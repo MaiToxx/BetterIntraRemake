@@ -186,7 +186,49 @@ async function syncDiscordQuiet() {
   }
 }
 
+/**
+ * Fetch an Intra page on behalf of a content script (cross-origin, with the
+ * user's Intra cookies). Content scripts are bound by the page's CORS; the
+ * background is not, thanks to the *.intra.42.fr host permission.
+ */
+async function fetchIntraPage(
+  url: unknown,
+): Promise<{ ok: boolean; status?: number; text?: string }> {
+  if (typeof url !== "string") return { ok: false };
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { ok: false };
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    !/(^|\.)intra\.42\.fr$/.test(parsed.hostname)
+  ) {
+    return { ok: false };
+  }
+  try {
+    const res = await fetch(parsed.toString(), {
+      credentials: "include",
+      redirect: "follow",
+    });
+    // a redirect to the sign-in page means the session is gone
+    if (!res.ok || /signin\.intra\.42\.fr/.test(res.url)) {
+      return { ok: false, status: res.status };
+    }
+    return { ok: true, status: res.status, text: await res.text() };
+  } catch {
+    return { ok: false };
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "FT_FETCH_INTRA_PAGE") {
+    fetchIntraPage(message.url)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
   if (message?.type === "FT_CHECK_UPDATE") {
     checkForUpdate()
       .catch(() => undefined)
