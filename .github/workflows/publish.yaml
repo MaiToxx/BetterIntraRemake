@@ -167,6 +167,7 @@ jobs:
           if [ "$HAS_CRX" = "true" ]; then node scripts/update-updates-xml.js "${RELEASE_TAG#v}"; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.json updates.xml
+          # only the manifests that were (re)generated exist
+          for f in updates.json updates.xml; do [ -f "$f" ] && git add "$f"; done
           git commit -m "chore: update manifests for ${RELEASE_TAG}" || exit 0
           git push origin main
