@@ -5,6 +5,10 @@ export default defineConfig({
   // importing hubSettings.data.ts can be loaded in tests.
   define: {
     __APP_VERSION__: JSON.stringify("test"),
+    __REPO_URL__: JSON.stringify("https://github.com/test/better-intra"),
+    __REPO_RELEASES_API__: JSON.stringify(
+      "https://api.github.com/repos/test/better-intra/releases/latest",
+    ),
     __TS_VERSION__: JSON.stringify("test"),
     __VITE_VERSION__: JSON.stringify("test"),
     __LIT_VERSION__: JSON.stringify("test"),

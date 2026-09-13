@@ -1,0 +1,50 @@
+import { describe, it, expect } from "vitest";
+import {
+  compareVersions,
+  isNewerVersion,
+  parseLatestRelease,
+} from "../src/utils/update-check";
+
+describe("compareVersions", () => {
+  it("compares numerically, not lexically", () => {
+    expect(compareVersions("1.8.10", "1.8.9")).toBeGreaterThan(0);
+    expect(compareVersions("1.8.6", "1.8.6")).toBe(0);
+    expect(compareVersions("v1.9.0", "1.8.6")).toBeGreaterThan(0);
+    expect(compareVersions("1.8", "1.8.0")).toBe(0);
+    expect(compareVersions("2.0.0", "1.99.99")).toBeGreaterThan(0);
+  });
+
+  it("isNewerVersion is strict", () => {
+    expect(isNewerVersion("1.8.7", "1.8.6")).toBe(true);
+    expect(isNewerVersion("1.8.6", "1.8.6")).toBe(false);
+    expect(isNewerVersion("1.8.5", "1.8.6")).toBe(false);
+  });
+});
+
+describe("parseLatestRelease", () => {
+  it("extracts the version and page url from a GitHub release", () => {
+    expect(
+      parseLatestRelease({
+        tag_name: "v1.8.7",
+        html_url: "https://github.com/o/r/releases/tag/v1.8.7",
+        draft: false,
+      }),
+    ).toEqual({
+      version: "1.8.7",
+      url: "https://github.com/o/r/releases/tag/v1.8.7",
+    });
+  });
+
+  it("rejects drafts, odd tags and non-GitHub urls", () => {
+    expect(parseLatestRelease(null)).toBeNull();
+    expect(
+      parseLatestRelease({ tag_name: "v1.8.7", html_url: "https://x", draft: true }),
+    ).toBeNull();
+    expect(
+      parseLatestRelease({ tag_name: "nightly", html_url: "https://github.com/o/r" }),
+    ).toBeNull();
+    expect(
+      parseLatestRelease({ tag_name: "v1.8.7", html_url: "https://evil.example/" }),
+    ).toBeNull();
+  });
+});

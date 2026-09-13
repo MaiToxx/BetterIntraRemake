@@ -15,6 +15,22 @@ export const BACKUP_EXCLUDED_KEYS: ReadonlySet<string> = new Set<ConfigKey>([
   "FRIENDS_DATA_CACHE",
 ]);
 
+/**
+ * Several UI paths store arrays as JSON strings (FRIENDS_LIST, SHORTCUTS_LINKS,
+ * ACTIVE_SCRIPTS); getConfig() parses them back. Do the same here so that the
+ * shape check below compares the real value.
+ */
+function parseLegacyJson(value: unknown): unknown {
+  if (typeof value === "string" && /^\s*[\[{]/.test(value)) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+  return value;
+}
+
 function sameShape(value: unknown, reference: unknown): boolean {
   if (reference === null) {
     // nullable keys accept null or an object (e.g. FRIENDS_DATA_CACHE)
@@ -35,7 +51,7 @@ export function exportableSettings(
   for (const [key, value] of Object.entries(items)) {
     if (!(key in CONFIG_DEFAULT)) continue;
     if (BACKUP_EXCLUDED_KEYS.has(key)) continue;
-    out[key] = value;
+    out[key] = parseLegacyJson(value);
   }
   return out;
 }
@@ -52,9 +68,10 @@ export function sanitizeBackup(data: unknown): Record<string, unknown> {
     throw new Error("Backup must be a JSON object");
   }
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+  for (const [key, raw] of Object.entries(data as Record<string, unknown>)) {
     if (!(key in CONFIG_DEFAULT)) continue;
     if (BACKUP_EXCLUDED_KEYS.has(key)) continue;
+    const value = parseLegacyJson(raw);
     const reference = CONFIG_DEFAULT[key as ConfigKey];
     if (!sameShape(value, reference)) continue;
     out[key] = value;

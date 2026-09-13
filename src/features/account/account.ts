@@ -3,6 +3,7 @@ import type { VisualUrls } from "../profile/visuals.ts";
 import { hashLogin } from "../../utils/crypto.ts";
 import { showConfirmDialog } from "../../utils/confirm-dialog.ts";
 import { markAuthFlowPending } from "./auth-callback.ts";
+import { sanitizeVisualUrls } from "../profile/visuals-sanitize.ts";
 
 export { hashLogin };
 
@@ -32,7 +33,9 @@ export async function loginWith42(
   const authUrl = `${WORKER_URL}/login?redirect_uri=${encodeURIComponent(extensionFakeCallback)}`;
 
   // Record that a login is in progress so that main.ts accepts the callback.
-  await markAuthFlowPending("cloud");
+  // Started before, awaited after window.open(): an await in between would
+  // leave the click's transient activation and get the popup blocked.
+  const marked = markAuthFlowPending("cloud");
 
   const popup = window.open(
     authUrl,
@@ -40,6 +43,7 @@ export async function loginWith42(
     "width=600,height=700",
   );
 
+  await marked;
   if (!popup) {
     alert("Popup blocked! Please allow popups for this site.");
     return;
@@ -252,7 +256,9 @@ export async function fetchUserVisuals(
     if (!response.ok) return null;
     const data = (await response.json()) as Record<string, unknown>;
 
-    return {
+    // Another user's values: validate them once here so that every consumer
+    // (cache, comparisons, applyImgs) sees the same sanitised object.
+    return sanitizeVisualUrls({
       avatar: String(data.avatar || ""),
       banner: String(data.banner || ""),
       bannerMode: String(data.bannerMode || "fill"),
@@ -268,7 +274,7 @@ export async function fetchUserVisuals(
       badgeBg: String(data.badgeBg || ""),
       theme: (data.theme as { profileColor?: string }) || null,
       logtime: (data.logtime as Record<string, unknown>) || null,
-    };
+    });
   } catch (error) {
     console.error(error);
     return null;

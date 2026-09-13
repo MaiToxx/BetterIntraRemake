@@ -122,3 +122,19 @@ jobs:
           files: |
             better-intra.xpi
             better-intra-chrome.zip
+
+      # Firefox auto-update: the add-on's update_url points at updates.json on
+      # the main branch, so publish the new version there once the signed
+      # .xpi is attached to the release.
+      - name: Update updates.json (Firefox auto-update)
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git fetch origin main
+          git checkout main
+          node scripts/update-updates-json.js "${RELEASE_TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "chore: updates.json for ${RELEASE_TAG}" || exit 0
+          git push origin main

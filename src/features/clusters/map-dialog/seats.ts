@@ -25,6 +25,9 @@ const FORBIDDEN_TAGS = new Set([
   "form",
 ]);
 
+/** url(...) whose target is not a local fragment reference (#id). */
+const REMOTE_URL_RE = /url\s*\(\s*(?!['"]?#)[^)]*\)/gi;
+
 /** True for hrefs that stay inside the document or the data itself. */
 function isLocalHref(href: string): boolean {
   const v = href.trim();
@@ -47,12 +50,12 @@ export function sanitizeAndParseSeats(svgDoc: Document): Map<string, SeatPos> {
       }
     }
     if (tagName === "style") {
-      // keep local styling but strip remote loads (@import, url(https://...))
+      // keep local styling (url(#gradient) etc.) but strip remote loads
       const css = el.textContent || "";
       if (/@import|url\s*\(/i.test(css)) {
         el.textContent = css
           .replace(/@import[^;]*;?/gi, "")
-          .replace(/url\s*\([^)]*\)/gi, "none");
+          .replace(REMOTE_URL_RE, "none");
       }
       continue;
     }
@@ -67,8 +70,12 @@ export function sanitizeAndParseSeats(svgDoc: Document): Map<string, SeatPos> {
           el.removeAttribute(attr.name);
         }
       }
-      if (attr.name === "style" && /url\s*\(|expression\s*\(/i.test(attr.value)) {
-        el.removeAttribute(attr.name);
+      if (
+        attr.name === "style" &&
+        (REMOTE_URL_RE.test(attr.value) || /expression\s*\(/i.test(attr.value))
+      ) {
+        // fill:url(#grad) is fine; url(https://...) is not
+        el.setAttribute(attr.name, attr.value.replace(REMOTE_URL_RE, "none"));
       }
     }
   }

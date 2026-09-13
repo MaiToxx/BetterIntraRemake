@@ -4,9 +4,11 @@ import { resolve } from "path";
 import fs from "fs";
 import { cp } from "fs/promises";
 import pkg from "./package.json" with { type: "json" };
+import { readRepoInfo } from "./scripts/repo-info.js";
 
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
+const repo = readRepoInfo();
 
 export default defineConfig({
   plugins: [
@@ -27,6 +29,13 @@ export default defineConfig({
 
         const manifest = JSON.parse(fs.readFileSync(manifestSrc, "utf-8"));
         manifest.version = pkg.version;
+        if (target === "firefox") {
+          // Firefox auto-update: id and update manifest derived from the
+          // repository this fork lives in (package.json "repository").
+          const gecko = (manifest.browser_specific_settings ??= {}).gecko ??= {};
+          gecko.id = repo.geckoId;
+          gecko.update_url = repo.updatesJsonUrl;
+        }
         fs.writeFileSync(
           manifestDst,
           JSON.stringify(manifest, null, 2),
@@ -61,6 +70,8 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __REPO_URL__: JSON.stringify(repo.url),
+    __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
     __TS_VERSION__: JSON.stringify(pkg.devDependencies.typescript),
     __VITE_VERSION__: JSON.stringify(pkg.devDependencies.vite),
     __LIT_VERSION__: JSON.stringify(pkg.dependencies["lit-html"]),

@@ -12,15 +12,22 @@ const BANNER_MODES = new Set(["fill", "fit", "stretch", "center", "tile"]);
 const DECORATIONS = new Set(["none", "solid"]);
 const AVATAR_BG_KEYWORDS = new Set(["transparent"]);
 
-/** Absolute http(s) URL without characters that could end a CSS url("...") string. */
+/**
+ * Absolute http(s) URL, normalised by the URL parser (which percent-encodes
+ * quotes and whitespace) so that it can never end a CSS url("...") string.
+ * Parentheses are left alone: they are harmless inside a quoted url() and
+ * common in real image URLs (e.g. Wikimedia "..._(foo).png").
+ */
 export function sanitizeCssUrl(value: unknown): string {
   if (typeof value !== "string") return "";
   const raw = value.trim();
-  if (!raw || /["'()\\\s]/.test(raw)) return "";
+  if (!raw) return "";
   try {
     const parsed = new URL(raw);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
-    return raw;
+    const href = parsed.href;
+    if (/["\\\s]/.test(href)) return ""; // defensive: the parser already encodes these
+    return href;
   } catch {
     return "";
   }
@@ -73,6 +80,11 @@ export function sanitizeVisualUrls(urls: VisualUrls): VisualUrls {
         emojiRate:
           lt.emojiRate !== undefined
             ? clampNumber(lt.emojiRate, 0, 1_000_000, 2)
+            : undefined,
+        // palette ids are looked up in a fixed table (unknown ids fall back)
+        rainbowPalette:
+          typeof lt.rainbowPalette === "string"
+            ? lt.rainbowPalette.slice(0, 64)
             : undefined,
       }
     : null;

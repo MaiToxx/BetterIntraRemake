@@ -36,6 +36,7 @@ export interface VisualUrls {
     emoji?: string;
     emojiDivisor?: string | number;
     emojiRate?: string | number;
+    rainbowPalette?: string;
   } | null;
 }
 
@@ -599,6 +600,10 @@ export const updateVisuals = async () => {
         avatarScale: c.PROFILE_AVATAR_SCALE,
         badgeBg: c.PROFILE_BADGE_BG,
       };
+      // sanitise at ingestion so that needsReapply()/getVisualKey() compare
+      // exactly what applyImgs() writes (otherwise a normalised URL would
+      // look "not applied" and trigger a re-apply on every mutation pass)
+      visualCache = sanitizeVisualUrls(visualCache);
 
       if (
         !visualCache.avatar &&
@@ -627,11 +632,11 @@ export const updateVisuals = async () => {
           cached.theme ||
           cached.logtime)
       ) {
-        visualCache = cached;
+        visualCache = sanitizeVisualUrls(cached);
         applyImgs(visualCache);
         lastAppliedUser = targetLogin;
         lastAppliedKey = getVisualKey(visualCache);
-        if (cached.avatar) attachToggleListener(avatarEl);
+        if (visualCache.avatar) attachToggleListener(avatarEl);
         revalidateVisuals(targetLogin, cached);
       } else {
         // Negative cache: a user without cloud visuals used to be re-fetched

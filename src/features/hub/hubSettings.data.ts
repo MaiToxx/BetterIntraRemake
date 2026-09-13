@@ -11,12 +11,14 @@ import { CONFIG_DEFAULT, ConfigKey } from "../../config.ts";
 import { CLUSTERS as CLUSTER_OPTIONS } from "../clusters/clusters.data.ts";
 import { RAINBOW_PALETTES } from "../logtime/rainbow-presets.ts";
 
+// Repository links come from package.json "repository" (see scripts/repo-info.js)
 export const HUB_INFO = {
   name: "Better Intra",
   version: __APP_VERSION__,
-  author: "https://github.com/nicopasla",
-  github: "https://github.com/nicopasla/better-intra",
-  issues: "https://github.com/nicopasla/better-intra/issues",
+  author: __REPO_URL__.replace(/\/[^/]+$/, ""),
+  github: __REPO_URL__,
+  issues: `${__REPO_URL__}/issues`,
+  upstream: "https://github.com/nicopasla/better-intra",
   license: "MIT",
 } as const;
 

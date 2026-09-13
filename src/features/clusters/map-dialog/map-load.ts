@@ -266,11 +266,13 @@ export async function loadCampus(
   const { shadow } = state;
   state.activeCampusId = campusId;
   state.zoomLevel = 1.0;
-  // Generation token: if another campus is selected (or the dialog closed)
-  // while this one is loading, the stale result must not overwrite state nor
-  // be cached under the newer campus id.
-  const gen = ++state.loadId;
-  const stale = () => gen !== state.loadId || signal?.aborted === true;
+  // If another campus is selected (or the dialog closed) while this one is
+  // loading, the stale result must not overwrite state nor be cached under the
+  // newer campus id. Keyed on the campus id: loadCluster() bumps loadId itself,
+  // so a generation token on that counter would always look stale here.
+  state.loadId++;
+  const stale = () =>
+    state.activeCampusId !== campusId || signal?.aborted === true;
   const exits = await getCampusExits(campusId);
   if (stale()) return;
   state.campusExits = exits ?? null;

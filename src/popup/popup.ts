@@ -3,6 +3,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { initAccountSettings } from "../features/account/account.ui";
 import CSS from "../assets/style.css?inline";
 import ICON_SVG from "../assets/svg/icon.svg?raw";
+import { UPDATE_KEY, type UpdateInfo } from "../utils/update-check";
 
 const style = document.createElement("style");
 style.textContent = CSS;
@@ -49,9 +50,45 @@ function renderPlaceholder(container: HTMLElement) {
   );
 }
 
+/** Banner shown above the popup content when a newer GitHub release exists. */
+async function renderUpdateBanner(root: HTMLElement) {
+  const store = await chrome.storage.local.get(UPDATE_KEY);
+  const info = store[UPDATE_KEY] as UpdateInfo | undefined;
+  if (!info?.version || !info.url) return;
+  const current = chrome.runtime.getManifest().version;
+  const banner = document.createElement("div");
+  banner.id = "update-banner";
+  root.parentElement?.insertBefore(banner, root);
+  render(
+    html`
+      <div
+        data-theme="light"
+        class="flex items-center justify-between gap-3 px-4 py-2 bg-[#00babc] text-white text-sm"
+      >
+        <span>
+          <strong>Better Intra ${info.version}</strong> is available
+          <span class="opacity-80">(you have ${current})</span>
+        </span>
+        <a
+          class="btn btn-xs bg-white text-[#00babc] border-none hover:bg-gray-100 font-bold"
+          href="${info.url}"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Download</a
+        >
+      </div>
+    `,
+    banner,
+  );
+}
+
 async function main() {
   const root = document.getElementById("account-root");
   if (!root) return;
+
+  await renderUpdateBanner(root);
+  // refresh the check in the background so the badge never stays stale
+  void chrome.runtime.sendMessage({ type: "FT_CHECK_UPDATE" }).catch(() => {});
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;

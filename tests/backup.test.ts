@@ -58,6 +58,25 @@ describe("sanitizeBackup", () => {
     expect(out).toEqual({ FRIENDS_LIST: ["a", "b"], LOGTIME_EMOJI: "🍕" });
   });
 
+  it("accepts arrays stored as JSON strings by the UI", () => {
+    // FRIENDS_LIST / SHORTCUTS_LINKS / ACTIVE_SCRIPTS are written with JSON.stringify
+    const out = sanitizeBackup({
+      FRIENDS_LIST: '["alice","bob"]',
+      ACTIVE_SCRIPTS: '["logtime"]',
+      SHORTCUTS_LINKS: '[{"name":"x","url":"https://x"}]',
+      LOGTIME_EMOJI: "[not json",
+    });
+    expect(out.FRIENDS_LIST).toEqual(["alice", "bob"]);
+    expect(out.ACTIVE_SCRIPTS).toEqual(["logtime"]);
+    expect(out.SHORTCUTS_LINKS).toEqual([{ name: "x", url: "https://x" }]);
+    // a string that merely starts with "[" but is not JSON stays a string
+    expect(out.LOGTIME_EMOJI).toBe("[not json");
+    // export parses them too, so the file contains real arrays
+    expect(exportableSettings({ FRIENDS_LIST: '["a"]' })).toEqual({
+      FRIENDS_LIST: ["a"],
+    });
+  });
+
   it("accepts null for nullable keys", () => {
     const out = sanitizeBackup({ ACCOUNT: null, LAST_CLOUD_SYNC: null });
     // both are excluded as session state, so nothing is restored

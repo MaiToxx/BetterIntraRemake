@@ -163,9 +163,11 @@ export function renderDiscordPanel() {
         ? html`<button
             type="button"
             class="btn bg-[#5865F2] text-white border-none hover:bg-[#4752C4] h-12 text-base flex items-center justify-center gap-3 transition-colors duration-200"
-            @click="${async () => {
-              // let main.ts know a Discord link is in progress (see auth-callback.ts)
-              await markAuthFlowPending("discord");
+            @click="${() => {
+              // let main.ts know a Discord link is in progress (see
+              // auth-callback.ts); not awaited so window.open() stays inside
+              // the click's transient activation (popup blockers)
+              void markAuthFlowPending("discord");
               window.open(authUrl, "_blank");
             }}"
           >

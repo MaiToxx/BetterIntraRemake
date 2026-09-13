@@ -2,6 +2,10 @@
   "name": "better-intra",
   "private": true,
   "version": "1.8.6",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicopasla/better-intra.git"
+  },
   "type": "module",
   "scripts": {
     "dev:firefox": "concurrently \"npm run watch:firefox\" \"npm run web-ext:firefox\"",

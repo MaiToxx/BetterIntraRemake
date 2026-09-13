@@ -76,7 +76,7 @@ export async function initClusters() {
       // first <svg> of the document is a navigation icon on Intra v3.
       const svg =
         document.querySelector("svg image")?.closest<SVGSVGElement>("svg") ??
-        null;
+        document.querySelector<SVGSVGElement>("svg"); // fallback: previous behaviour
       if (svg && svg !== observedSvgRoot) {
         if (svgObserver) svgObserver.disconnect();
         observedSvgRoot = svg;

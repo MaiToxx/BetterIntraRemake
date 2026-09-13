@@ -31,9 +31,21 @@ describe("sanitizeCssUrl", () => {
     ).toBe("");
     expect(sanitizeCssUrl("javascript:alert(1)")).toBe("");
     expect(sanitizeCssUrl("data:image/png;base64,AAAA")).toBe("");
-    expect(sanitizeCssUrl("https://a.com/x y.png")).toBe("");
     expect(sanitizeCssUrl("not a url")).toBe("");
     expect(sanitizeCssUrl(42)).toBe("");
+  });
+
+  it("normalises rather than rejects unusual but legitimate URLs", () => {
+    // spaces and quotes are percent-encoded by the URL parser
+    expect(sanitizeCssUrl("https://a.com/x y.png")).toBe("https://a.com/x%20y.png");
+    expect(sanitizeCssUrl('https://a.com/x"y.png')).toBe("https://a.com/x%22y.png");
+    // parentheses are common in real image URLs and harmless in url("...")
+    expect(sanitizeCssUrl("https://upload.wikimedia.org/a_(b).png")).toBe(
+      "https://upload.wikimedia.org/a_(b).png",
+    );
+    // idempotent: sanitising twice yields the same value (no re-apply loops)
+    const once = sanitizeCssUrl("https://a.com/x y.png");
+    expect(sanitizeCssUrl(once)).toBe(once);
   });
 });
 
@@ -115,7 +127,12 @@ describe("sanitizeVisualUrls", () => {
       avatarScale: 120,
       badgeBg: "#abcdef",
       theme: { profileColor: "#00bcba" },
-      logtime: { calendarColor: "#00bcba", labelsColor: "#26a641", emoji: "🌮" },
+      logtime: {
+        calendarColor: "#00bcba",
+        labelsColor: "#26a641",
+        emoji: "🌮",
+        rainbowPalette: "rainbow",
+      },
     };
     expect(sanitizeVisualUrls(legit)).toEqual({
       ...legit,
@@ -125,7 +142,18 @@ describe("sanitizeVisualUrls", () => {
         emoji: "🌮",
         emojiDivisor: undefined,
         emojiRate: undefined,
+        rainbowPalette: "rainbow",
       },
     });
+  });
+
+  it("is idempotent", () => {
+    const once = sanitizeVisualUrls({
+      ...base,
+      avatar: "https://a.com/x y.png",
+      bannerColor: "#112233",
+      decoration: "solid",
+    });
+    expect(sanitizeVisualUrls(once)).toEqual(once);
   });
 });

@@ -1,10 +1,65 @@
 import { hashLogin } from "./utils/crypto";
+import {
+  UPDATE_KEY,
+  isNewerVersion,
+  parseLatestRelease,
+  type UpdateInfo,
+} from "./utils/update-check";
 
 const WORKER_URL = "https://api.betterintra.com";
+
+// ---------------------------------------------------------------------------
+// Update check (GitHub Releases of __REPO_URL__)
+// ---------------------------------------------------------------------------
+const UPDATE_ALARM = "better-intra-update-check";
+const UPDATE_PERIOD_MINUTES = 6 * 60;
+const RELEASES_API = __REPO_RELEASES_API__;
+
+async function checkForUpdate(): Promise<void> {
+  const current = chrome.runtime.getManifest().version;
+  try {
+    const res = await fetch(RELEASES_API, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return; // rate-limited or no release yet: keep previous state
+    const latest = parseLatestRelease(await res.json());
+    if (!latest) return;
+    if (isNewerVersion(latest.version, current)) {
+      const info: UpdateInfo = {
+        version: latest.version,
+        url: latest.url,
+        checkedAt: Date.now(),
+      };
+      await chrome.storage.local.set({ [UPDATE_KEY]: info });
+      await chrome.action.setBadgeBackgroundColor({ color: "#00babc" });
+      await chrome.action.setBadgeText({ text: "NEW" });
+    } else {
+      await chrome.storage.local.remove(UPDATE_KEY);
+      await chrome.action.setBadgeText({ text: "" });
+    }
+  } catch {
+    console.warn("checkForUpdate: fetch failed");
+  }
+}
 
 chrome.runtime.onInstalled.addListener(() => {
   syncDiscord();
   syncDiscordQuiet();
+  // a fresh install/update is by definition up to date: clear any stale flag
+  void chrome.storage.local.remove(UPDATE_KEY);
+  void chrome.action.setBadgeText({ text: "" });
+  chrome.alarms.create(UPDATE_ALARM, {
+    delayInMinutes: 1,
+    periodInMinutes: UPDATE_PERIOD_MINUTES,
+  });
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void checkForUpdate();
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === UPDATE_ALARM) void checkForUpdate();
 });
 
 chrome.storage.onChanged.addListener((changes) => {
@@ -133,6 +188,12 @@ async function syncDiscordQuiet() {
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "FT_CHECK_UPDATE") {
+    checkForUpdate()
+      .catch(() => undefined)
+      .finally(() => sendResponse(true));
+    return true;
+  }
   if (message?.type === "FT_RELOAD_INTRA_TABS") {
     reloadIntraTabs()
       .catch(() => undefined)

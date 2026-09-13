@@ -702,6 +702,7 @@ export function applyPublicLogtimeSettings(logtime: {
 // a second caller during that window used to install a second data listener,
 // which rendered the widget and fetched events twice.
 let initPromise: Promise<void> | null = null;
+let hookInstalled = false;
 
 export function initLogtime(): Promise<void> {
   if (isLoaded) return Promise.resolve();
@@ -717,7 +718,12 @@ export function initLogtime(): Promise<void> {
     const preset = THEMES[presetKey] ?? THEMES["dark"];
     primaryColor = `hsl(${preset.primary})`;
     primaryContent = `hsl(${preset.primaryForeground})`;
-    installFetchHook();
+    // isLoaded stays false on non-target pages, so init can legitimately run
+    // again later: never install the data listener twice.
+    if (!hookInstalled) {
+      installFetchHook();
+      hookInstalled = true;
+    }
 
     if (isProfileV3TargetPage()) {
       isLoaded = true;
