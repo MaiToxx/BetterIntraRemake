@@ -1,0 +1,43 @@
+{
+  "name": "better-intra",
+  "private": true,
+  "version": "1.8.6",
+  "type": "module",
+  "scripts": {
+    "dev:firefox": "concurrently \"npm run watch:firefox\" \"npm run web-ext:firefox\"",
+    "dev:chrome": "concurrently \"npm run watch:chrome\" \"npm run web-ext:chrome\"",
+    "dev:brave": "concurrently \"npm run watch:chrome\" \"npm run web-ext:brave\"",
+    "build:chrome": "cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome tsc && cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build && cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build --config vite.popup.config.ts && cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build --config vite.background.config.ts",
+    "build:firefox": "cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.popup.config.ts && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.background.config.ts",
+    "watch:firefox": "concurrently \"cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --watch\" \"cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.popup.config.ts --watch\" \"cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.background.config.ts --watch\"",
+    "watch:chrome": "concurrently \"cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build --watch\" \"cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build --config vite.popup.config.ts --watch\" \"cross-env TARGET=chrome BUILD_OUT_DIR=dist-chrome vite build --config vite.background.config.ts --watch\"",
+    "web-ext:firefox": "web-ext run --keep-profile-changes --source-dir dist-firefox --start-url https://profile-v3.intra.42.fr",
+    "web-ext:chrome": "web-ext run -t chromium --source-dir dist-chrome --start-url https://profile-v3.intra.42.fr",
+    "web-ext:brave": "web-ext run -t chromium --chromium-binary \"C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe\" --source-dir dist-chrome --start-url https://profile-v3.intra.42.fr",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "generate:store-images": "node scripts/generate-store-images.js",
+    "generate:description": "node scripts/convert-description.js"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.9",
+    "@vitest/ui": "^5.0.0",
+    "concurrently": "^10.0.5",
+    "cross-env": "^10.1.0",
+    "daisyui": "^5.7.28",
+    "jsdom": "^30.0.1",
+    "sharp": "^0.35.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0",
+    "web-ext": "^10.6.0"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "lit-html": "^3.3.3",
+    "qrcode-generator": "^2.0.4"
+  },
+  "allowScripts": {
+    "fsevents": true
+  }
+}

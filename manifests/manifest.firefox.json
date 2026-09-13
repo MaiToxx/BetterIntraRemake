@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Better Intra",
+  "version": "1.0.8",
+  "description": "UI and UX improvements for 42 Intra: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.",
+  "permissions": ["storage", "activeTab"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["hook.js"],
+      "matches": ["https://*.intra.42.fr/*"]
+    }
+  ],
+  "incognito": "not_allowed",
+  "host_permissions": [
+    "https://api.betterintra.com/*",
+    "https://*.intra.42.fr/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.intra.42.fr/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Better Intra"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "better-intra@nicopasla.42",
+      "strict_min_version": "140.0",
+      "update_url": "https://raw.githubusercontent.com/nicopasla/better-intra/main/updates.json",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  }
+}

@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+@plugin "daisyui" {
+  root:
+    "#hub-shadow-wrapper", "#events-shadow-wrapper", "#profile-shadow-wrapper",
+    "#profile-badges-shadow", "#cluster-shadow-host",
+    "#shortcuts-shadow-wrapper", "#friends-shadow-wrapper",
+    "#ft-friend-btn-shadow", "#logtime-shadow-wrapper", "#popup-root",
+    "#project-badges-shadow", "#cluster-map-dialog", "#profile-modal-host",
+    "#better-intra-sort-host", "#ft-tracker-card", "#ft-transcript-dialog",
+    "#ft-star-total-host", "#ft-subject-update-host";
+  themes:
+    "light", "dark", "valentine", "cupcake", "bumblebee", "emerald",
+    "corporate", "retro", "garden", "lofi", "pastel", "fantasy", "wireframe",
+    "cmyk", "autumn", "acid", "lemonade", "winter", "nord", "caramellatte",
+    "silk", "synthwave", "forest", "halloween", "dracula", "night", "sunset",
+    "luxury", "cyberpunk", "dim", "black", "coffee", "aqua", "soap", "citrus",
+    "neon";
+  include:
+    [ "button",
+    "toggle",
+    "input",
+    "select",
+    "radio",
+    "label",
+    "card",
+    "tabs",
+    "modal",
+    "divider",
+    "swap",
+    "fieldset",
+    "status",
+    "tooltip",
+    "badge",
+    "collapse",
+    "countdown",
+    "ring",
+    "avatar",
+    "indicator",
+    "list",
+    "loading",
+    "skeleton",
+    "progress",
+    "steps",
+    "join",
+    "kbd",
+    "dropdown",
+    "menu",
+    "alert"];
+}
+
+#hub-shadow-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  overflow: hidden;
+}
+
+.sidebar-tabs {
+  width: 200px;
+  border-right: 1px solid var(--color-base-300);
+  background-color: color-mix(in oklch, var(--color-base-200) 30%, transparent);
+}
+
+.content-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.scroll-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.tab-content {
+  padding: 0 !important;
+  scrollbar-gutter: stable;
+}
+
+.sticky {
+  position: sticky;
+  top: 0;
+  width: 100%;
+  backdrop-filter: blur(8px);
+  background-color: color-mix(in oklch, var(--color-base-200) 80%, transparent);
+}
+
+#hub-shadow-wrapper .grid {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  padding-bottom: 3rem !important;
+}
+
+#hub-dialog::backdrop {
+  cursor: pointer;
+}
+
+.hub-modal-box {
+  cursor: default;
+}
+
+.tab svg,
+.tab svg path {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor !important;
+  stroke: none;
+  transition: color 0.2s ease;
+}
+
+.tab:has(input:checked) {
+  color: var(--p) !important;
+}
+
+.tab:has(input:not(:checked)) {
+  opacity: 0.6;
+}
+
+[data-reset-feature]:hover svg {
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease-in-out;
+}
+
+@plugin "daisyui/theme" {
+  name: "soap";
+  default: false;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: oklch(98% 0.014 180.72);
+  --color-base-200: oklch(95% 0.051 180.801);
+  --color-base-300: oklch(91% 0.096 180.426);
+  --color-base-content: oklch(38% 0.063 188.416);
+  --color-primary: oklch(70% 0.191 22.216);
+  --color-primary-content: oklch(25% 0.092 26.042);
+  --color-secondary: oklch(77% 0.152 181.912);
+  --color-secondary-content: oklch(27% 0.046 192.524);
+  --color-accent: oklch(82% 0.189 84.429);
+  --color-accent-content: oklch(27% 0.077 45.635);
+  --color-neutral: oklch(51% 0.096 186.391);
+  --color-neutral-content: oklch(98% 0.014 180.72);
+  --color-info: oklch(54% 0.245 262.881);
+  --color-info-content: oklch(97% 0.014 254.604);
+  --color-success: oklch(60% 0.118 184.704);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 1rem;
+  --radius-field: 2rem;
+  --radius-box: 0.25rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 1;
+}
+
+@plugin "daisyui/theme" {
+  name: "citrus";
+  default: false;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: #fffff0;
+  --color-base-200: #ffffe6;
+  --color-base-300: #ffffd9;
+  --color-base-content: #2b2b2b;
+  --color-primary: #ffd700;
+  --color-primary-content: #2b2b2b;
+  --color-secondary: #98fb98;
+  --color-secondary-content: #2b2b2b;
+  --color-accent: #ff8c69;
+  --color-accent-content: #2b2b2b;
+  --color-neutral: #3c3c3c;
+  --color-neutral-content: #ffffff;
+  --color-info: #38bdf8;
+  --color-info-content: #2b2b2b;
+  --color-success: #4ade80;
+  --color-success-content: #2b2b2b;
+  --color-warning: #fb923c;
+  --color-warning-content: #2b2b2b;
+  --color-error: #f87171;
+  --color-error-content: #2b2b2b;
+  --radius-selector: 1rem;
+  --radius-field: 1.5rem;
+  --radius-box: 1.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "neon";
+  default: false;
+  prefersdark: false;
+  color-scheme: "dark";
+  --color-base-100: #000000;
+  --color-base-200: #0d0d0d;
+  --color-base-300: #1a1a1a;
+  --color-base-content: #00ffbb;
+  --color-primary: #ff0099;
+  --color-primary-content: #000000;
+  --color-secondary: #00ffbb;
+  --color-secondary-content: #000000;
+  --color-accent: #ff9900;
+  --color-accent-content: #000000;
+  --color-neutral: #1a1a1a;
+  --color-neutral-content: #ffffff;
+  --color-info: #00ccff;
+  --color-info-content: #000000;
+  --color-success: #00ff00;
+  --color-success-content: #000000;
+  --color-warning: #ffcc00;
+  --color-warning-content: #000000;
+  --color-error: #ff0000;
+  --color-error-content: #000000;
+  --radius-selector: 0rem;
+  --radius-field: 0rem;
+  --radius-box: 0rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}

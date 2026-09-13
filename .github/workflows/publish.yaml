@@ -1,0 +1,124 @@
+name: Build and Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-prerelease:
+    if: github.event.release.prerelease == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Extension (Firefox)
+        run: npm run build:firefox
+
+      - name: web-ext build (Firefox)
+        id: web-ext-build-ff
+        uses: kewisch/action-web-ext@main
+        with:
+          cmd: build
+          source: dist-firefox
+          filename: "better-intra.xpi"
+
+      - name: Build Extension (Chrome)
+        run: npm run build:chrome
+
+      - name: web-ext build (Chrome)
+        id: web-ext-build-chrome
+        uses: kewisch/action-web-ext@main
+        with:
+          cmd: build
+          source: dist-chrome
+          filename: "better-intra-chrome.zip"
+
+      - name: Move Chrome artifact
+        run: mv web-ext-artifacts/better-intra-chrome.zip .
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            web-ext-artifacts/better-intra.xpi
+            better-intra-chrome.zip
+
+  build-and-sign:
+    if: github.event.release.prerelease == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Extension (Firefox)
+        run: npm run build:firefox
+
+      - name: web-ext build (Firefox)
+        id: web-ext-build-ff
+        uses: kewisch/action-web-ext@v2
+        with:
+          cmd: build
+          source: dist-firefox
+          filename: "better-intra.xpi"
+
+      - name: Build Extension (Chrome)
+        run: npm run build:chrome
+
+      - name: web-ext build (Chrome)
+        id: web-ext-build-chrome
+        uses: kewisch/action-web-ext@v2
+        with:
+          cmd: build
+          source: dist-chrome
+          filename: "better-intra-chrome.zip"
+
+      - name: Move Chrome artifact
+        run: mv web-ext-artifacts/better-intra-chrome.zip .
+
+      - name: Collect source code
+        run: git archive --format=zip --output=sources.zip ${{ github.ref }}
+
+      - name: web-ext sign (Firefox)
+        id: web-ext-sign
+        uses: kewisch/action-web-ext@v2
+        with:
+          cmd: sign
+          source: ${{ steps.web-ext-build-ff.outputs.target }}
+          sourceCode: sources.zip
+          channel: unlisted
+          apiKey: ${{ secrets.AMO_SIGN_KEY }}
+          apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
+          timeout: 900000
+
+      - name: Rename signed artifact
+        run: mv "${{ steps.web-ext-sign.outputs.target }}" better-intra.xpi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            better-intra.xpi
+            better-intra-chrome.zip
