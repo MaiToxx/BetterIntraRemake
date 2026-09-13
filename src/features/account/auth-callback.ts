@@ -54,6 +54,33 @@ export function parseAuthSuccessScript(
   return { token, login };
 }
 
+/** Read the marker without clearing it (for diagnostics and waiting). */
+export async function peekAuthFlow(flow: AuthFlow): Promise<unknown> {
+  const key = PENDING_KEYS[flow];
+  const store = await chrome.storage.local.get(key);
+  return store?.[key];
+}
+
+/**
+ * Wait until a fresh marker exists for the flow (the write that sets it can
+ * land slightly after the callback page starts), then consume it.
+ * Resolves false after `timeoutMs` without a fresh marker.
+ */
+export async function waitForAuthFlow(
+  flow: AuthFlow,
+  timeoutMs = 3000,
+  stepMs = 250,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (isAuthFlowFresh(await peekAuthFlow(flow))) {
+      return consumeAuthFlow(flow);
+    }
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, stepMs));
+  }
+}
+
 /**
  * Consume the pending marker for a flow. Returns true when the callback may be
  * trusted. The marker is always cleared, so a callback can only be used once.

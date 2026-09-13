@@ -16,8 +16,10 @@
  */
 import { html, render } from "lit-html";
 import {
-  consumeAuthFlow,
+  AUTH_FLOW_TTL_MS,
   parseAuthSuccessScript,
+  peekAuthFlow,
+  waitForAuthFlow,
 } from "./features/account/auth-callback.ts";
 
 const VERSION = __APP_VERSION__;
@@ -73,21 +75,29 @@ function showStatus(title: string, lines: string[], ok: boolean) {
       [
         "This page does not contain the expected credentials.",
         "Close this window and try Connect with 42 again.",
+        `Diagnostic: ${document.scripts.length} script(s) on the page, ${navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium"}.`,
       ],
       false,
     );
     return;
   }
 
-  if (!(await consumeAuthFlow("cloud"))) {
+  // The marker write may land a moment after this page starts: wait for it.
+  if (!(await waitForAuthFlow("cloud", 3000))) {
+    const marker = await peekAuthFlow("cloud");
+    const diag =
+      typeof marker === "number"
+        ? `marker age ${Math.round((Date.now() - marker) / 1000)}s (limit ${AUTH_FLOW_TTL_MS / 1000}s)`
+        : `marker absent (${String(marker)})`;
     console.warn(
-      "Better Intra: auth callback page reached without a login in progress; ignoring.",
+      `Better Intra: auth callback page reached without a login in progress; ignoring. ${diag}`,
     );
     showStatus(
       "Login not started from Better Intra",
       [
         "For your safety this window is ignored: the extension did not start a login in the last 10 minutes.",
         "Close this window, then click Connect with 42 in the extension popup or in the hub, and complete the login within 10 minutes.",
+        `Diagnostic: ${diag}, ${navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium"}.`,
       ],
       false,
     );

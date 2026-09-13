@@ -32,9 +32,38 @@ export async function loginWith42(
   const extensionFakeCallback = window.location.href;
   const authUrl = `${WORKER_URL}/login?redirect_uri=${encodeURIComponent(extensionFakeCallback)}`;
 
-  // Record that a login is in progress so that main.ts accepts the callback.
-  // Started before, awaited after window.open(): an await in between would
-  // leave the click's transient activation and get the popup blocked.
+  const WORKER_ORIGIN = new URL(WORKER_URL).origin;
+  const isExtension =
+    window.location.protocol === "chrome-extension:" ||
+    window.location.protocol === "moz-extension:";
+
+  if (isExtension) {
+    // Toolbar popup. The browser destroys this popup as soon as the auth
+    // window takes focus, so: (1) the "login in progress" marker must be
+    // fully written BEFORE the window opens, otherwise the write can be lost
+    // with the popup and the callback page refuses the login; (2) nothing
+    // here can act as an opener. The content script on the worker's callback
+    // page (auth-callback.js) finishes the login, the background reloads the
+    // Intra tabs when CLOUD_TOKEN changes, and popup.ts closes itself.
+    await markAuthFlowPending("cloud");
+    try {
+      await chrome.windows.create({
+        url: authUrl,
+        type: "popup",
+        width: 600,
+        height: 700,
+        focused: true,
+      });
+    } catch {
+      window.open(authUrl, "_blank");
+    }
+    return;
+  }
+
+  // In-page (hub) login: this page survives, so it also receives the worker's
+  // postMessage through the opener path below.
+  // Marker started before, awaited after window.open(): an await in between
+  // would leave the click's transient activation and get the popup blocked.
   const marked = markAuthFlowPending("cloud");
 
   const popup = window.open(
@@ -48,11 +77,6 @@ export async function loginWith42(
     alert("Popup blocked! Please allow popups for this site.");
     return;
   }
-
-  const WORKER_ORIGIN = new URL(WORKER_URL).origin;
-  const isExtension =
-    window.location.protocol === "chrome-extension:" ||
-    window.location.protocol === "moz-extension:";
 
   const messageListener = async (event: MessageEvent) => {
     if (
@@ -86,22 +110,22 @@ export async function loginWith42(
 
   window.addEventListener("message", messageListener);
 
+  // Fallback when the postMessage never arrives (e.g. the auth window was
+  // closed by the callback content script): once the window is gone, check
+  // whether the login was stored and finish the same way.
   let pollInterval: ReturnType<typeof setInterval> | undefined;
-  if (isExtension) {
-    pollInterval = setInterval(async () => {
-      if (!popup.closed) return;
-      clearInterval(pollInterval);
-      window.removeEventListener("message", messageListener);
-      await new Promise((r) => setTimeout(r, 300));
-      const savedLogin = await getCloudLogin();
-      const savedToken = await getConfig("CLOUD_TOKEN");
-      if (savedLogin && savedToken) {
-        await chrome.storage.local.set({ PENDING_SETTINGS_RESTORE: true });
-        if (onSuccess) await onSuccess();
-        else window.location.reload();
-      }
-    }, 500);
-  }
+  pollInterval = setInterval(async () => {
+    if (!popup.closed) return;
+    clearInterval(pollInterval);
+    window.removeEventListener("message", messageListener);
+    await new Promise((r) => setTimeout(r, 300));
+    const savedLogin = await getCloudLogin();
+    const savedToken = await getConfig("CLOUD_TOKEN");
+    if (savedLogin && savedToken) {
+      if (onSuccess) await onSuccess();
+      else window.location.reload();
+    }
+  }, 500);
 }
 
 /**

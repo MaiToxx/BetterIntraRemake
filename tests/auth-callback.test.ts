@@ -5,6 +5,7 @@ import {
   isAuthFlowFresh,
   markAuthFlowPending,
   parseAuthSuccessScript,
+  waitForAuthFlow,
 } from "../src/features/account/auth-callback";
 
 describe("parseAuthSuccessScript", () => {
@@ -52,6 +53,19 @@ describe("isAuthFlowFresh", () => {
     const now = 1_000_000;
     expect(isAuthFlowFresh(now - AUTH_FLOW_TTL_MS - 1, now)).toBe(false);
     expect(isAuthFlowFresh(now + 5000, now)).toBe(false);
+  });
+});
+
+describe("waitForAuthFlow", () => {
+  it("resolves true when the marker lands shortly after the page started", async () => {
+    setTimeout(() => void markAuthFlowPending("cloud"), 120);
+    expect(await waitForAuthFlow("cloud", 1500, 50)).toBe(true);
+    // consumed: a second callback is refused
+    expect(await waitForAuthFlow("cloud", 100, 50)).toBe(false);
+  });
+
+  it("resolves false after the timeout without a marker", async () => {
+    expect(await waitForAuthFlow("discord", 200, 50)).toBe(false);
   });
 });
 
