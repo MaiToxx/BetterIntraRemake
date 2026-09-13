@@ -113,6 +113,15 @@ export interface BetterIntraConfig {
   CALENDAR_EVENTS_HASH: string;
   ADVANCED_OPEN_LINKS_NEW_TAB: boolean;
 
+  // Customize (look & feel of every Intra page)
+  CUSTOM_ACCENT_ENABLED: boolean;
+  CUSTOM_ACCENT_COLOR: string;
+  CUSTOM_FONT: "default" | "system" | "humanist" | "rounded" | "serif" | "mono" | "custom";
+  CUSTOM_FONT_FAMILY: string;
+  CUSTOM_FONT_SCALE: number;
+  CUSTOM_RADIUS: "default" | "none" | "small" | "large" | "full";
+  CUSTOM_CSS: string;
+
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
   SUBJECT_TRACKER_SEND_DATA: boolean;
@@ -228,6 +237,14 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   SUBJECT_TRACKER_STATE: {},
   SUBJECT_TRACKER_ENABLED: true,
   SUBJECT_TRACKER_SEND_DATA: true,
+
+  CUSTOM_ACCENT_ENABLED: false,
+  CUSTOM_ACCENT_COLOR: "#00babc",
+  CUSTOM_FONT: "default",
+  CUSTOM_FONT_FAMILY: "",
+  CUSTOM_FONT_SCALE: 100,
+  CUSTOM_RADIUS: "default",
+  CUSTOM_CSS: "",
 };
 
 /**
@@ -306,6 +323,13 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "ADVANCED_OPEN_LINKS_NEW_TAB",
   "CLOUD_SYNC_ENABLED",
   "TRACKER_MODE",
+  "CUSTOM_ACCENT_ENABLED",
+  "CUSTOM_ACCENT_COLOR",
+  "CUSTOM_FONT",
+  "CUSTOM_FONT_FAMILY",
+  "CUSTOM_FONT_SCALE",
+  "CUSTOM_RADIUS",
+  "CUSTOM_CSS",
 ];
 
 export const VISUAL_CLOUD_KEYS: ConfigKey[] = [

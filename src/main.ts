@@ -15,9 +15,12 @@ import { updateNavAvatar } from "./features/profile/visuals.ts";
 import { AVATAR_SELECTOR } from "./features/profile/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
+import { initCustomize } from "./features/customize/customize.ts";
 import { html, render } from "lit-html";
 
 initThemeManager();
+// user look & feel tweaks (accent, font, size, custom CSS): always on, like the theme
+void initCustomize();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);
 

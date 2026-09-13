@@ -750,6 +750,19 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
               saveSetting(def.key!, (e.target as HTMLInputElement).value)}"
           />`;
 
+        case "textarea":
+          return html`<textarea
+            class="textarea textarea-accent w-full font-mono text-xs leading-snug"
+            rows="8"
+            spellcheck="false"
+            placeholder="${def.placeholder || ""}"
+            .value="${String(value || "")}"
+            data-setting-key="${def.key}"
+            ?disabled="${!enabled}"
+            @change="${(e: Event) =>
+              saveSetting(def.key!, (e.target as HTMLTextAreaElement).value)}"
+          ></textarea>`;
+
         case "action": {
           const { actionType, actionLabel } = def as {
             actionType?: string;
@@ -944,6 +957,7 @@ function renderTabsContent(
       f.id === "discord" ||
       f.id === "calendar" ||
       f.id === "advanced" ||
+      f.id === "customize" ||
       f.id === "extras";
     const enabled = active.includes(f.id) || isAlwaysEnabled;
     const cloudDisabled =

@@ -86,6 +86,18 @@ To install this extension, click the buttons below or visit the [Releases](https
 
 ---
 
+### 🎨 Customize
+
+A **Customize** tab in the hub applies your own look & feel to every Intra page (v2 and v3), live, and syncs with your cloud settings.
+
+* **Accent colour** — pick any colour for buttons, links, highlights and progress bars, on top of any theme preset.
+* **Font** — System UI, Humanist, Rounded, Serif, Monospace, or any CSS `font-family` of your own. System fonts only: nothing is downloaded.
+* **Size** — scale the whole interface from 70 % (dense) to 140 % (large text).
+* **Corners** — square, slightly rounded, rounded or very rounded cards, buttons and inputs.
+* **Custom CSS** — a free-form stylesheet applied last on every page.
+
+---
+
 ### 📅 Logtime
 
 Replaces the default logtime view with a monthly calendar showing your logged hours at a glance.

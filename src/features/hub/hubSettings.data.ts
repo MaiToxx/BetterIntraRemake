@@ -7,6 +7,7 @@ import ABOUT from "../../assets/svg/about.svg?raw";
 import DISCORD_SVG from "../../assets/svg/discord.svg?raw";
 import ADVANCED_SVG from "../../assets/svg/advanced.svg?raw";
 import GRID_SVG from "../../assets/svg/grid.svg?raw";
+import CUSTOMIZE_SVG from "../../assets/svg/sun.svg?raw";
 import { CONFIG_DEFAULT, ConfigKey } from "../../config.ts";
 import { CLUSTERS as CLUSTER_OPTIONS } from "../clusters/clusters.data.ts";
 import { RAINBOW_PALETTES } from "../logtime/rainbow-presets.ts";
@@ -71,6 +72,13 @@ export const FEATURE_DEFS = [
     desc: "Subscribe to your 42 events in Google Calendar, Apple Calendar, or any calendar app.",
   },
   {
+    id: "customize",
+    name: "Customize",
+    icon: CUSTOMIZE_SVG,
+    desc: "Accent colour, fonts, size, corners and your own CSS on every Intra page.",
+    cols: 2,
+  },
+  {
     id: "advanced",
     name: "Advanced",
     icon: ADVANCED_SVG,
@@ -94,6 +102,7 @@ export type SettingKind =
   | "toggle"
   | "number"
   | "text"
+  | "textarea"
   | "url"
   | "select"
   | "color"
@@ -619,6 +628,103 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "about",
       label: "",
       kind: "about",
+      fullWidth: true,
+    },
+  ],
+  customize: [
+    { feature: "customize", label: "Accent", kind: "divider" },
+    {
+      feature: "customize",
+      key: "CUSTOM_ACCENT_ENABLED",
+      label: "Custom accent colour",
+      desc: "Use your own colour instead of the theme preset's accent.",
+      kind: "toggle",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_ACCENT_ENABLED,
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_ACCENT_COLOR",
+      label: "Accent colour",
+      desc: "Buttons, links, highlights and progress bars across the intranet.",
+      kind: "color",
+      placeholder: "#00babc",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_ACCENT_COLOR,
+      dependsOn: "CUSTOM_ACCENT_ENABLED",
+      grid: true,
+      colSpan: 1,
+    },
+    { feature: "customize", label: "Typography", kind: "divider" },
+    {
+      feature: "customize",
+      key: "CUSTOM_FONT",
+      label: "Font",
+      desc: "Font family used on every Intra page. System fonts only, nothing is downloaded.",
+      kind: "select",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_FONT,
+      options: [
+        { label: "Intra default", value: "default" },
+        { label: "System UI", value: "system" },
+        { label: "Humanist (Segoe / Helvetica)", value: "humanist" },
+        { label: "Rounded", value: "rounded" },
+        { label: "Serif", value: "serif" },
+        { label: "Monospace", value: "mono" },
+        { label: "Custom…", value: "custom" },
+      ],
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_FONT_FAMILY",
+      label: "Custom font family",
+      desc: "CSS font-family value, e.g. 'Fira Sans', sans-serif. Used when Font is set to Custom.",
+      kind: "text",
+      placeholder: "'Fira Sans', sans-serif",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_FONT_FAMILY,
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_FONT_SCALE",
+      label: "Size (%)",
+      desc: "Scales the whole interface: 90 for a denser layout, 110 for larger text. 70–140.",
+      kind: "number",
+      min: 70,
+      max: 140,
+      step: 5,
+      defaultValue: CONFIG_DEFAULT.CUSTOM_FONT_SCALE,
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_RADIUS",
+      label: "Corners",
+      desc: "Roundness of cards, buttons and inputs.",
+      kind: "select",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_RADIUS,
+      options: [
+        { label: "Intra default", value: "default" },
+        { label: "Square", value: "none" },
+        { label: "Slightly rounded", value: "small" },
+        { label: "Rounded", value: "large" },
+        { label: "Very rounded", value: "full" },
+      ],
+      grid: true,
+      colSpan: 1,
+    },
+    { feature: "customize", label: "Custom CSS", kind: "divider" },
+    {
+      feature: "customize",
+      key: "CUSTOM_CSS",
+      label: "Custom CSS",
+      desc: "Applied last on every Intra page, on top of the theme and the settings above. Reload the page to undo a broken rule.",
+      kind: "textarea",
+      placeholder: "/* example */\n.dash-main { gap: 2rem; }",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_CSS,
       fullWidth: true,
     },
   ],
