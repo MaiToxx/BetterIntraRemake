@@ -1,7 +1,8 @@
 import { getConfig } from "../../config.ts";
 import { hashLogin } from "../account/account.ts";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
+import { fetchFriendsDataViaIntra } from "./friends-intra.ts";
 export interface FriendData {
   login: string;
   displayName: string;
@@ -96,6 +97,20 @@ export async function fetchFriendsData(
   const token = await getConfig("CLOUD_TOKEN");
   const cloudLogin = await getConfig("CLOUD_LOGIN");
   if (!token || !cloudLogin) return [];
+
+  if (AUTH_MODE === "intra") {
+    // No 42 API on the self-hosted worker: build the data from the Intra's
+    // own API with the page's session token (see friends-intra.ts).
+    if (logins.length === 1) return fetchFriendsDataViaIntra(logins);
+    const cached = await getCachedData();
+    if (cached && cached.data.length > 0 && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+    const friends = await fetchFriendsDataViaIntra(logins);
+    if (friends.length > 0) setCachedData(friends);
+    else if (cached && cached.data.length > 0) return cached.data;
+    return friends;
+  }
 
   // Single-login fetches (add friend validation) always go to API
   if (logins.length === 1) {

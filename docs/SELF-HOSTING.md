@@ -36,7 +36,7 @@ redirect, no application to register. Enable it in `package.json`:
 What still needs a 42 application (and stays unavailable in this mode):
 evaluation reminders / Discord, students directory, logtime history beyond
 what the Intra page provides, roulette and correction stats, outstanding
-stars, friends' live data. Settings sync, shared profile visuals, cluster
+stars. Friends' live data is rebuilt from the Intra's own API by the extension (src/features/friends/friends-intra.ts). Settings sync, shared profile visuals, cluster
 map proxy, announcements, subject tracker and calendar sync work.
 
 With this mode, steps 1 and 4 below only need the storage resources and the
