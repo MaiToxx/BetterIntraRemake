@@ -7,7 +7,11 @@ import { sanitizeVisualUrls } from "../profile/visuals-sanitize.ts";
 
 export { hashLogin };
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
+import {
+  loginWithIntraSession,
+  requestIntraLoginFromActiveTab,
+} from "./intra-login.ts";
 async function handleAuthResponse(response: Response): Promise<boolean> {
   if (response.status === 401) {
     await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
@@ -35,6 +39,22 @@ export async function loginWith42(
   const isExtension =
     window.location.protocol === "chrome-extension:" ||
     window.location.protocol === "moz-extension:";
+
+  if (AUTH_MODE === "intra") {
+    // Self-hosted worker without a 42 OAuth application: sign in with the
+    // Intra session token, straight from the page (or via the active Intra
+    // tab when called from the toolbar popup). No popup window at all.
+    const result = isExtension
+      ? await requestIntraLoginFromActiveTab()
+      : await loginWithIntraSession();
+    if (!result.ok) {
+      alert(`Better Intra login failed.\n${result.error ?? ""}`);
+      return;
+    }
+    if (onSuccess) await onSuccess();
+    else window.location.reload();
+    return;
+  }
 
   if (isExtension) {
     // Toolbar popup. The browser destroys this popup as soon as the auth

@@ -10,6 +10,7 @@ export default defineConfig({
       "https://api.github.com/repos/test/better-intra/releases/latest",
     ),
     __WORKER_URL__: JSON.stringify("https://api.betterintra.com"),
+    __AUTH_MODE__: JSON.stringify("oauth"),
     __TS_VERSION__: JSON.stringify("test"),
     __VITE_VERSION__: JSON.stringify("test"),
     __LIT_VERSION__: JSON.stringify("test"),

@@ -16,6 +16,32 @@ manifests' host permissions and the callback content script match pattern.
 > synced settings and shared visuals live in the worker's storage and are not
 > migrated. Users simply click *Connect with 42* again.
 
+## Without a 42 OAuth application: "intra" auth mode
+
+Creating a 42 API application requires student status (pisciners get
+"YOU ARE NOT ALLOWED TO CREATE A NEW APP"). The fork of the worker at
+[MaiToxx/BetterIntraRemake-worker](https://github.com/MaiToxx/BetterIntraRemake-worker)
+adds `POST /auth/intra`: the extension sends the Keycloak session token the
+Intra v3 front-end already uses, the worker verifies its signature against
+`auth.42.fr`'s public keys and opens a session for that login. No popup, no
+redirect, no application to register. Enable it in `package.json`:
+
+```json
+"config": {
+  "workerUrl": "https://<your-worker-url>",
+  "authMode": "intra"
+}
+```
+
+What still needs a 42 application (and stays unavailable in this mode):
+evaluation reminders / Discord, students directory, logtime history beyond
+what the Intra page provides, roulette and correction stats, outstanding
+stars, friends' live data. Settings sync, shared profile visuals, cluster
+map proxy, announcements, subject tracker and calendar sync work.
+
+With this mode, steps 1 and 4 below only need the storage resources and the
+`TOKEN_ENCRYPTION_KEY` secret; `CLIENT_ID` / `CLIENT_SECRET` can stay unset.
+
 ## 1. What you need
 
 - A **Cloudflare** account (free plan is enough: Workers, KV, D1, cron triggers).

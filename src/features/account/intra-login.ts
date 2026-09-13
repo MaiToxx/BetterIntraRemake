@@ -1,0 +1,87 @@
+/**
+ * Login without a 42 OAuth application ("intra" auth mode).
+ *
+ * The Intra v3 front-end authenticates its API calls with a Keycloak token
+ * that hook.js captures on every page (sessionStorage "ft_intrapy_token").
+ * The self-hosted worker verifies that token's signature against Keycloak's
+ * public keys and opens a Better Intra session for its login. No popup, no
+ * redirect, no application to register on the Intra.
+ *
+ * Only usable from a content script on an Intra page (the token lives there);
+ * the toolbar popup asks the active Intra tab to do it (FT_INTRA_LOGIN).
+ */
+import { waitForIntrapyToken } from "../../utils/intrapy.ts";
+import { WORKER_URL } from "../../utils/worker.ts";
+
+export const INTRA_LOGIN_MESSAGE = "FT_INTRA_LOGIN";
+
+export interface IntraLoginResult {
+  ok: boolean;
+  login?: string;
+  error?: string;
+}
+
+export async function loginWithIntraSession(): Promise<IntraLoginResult> {
+  const token = await waitForIntrapyToken(6000);
+  if (!token) {
+    return {
+      ok: false,
+      error:
+        "No Intra session token found on this page. Reload the Intra page and try again.",
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${WORKER_URL}/auth/intra`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+  } catch {
+    return { ok: false, error: "Could not reach the Better Intra server." };
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { ok: false, error: `Server refused the login (${res.status}): ${text}` };
+  }
+
+  const data = (await res.json()) as { token?: string; login?: string };
+  if (!data.token || !data.login) {
+    return { ok: false, error: "Unexpected server response." };
+  }
+
+  await chrome.storage.local.set({
+    CLOUD_TOKEN: data.token,
+    CLOUD_LOGIN: data.login,
+    PENDING_SETTINGS_RESTORE: true,
+  });
+  await chrome.storage.local.remove("CLOUD_AUTH_FAILED");
+  return { ok: true, login: data.login };
+}
+
+/**
+ * From the toolbar popup: ask the active tab (which must be an Intra page) to
+ * perform the login, since only the page has the Intra token.
+ */
+export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https:\/\/[^/]*intra\.42\.fr\//.test(tab.url || "")) {
+    return {
+      ok: false,
+      error: "Open an Intra page (profile-v3.intra.42.fr) in the current tab first.",
+    };
+  }
+  try {
+    const result = (await chrome.tabs.sendMessage(tab.id, {
+      type: INTRA_LOGIN_MESSAGE,
+    })) as IntraLoginResult | undefined;
+    return result ?? { ok: false, error: "No answer from the Intra page." };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Better Intra is not running on this tab yet. Reload the Intra page and try again.",
+    };
+  }
+}

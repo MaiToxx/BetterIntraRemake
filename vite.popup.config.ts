@@ -4,12 +4,13 @@ import { resolve } from "path";
 import fs from "fs";
 import pkg from "./package.json" with { type: "json" };
 import { cp } from "fs/promises";
-import { readRepoInfo, readWorkerUrl } from "./scripts/repo-info.js";
+import { readRepoInfo, readWorkerUrl, readAuthMode } from "./scripts/repo-info.js";
 
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
 const repo = readRepoInfo();
 const workerUrl = readWorkerUrl();
+const authMode = readAuthMode();
 
 export default defineConfig({
   plugins: [
@@ -72,6 +73,7 @@ export default defineConfig({
     __REPO_URL__: JSON.stringify(repo.url),
     __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
     __WORKER_URL__: JSON.stringify(workerUrl),
+    __AUTH_MODE__: JSON.stringify(authMode),
     __TS_VERSION__: JSON.stringify(pkg.devDependencies.typescript),
     __VITE_VERSION__: JSON.stringify(pkg.devDependencies.vite),
     __LIT_VERSION__: JSON.stringify(pkg.dependencies["lit-html"]),

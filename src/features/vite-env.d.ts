@@ -26,3 +26,5 @@ declare const __REPO_URL__: string;
 declare const __REPO_RELEASES_API__: string;
 
 declare const __WORKER_URL__: string;
+
+declare const __AUTH_MODE__: string;

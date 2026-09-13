@@ -22,6 +22,16 @@ export function readWorkerUrl(pkgPath = resolve(here, "../package.json")) {
   return url.origin;
 }
 
+/** "oauth" (upstream 42 application) or "intra" (Intra session token, self-hosted). */
+export function readAuthMode(pkgPath = resolve(here, "../package.json")) {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  const mode = pkg.config?.authMode || "oauth";
+  if (mode !== "oauth" && mode !== "intra") {
+    throw new Error(`package.json config.authMode must be "oauth" or "intra" (got ${mode})`);
+  }
+  return mode;
+}
+
 export function readRepoInfo(pkgPath = resolve(here, "../package.json")) {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   const raw =

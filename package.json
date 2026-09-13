@@ -1,13 +1,14 @@
 {
   "name": "better-intra",
   "private": true,
-  "version": "1.8.13",
+  "version": "1.8.14",
   "repository": {
     "type": "git",
     "url": "https://github.com/MaiToxx/BetterIntraRemake.git"
   },
   "config": {
-    "workerUrl": "https://api.betterintra.com"
+    "workerUrl": "https://betterintra-remake.maitox.workers.dev",
+    "authMode": "intra"
   },
   "type": "module",
   "scripts": {

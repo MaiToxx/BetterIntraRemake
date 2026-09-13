@@ -16,6 +16,21 @@ import { AVATAR_SELECTOR } from "./features/profile/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
 import { initCustomize } from "./features/customize/customize.ts";
+import {
+  INTRA_LOGIN_MESSAGE,
+  loginWithIntraSession,
+} from "./features/account/intra-login.ts";
+
+// The toolbar popup cannot see the Intra session token: it asks this page.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === INTRA_LOGIN_MESSAGE) {
+    loginWithIntraSession()
+      .then(sendResponse)
+      .catch((e) => sendResponse({ ok: false, error: String(e) }));
+    return true;
+  }
+  return undefined;
+});
 import { html, render } from "lit-html";
 
 initThemeManager();
