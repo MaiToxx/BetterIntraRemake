@@ -60,6 +60,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Signing is optional: without AMO credentials the release still gets
+      # the unsigned .xpi and the Chrome zip (usable as temporary add-on /
+      # unpacked extension), and the in-extension update check still works.
+      HAS_AMO: ${{ secrets.AMO_SIGN_KEY != '' && secrets.AMO_SIGN_SECRET != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -99,9 +104,11 @@ jobs:
         run: mv web-ext-artifacts/better-intra-chrome.zip .
 
       - name: Collect source code
+        if: env.HAS_AMO == 'true'
         run: git archive --format=zip --output=sources.zip ${{ github.ref }}
 
       - name: web-ext sign (Firefox)
+        if: env.HAS_AMO == 'true'
         id: web-ext-sign
         uses: kewisch/action-web-ext@v2
         with:
@@ -114,7 +121,14 @@ jobs:
           timeout: 900000
 
       - name: Rename signed artifact
+        if: env.HAS_AMO == 'true'
         run: mv "${{ steps.web-ext-sign.outputs.target }}" better-intra.xpi
+
+      - name: Use unsigned artifact (no AMO credentials configured)
+        if: env.HAS_AMO != 'true'
+        run: |
+          mv "${{ steps.web-ext-build-ff.outputs.target }}" better-intra.xpi
+          echo "::warning::AMO_SIGN_KEY / AMO_SIGN_SECRET not set: the Firefox .xpi is unsigned and will not auto-update."
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
@@ -127,6 +141,7 @@ jobs:
       # the main branch, so publish the new version there once the signed
       # .xpi is attached to the release.
       - name: Update updates.json (Firefox auto-update)
+        if: env.HAS_AMO == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
