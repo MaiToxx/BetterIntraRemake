@@ -15,7 +15,6 @@ function renderAccountTab(
   if (!state.token) {
     return html`
       <div
-        data-theme="light"
         class="w-full h-full flex flex-col items-center justify-center p-8 gap-4"
       >
         <div class="text-center">
@@ -44,10 +43,7 @@ function renderAccountTab(
   }
 
   return html`
-    <div
-      data-theme="light"
-      class="w-full h-full flex flex-col gap-4 overflow-y-auto"
-    >
+    <div class="w-full h-full flex flex-col gap-4 overflow-y-auto">
       ${state.needsReconnect
         ? html`<div
             class="alert alert-warning shadow-lg rounded-xl flex items-center justify-between"

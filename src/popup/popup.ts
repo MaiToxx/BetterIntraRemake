@@ -4,6 +4,7 @@ import { initAccountSettings } from "../features/account/account.ui";
 import CSS from "../assets/style.css?inline";
 import ICON_SVG from "../assets/svg/icon.svg?raw";
 import { UPDATE_KEY, type UpdateInfo } from "../utils/update-check";
+import { getEffectiveTheme } from "../features/profile/theme/theme-manager";
 
 const style = document.createElement("style");
 style.textContent = CSS;
@@ -24,7 +25,6 @@ function renderPlaceholder(container: HTMLElement) {
   render(
     html`
       <div
-        data-theme="light"
         class="w-full h-full flex flex-col items-center justify-center p-8 gap-4"
       >
         <div class="text-center flex flex-col items-center">
@@ -62,7 +62,6 @@ async function renderUpdateBanner(root: HTMLElement) {
   render(
     html`
       <div
-        data-theme="light"
         class="flex items-center justify-between gap-3 px-4 py-2 bg-[#00babc] text-white text-sm"
       >
         <span>
@@ -85,6 +84,15 @@ async function renderUpdateBanner(root: HTMLElement) {
 async function main() {
   const root = document.getElementById("account-root");
   if (!root) return;
+
+  // The popup follows the extension theme (dark / light / system) instead of
+  // being hard-wired to light; daisyUI picks the theme up from #popup-root.
+  const popupRoot = document.getElementById("popup-root");
+  if (popupRoot) {
+    const theme = await getEffectiveTheme();
+    popupRoot.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }
 
   await renderUpdateBanner(root);
   // refresh the check in the background so the badge never stays stale

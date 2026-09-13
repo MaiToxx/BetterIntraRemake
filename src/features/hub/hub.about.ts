@@ -2,6 +2,7 @@ import { html } from "lit-html";
 import { until } from "lit-html/directives/until.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { HUB_INFO } from "../hub/hubSettings.data.ts";
+import { UPDATE_KEY, type UpdateInfo } from "../../utils/update-check.ts";
 
 import GITHUB_SVG from "../../assets/svg/github.svg?raw";
 import HEART_SVG from "../../assets/svg/heart.svg?raw";
@@ -30,17 +31,49 @@ const QUICK_LINKS = [
     label: "PRs",
     color: "bg-accent text-accent-content",
   },
+  {
+    href: HUB_INFO.upstream,
+    svg: GITHUB_SVG,
+    label: "Upstream",
+    color: "bg-neutral text-neutral-content",
+  },
 ];
 
-const starCount = fetch("https://api.github.com/repos/nicopasla/better-intra")
-  .then((r) => r.json())
-  .then((d) => d.stargazers_count as number)
-  .catch(() => null);
+// These used to be module-level fetches, i.e. three network requests on every
+// intra page load even when the hub was never opened. They are now started
+// the first time the About panel is rendered and memoised afterwards.
+function lazy<T>(factory: () => Promise<T>): () => Promise<T> {
+  let promise: Promise<T> | null = null;
+  return () => (promise ??= factory());
+}
 
-const followerCount = fetch("https://api.github.com/users/nicopasla")
-  .then((r) => r.json())
-  .then((d) => d.followers as number)
-  .catch(() => null);
+const REPO_PATH = HUB_INFO.github.replace(/^https:\/\/github\.com\//, "");
+const REPO_OWNER = REPO_PATH.split("/")[0];
+
+const getStarCount = lazy(() =>
+  fetch(`https://api.github.com/repos/${REPO_PATH}`)
+    .then((r) => r.json())
+    .then((d) => d.stargazers_count as number)
+    .catch(() => null),
+);
+
+const getFollowerCount = lazy(() =>
+  fetch(`https://api.github.com/users/${REPO_OWNER}`)
+    .then((r) => r.json())
+    .then((d) => d.followers as number)
+    .catch(() => null),
+);
+
+/** Newer release recorded by the background update check, if any. */
+const getUpdateInfo = async (): Promise<UpdateInfo | null> => {
+  try {
+    const store = await chrome.storage.local.get(UPDATE_KEY);
+    const info = store[UPDATE_KEY] as UpdateInfo | undefined;
+    return info?.version && info.url ? info : null;
+  } catch {
+    return null;
+  }
+};
 
 type Stats = {
   total: number;
@@ -51,10 +84,12 @@ type Stats = {
   countries: { country: string; count: number }[];
 };
 
-const communityStats = fetch("https://api.betterintra.com/api/v1/public/stats")
-  .then((r) => r.json())
-  .then((d) => d as Stats)
-  .catch(() => null);
+const getCommunityStats = lazy(() =>
+  fetch("https://api.betterintra.com/api/v1/public/stats")
+    .then((r) => r.json())
+    .then((d) => d as Stats)
+    .catch(() => null),
+);
 
 function countryFlag(code: string): string {
   if (!code || code.length !== 2) return "🌍";
@@ -112,7 +147,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                   <span>v${HUB_INFO.version}</span>
                 </a>
                 <a
-                  href="https://github.com/nicopasla/better-intra"
+                  href="${HUB_INFO.github}"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn btn-sm gap-1"
@@ -124,7 +159,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                   </span>
                   <span>Star</span>
                   ${until(
-                    starCount.then((c) =>
+                    getStarCount().then((c) =>
                       c != null
                         ? html`<span class="badge badge-sm font-mono"
                             >${c}</span
@@ -143,6 +178,28 @@ export function renderAboutPanel(): ReturnType<typeof html> {
             UI and UX improvements for 42 Intra v3: logtime calendar, cluster
             map tools, custom profiles, shortcuts, friends widget, and more.
           </p>
+          ${until(
+            getUpdateInfo().then((info) =>
+              info
+                ? html`<div
+                    class="alert alert-info rounded-xl flex items-center justify-between gap-3 py-2"
+                  >
+                    <span class="text-sm">
+                      <strong>Version ${info.version}</strong> is available
+                      <span class="opacity-70">(installed: ${HUB_INFO.version})</span>
+                    </span>
+                    <a
+                      href="${info.url}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="btn btn-sm btn-primary font-bold"
+                      >Download</a
+                    >
+                  </div>`
+                : "",
+            ),
+            "",
+          )}
         </div>
 
         <!-- Community -->
@@ -154,7 +211,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
             <div class="flex-1 h-px bg-base-300/40"></div>
           </div>
           ${until(
-            communityStats.then((s) =>
+            getCommunityStats().then((s) =>
               s && s.total > 0
                 ? html`
                     <div
@@ -295,7 +352,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
               </span>
               <span>Follow</span>
               ${until(
-                followerCount.then((c) =>
+                getFollowerCount().then((c) =>
                   c != null
                     ? html`<span class="badge badge-sm font-mono">${c}</span>`
                     : "",
