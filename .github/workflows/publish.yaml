@@ -65,6 +65,9 @@ jobs:
       # the unsigned .xpi and the Chrome zip (usable as temporary add-on /
       # unpacked extension), and the in-extension update check still works.
       HAS_AMO: ${{ secrets.AMO_SIGN_KEY != '' && secrets.AMO_SIGN_SECRET != '' }}
+      # Chrome .crx packaging (self-hosted updates on Linux) needs the private
+      # key matching the "key" field of manifests/manifest.chrome.json.
+      HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -103,6 +106,16 @@ jobs:
       - name: Move Chrome artifact
         run: mv web-ext-artifacts/better-intra-chrome.zip .
 
+      - name: Pack Chrome .crx (self-hosted updates)
+        if: env.HAS_CRX == 'true'
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          printf '%s\n' "$CRX_PRIVATE_KEY" > crx-key.pem
+          npx --yes crx@5 pack dist-chrome -o better-intra.crx -p crx-key.pem
+          rm -f crx-key.pem
+          ls -la better-intra.crx
+
       - name: Collect source code
         if: env.HAS_AMO == 'true'
         run: git archive --format=zip --output=sources.zip ${{ github.ref }}
@@ -136,20 +149,24 @@ jobs:
           files: |
             better-intra.xpi
             better-intra-chrome.zip
+            better-intra.crx
 
-      # Firefox auto-update: the add-on's update_url points at updates.json on
-      # the main branch, so publish the new version there once the signed
-      # .xpi is attached to the release.
-      - name: Update updates.json (Firefox auto-update)
-        if: env.HAS_AMO == 'true'
+      # Auto-update manifests live on the main branch (the browsers fetch them
+      # from raw.githubusercontent.com): publish the new version there once
+      # the artifacts are attached to the release.
+      #   updates.json -> Firefox (only meaningful for signed builds)
+      #   updates.xml  -> Chrome self-hosted .crx (Linux)
+      - name: Update auto-update manifests
+        if: env.HAS_AMO == 'true' || env.HAS_CRX == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           git fetch origin main
           git checkout main
-          node scripts/update-updates-json.js "${RELEASE_TAG#v}"
+          if [ "$HAS_AMO" = "true" ]; then node scripts/update-updates-json.js "${RELEASE_TAG#v}"; fi
+          if [ "$HAS_CRX" = "true" ]; then node scripts/update-updates-xml.js "${RELEASE_TAG#v}"; fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.json
-          git commit -m "chore: updates.json for ${RELEASE_TAG}" || exit 0
+          git add updates.json updates.xml
+          git commit -m "chore: update manifests for ${RELEASE_TAG}" || exit 0
           git push origin main

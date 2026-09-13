@@ -3,14 +3,22 @@
   "name": "Better Intra",
   "version": "1.0.8",
   "description": "UI and UX improvements for 42 Intra: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.",
-  "permissions": ["storage", "activeTab", "alarms"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "alarms"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "web_accessible_resources": [
     {
-      "resources": ["hook.js"],
-      "matches": ["https://*.intra.42.fr/*"]
+      "resources": [
+        "hook.js"
+      ],
+      "matches": [
+        "https://*.intra.42.fr/*"
+      ]
     }
   ],
   "action": {
@@ -30,13 +38,21 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://*.intra.42.fr/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://*.intra.42.fr/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://api.betterintra.com/callback*"],
-      "js": ["auth-callback.js"],
+      "matches": [
+        "https://api.betterintra.com/callback*"
+      ],
+      "js": [
+        "auth-callback.js"
+      ],
       "run_at": "document_end"
     }
   ]

@@ -35,6 +35,10 @@ export default defineConfig({
           const gecko = (manifest.browser_specific_settings ??= {}).gecko ??= {};
           gecko.id = repo.geckoId;
           gecko.update_url = repo.updatesJsonUrl;
+        } else {
+          // Chrome self-hosted updates (.crx + updates.xml). Ignored for
+          // unpacked installs and on Windows/macOS, harmless there.
+          manifest.update_url = repo.updatesXmlUrl;
         }
         fs.writeFileSync(
           manifestDst,

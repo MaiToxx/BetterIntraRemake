@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 images-store/
 tools/cluster-editor/index.html
+
+# CRX signing key (never commit)
+*.pem

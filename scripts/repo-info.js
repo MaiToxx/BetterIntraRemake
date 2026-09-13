@@ -27,6 +27,11 @@ export function readRepoInfo(pkgPath = resolve(here, "../package.json")) {
     url: `https://github.com/${owner}/${name}`,
     releasesApi: `https://api.github.com/repos/${owner}/${name}/releases/latest`,
     updatesJsonUrl: `https://raw.githubusercontent.com/${owner}/${name}/main/updates.json`,
+    // Chrome self-hosted update manifest (honoured on Linux; Windows/macOS
+    // only update extensions from the Chrome Web Store)
+    updatesXmlUrl: `https://raw.githubusercontent.com/${owner}/${name}/main/updates.xml`,
+    crxUrl: (version) =>
+      `https://github.com/${owner}/${name}/releases/download/v${version}/better-intra.crx`,
     // must differ from upstream's id: an AMO-signed id belongs to one account
     geckoId: `better-intra@${owner.toLowerCase()}.github`,
     xpiUrl: (version) =>
