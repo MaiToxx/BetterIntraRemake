@@ -24,3 +24,5 @@ declare const __WEB_EXT_VERSION__: string;
 
 declare const __REPO_URL__: string;
 declare const __REPO_RELEASES_API__: string;
+
+declare const __WORKER_URL__: string;

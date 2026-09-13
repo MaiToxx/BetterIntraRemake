@@ -3,7 +3,8 @@ import { getConfig } from "../../../config.ts";
 import { sharedCSS } from "../../../assets/shared-styles.ts";
 import { THEMES, getEffectiveTheme } from "../theme/theme-manager.ts";
 
-const DATA_BASE = "https://api.betterintra.com/gh/data";
+import { WORKER_URL } from "../../../utils/worker.ts";
+const DATA_BASE = `${WORKER_URL}/gh/data`;
 const EVENT_TYPES_CACHE_KEY = "EVENT_TYPES_DATA";
 const EVENT_TYPES_CACHE_TTL = 60 * 60 * 1000;
 

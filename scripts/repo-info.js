@@ -9,6 +9,19 @@ import { dirname, resolve } from "path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/** Upstream cloud worker; override with package.json "config.workerUrl". */
+export const DEFAULT_WORKER_URL = "https://api.betterintra.com";
+
+export function readWorkerUrl(pkgPath = resolve(here, "../package.json")) {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  const raw = pkg.config?.workerUrl || DEFAULT_WORKER_URL;
+  const url = new URL(String(raw)); // throws on garbage
+  if (url.protocol !== "https:") {
+    throw new Error(`package.json config.workerUrl must be https (got ${raw})`);
+  }
+  return url.origin;
+}
+
 export function readRepoInfo(pkgPath = resolve(here, "../package.json")) {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   const raw =

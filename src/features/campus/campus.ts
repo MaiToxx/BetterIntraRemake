@@ -33,7 +33,8 @@ interface CampusManifest {
 
 export let CLUSTERS: { id: string; name: string; svg?: string }[] = [];
 
-const CAMPUS_BASE = "https://api.betterintra.com/gh/campuses";
+import { WORKER_URL } from "../../utils/worker.ts";
+const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 const CACHE_PREFIX = "CAMPUS_DATA_";
 const MANIFEST_CACHE_KEY = "CAMPUS_MANIFEST_V2";
 const CACHE_TTL = 60 * 60 * 1000;

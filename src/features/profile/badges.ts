@@ -2,7 +2,8 @@ import { getConfig } from "../../config.ts";
 import { fetchCampusList } from "../campus/campus.ts";
 import { TITLE_BADGE_SELECTOR } from "./selectors.ts";
 
-const CAMPUS_BASE = "https://api.betterintra.com/gh/campuses";
+import { WORKER_URL } from "../../utils/worker.ts";
+const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 
 interface CampusBadgeData {
   badgeBaseUrl: string;

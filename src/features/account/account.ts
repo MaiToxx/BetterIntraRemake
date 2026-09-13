@@ -7,8 +7,7 @@ import { sanitizeVisualUrls } from "../profile/visuals-sanitize.ts";
 
 export { hashLogin };
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../utils/worker.ts";
 async function handleAuthResponse(response: Response): Promise<boolean> {
   if (response.status === 401) {
     await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });

@@ -1,8 +1,7 @@
 import { getConfig } from "../../../config.ts";
 import { hashLogin } from "../../../utils/crypto.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../../utils/worker.ts";
 export const INITIAL_VISIBLE_COUNT = 60;
 export const WINDOW_STEP = 90;
 

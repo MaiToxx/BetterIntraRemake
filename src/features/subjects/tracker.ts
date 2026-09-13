@@ -9,7 +9,7 @@ import {
 } from "./fingerprint.ts";
 import { renderSubjectBadge } from "./ui.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
+import { WORKER_URL } from "../../utils/worker.ts";
 const CHECK_COOLDOWN_MS = 15 * 60 * 1000;
 
 interface LocalSubjectState {

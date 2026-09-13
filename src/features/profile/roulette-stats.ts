@@ -10,7 +10,7 @@ import {
 import { getIsLight } from "./theme/theme-manager.ts";
 import { createSkeleton, createSkeletonLines } from "../../utils/skeleton.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
+import { WORKER_URL } from "../../utils/worker.ts";
 const CARD_ID = "ft-roulette-card";
 
 let rouletteStatsInitialized = false;

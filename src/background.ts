@@ -6,8 +6,7 @@ import {
   type UpdateInfo,
 } from "./utils/update-check";
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "./utils/worker";
 // ---------------------------------------------------------------------------
 // Update check (GitHub Releases of __REPO_URL__)
 // ---------------------------------------------------------------------------

@@ -39,8 +39,7 @@ export interface CalendarEvent {
 export type EventsByDate = Record<string, CalendarEvent[]>;
 
 const INTRAPY_BASE = "https://intrapy.intra.42.fr";
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../utils/worker.ts";
 const historyCache = new Map<string, Record<string, number>>();
 const fetchPromiseMap = new Map<string, Promise<void>>();
 

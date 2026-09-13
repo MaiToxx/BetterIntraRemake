@@ -1,11 +1,12 @@
 import { defineConfig } from "vite";
 import { resolve } from "path";
 import pkg from "./package.json" with { type: "json" };
-import { readRepoInfo } from "./scripts/repo-info.js";
+import { readRepoInfo, readWorkerUrl } from "./scripts/repo-info.js";
 
 // Content script injected on the worker's OAuth callback page.
 const outDir = process.env.BUILD_OUT_DIR || "dist";
 const repo = readRepoInfo();
+const workerUrl = readWorkerUrl();
 
 export default defineConfig({
   build: {
@@ -27,5 +28,6 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __REPO_URL__: JSON.stringify(repo.url),
     __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
+    __WORKER_URL__: JSON.stringify(workerUrl),
   },
 });

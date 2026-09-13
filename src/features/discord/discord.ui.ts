@@ -15,8 +15,7 @@ let discordPanelListener:
   | ((changes: { [key: string]: chrome.storage.StorageChange }) => void)
   | null = null;
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../utils/worker.ts";
 type StepState = "locked" | "active" | "done";
 
 function stepClass(s: StepState) {

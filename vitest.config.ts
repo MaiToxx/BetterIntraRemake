@@ -9,6 +9,7 @@ export default defineConfig({
     __REPO_RELEASES_API__: JSON.stringify(
       "https://api.github.com/repos/test/better-intra/releases/latest",
     ),
+    __WORKER_URL__: JSON.stringify("https://api.betterintra.com"),
     __TS_VERSION__: JSON.stringify("test"),
     __VITE_VERSION__: JSON.stringify("test"),
     __LIT_VERSION__: JSON.stringify("test"),

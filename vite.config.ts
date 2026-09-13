@@ -4,11 +4,12 @@ import { resolve } from "path";
 import fs from "fs";
 import { cp } from "fs/promises";
 import pkg from "./package.json" with { type: "json" };
-import { readRepoInfo } from "./scripts/repo-info.js";
+import { readRepoInfo, readWorkerUrl, DEFAULT_WORKER_URL } from "./scripts/repo-info.js";
 
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
 const repo = readRepoInfo();
+const workerUrl = readWorkerUrl();
 
 export default defineConfig({
   plugins: [
@@ -29,6 +30,15 @@ export default defineConfig({
 
         const manifest = JSON.parse(fs.readFileSync(manifestSrc, "utf-8"));
         manifest.version = pkg.version;
+        // Self-hosted worker: rewrite the upstream origin in host permissions
+        // and content script matches (package.json config.workerUrl).
+        if (workerUrl !== DEFAULT_WORKER_URL) {
+          const swap = (s: string) => s.replace(DEFAULT_WORKER_URL, workerUrl);
+          manifest.host_permissions = (manifest.host_permissions ?? []).map(swap);
+          for (const cs of manifest.content_scripts ?? []) {
+            cs.matches = (cs.matches ?? []).map(swap);
+          }
+        }
         if (target === "firefox") {
           // Firefox auto-update: id and update manifest derived from the
           // repository this fork lives in (package.json "repository").
@@ -76,6 +86,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __REPO_URL__: JSON.stringify(repo.url),
     __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
+    __WORKER_URL__: JSON.stringify(workerUrl),
     __TS_VERSION__: JSON.stringify(pkg.devDependencies.typescript),
     __VITE_VERSION__: JSON.stringify(pkg.devDependencies.vite),
     __LIT_VERSION__: JSON.stringify(pkg.dependencies["lit-html"]),

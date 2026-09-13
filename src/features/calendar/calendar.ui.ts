@@ -6,7 +6,7 @@ import { generateQrDataUrl } from "./qr.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
-const WORKER_URL = "https://api.betterintra.com";
+import { WORKER_URL } from "../../utils/worker.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
 
 function calUrl(token: string): string {

@@ -3,6 +3,7 @@ import { until } from "lit-html/directives/until.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { HUB_INFO } from "../hub/hubSettings.data.ts";
 import { UPDATE_KEY, type UpdateInfo } from "../../utils/update-check.ts";
+import { WORKER_URL } from "../../utils/worker.ts";
 
 import GITHUB_SVG from "../../assets/svg/github.svg?raw";
 import HEART_SVG from "../../assets/svg/heart.svg?raw";
@@ -85,7 +86,7 @@ type Stats = {
 };
 
 const getCommunityStats = lazy(() =>
-  fetch("https://api.betterintra.com/api/v1/public/stats")
+  fetch(`${WORKER_URL}/api/v1/public/stats`)
     .then((r) => r.json())
     .then((d) => d as Stats)
     .catch(() => null),

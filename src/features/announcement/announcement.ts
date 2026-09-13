@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
 import { sanitizeHttpUrl } from "../../utils/safe-url.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
+import { WORKER_URL } from "../../utils/worker.ts";
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_KEY = "ft-announcement-cache";
 const DISMISS_PREFIX = "ft-announcement-dismissed:";

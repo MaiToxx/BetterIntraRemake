@@ -5,6 +5,7 @@ import CSS from "../assets/style.css?inline";
 import ICON_SVG from "../assets/svg/icon.svg?raw";
 import { UPDATE_KEY, type UpdateInfo } from "../utils/update-check";
 import { getEffectiveTheme } from "../features/profile/theme/theme-manager";
+import { WORKER_HOST, WORKER_ORIGIN_PATTERN } from "../utils/worker";
 
 const style = document.createElement("style");
 style.textContent = CSS;
@@ -83,7 +84,7 @@ async function renderUpdateBanner(root: HTMLElement) {
 
 const REQUIRED_ORIGINS = [
   "https://*.intra.42.fr/*",
-  "https://api.betterintra.com/*",
+  WORKER_ORIGIN_PATTERN,
 ];
 
 /**
@@ -108,7 +109,7 @@ async function renderPermissionBanner(root: HTMLElement) {
       >
         <span>
           <strong>Site access required.</strong> Better Intra needs access to
-          intra.42.fr and api.betterintra.com.
+          intra.42.fr and ${WORKER_HOST}.
         </span>
         <button
           type="button"

@@ -15,7 +15,8 @@ export interface ClusterInfo {
   svg?: string;
 }
 
-export const WORKER_URL = "https://api.betterintra.com";
+import { WORKER_URL as BASE_WORKER_URL } from "../../../utils/worker.ts";
+export const WORKER_URL = BASE_WORKER_URL;
 export const CLUSTERS_JSON_URL = "https://meta.intra.42.fr/clusters.json";
 export const POLL_INTERVAL = 60_000;
 export const SEAT_TARGET_PX = 60;

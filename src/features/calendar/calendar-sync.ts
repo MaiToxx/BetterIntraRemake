@@ -1,7 +1,6 @@
 import { hashLogin } from "../../utils/crypto.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../utils/worker.ts";
 function escapeIcs(text: string): string {
   return text
     .replace(/\\/g, "\\\\")

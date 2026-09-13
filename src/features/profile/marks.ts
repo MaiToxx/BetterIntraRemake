@@ -12,8 +12,7 @@ import X_SVG from "../../assets/svg/x.svg?raw";
 import CHEVRON_DOWN_SVG from "../../assets/svg/chevron-down.svg?raw";
 import { createSkeleton } from "../../utils/skeleton.ts";
 
-const WORKER_URL = "https://api.betterintra.com";
-
+import { WORKER_URL } from "../../utils/worker.ts";
 const OUTSTANDING_CACHE_TTL_MS = 60 * 1000;
 
 const DATE_COLUMN_WIDTH = "150px";
