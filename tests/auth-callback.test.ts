@@ -4,7 +4,31 @@ import {
   consumeAuthFlow,
   isAuthFlowFresh,
   markAuthFlowPending,
+  parseAuthSuccessScript,
 } from "../src/features/account/auth-callback";
+
+describe("parseAuthSuccessScript", () => {
+  it("extracts token and login from the worker's success page script", () => {
+    const script =
+      'if (window.opener) { window.opener.postMessage({ type: "42_AUTH_SUCCESS", token: "88310963-d060-40d0-8bed-000000000000", login: "alepayen" }, "https://profile-v3.intra.42.fr"); }';
+    expect(parseAuthSuccessScript(script)).toEqual({
+      token: "88310963-d060-40d0-8bed-000000000000",
+      login: "alepayen",
+    });
+  });
+
+  it("returns null for unrelated scripts or malformed values", () => {
+    expect(parseAuthSuccessScript("console.log('hi')")).toBeNull();
+    expect(
+      parseAuthSuccessScript('42_AUTH_SUCCESS token: "short" login: "x"'),
+    ).toBeNull();
+    expect(
+      parseAuthSuccessScript(
+        '42_AUTH_SUCCESS, token: "abcdefghijklmnop", login: "bad login!"',
+      ),
+    ).toBeNull();
+  });
+});
 
 beforeEach(() => {
   (chrome.storage.local.clear as any)();

@@ -24,6 +24,11 @@
       "matches": ["https://*.intra.42.fr/*"],
       "js": ["content.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://api.betterintra.com/callback*"],
+      "js": ["auth-callback.js"],
+      "run_at": "document_end"
     }
   ],
   "action": {

@@ -37,6 +37,24 @@ export function isAuthFlowFresh(
 }
 
 /**
+ * The worker's "Login Successful" page only does
+ *   window.opener.postMessage({ type: "42_AUTH_SUCCESS", token, login }, origin)
+ * and waits for the opener to close it. Extract those credentials from that
+ * inline script so a content script on the callback page can finish the login
+ * itself when the opener is gone (Chrome closes the toolbar popup as soon as
+ * the auth window takes focus) or never receives the message.
+ */
+export function parseAuthSuccessScript(
+  scriptText: string,
+): { token: string; login: string } | null {
+  if (!scriptText.includes("42_AUTH_SUCCESS")) return null;
+  const token = /token\s*:\s*"([^"\\]{8,512})"/.exec(scriptText)?.[1];
+  const login = /login\s*:\s*"([a-z0-9_.-]{1,64})"/i.exec(scriptText)?.[1];
+  if (!token || !login) return null;
+  return { token, login };
+}
+
+/**
  * Consume the pending marker for a flow. Returns true when the callback may be
  * trusted. The marker is always cleared, so a callback can only be used once.
  */

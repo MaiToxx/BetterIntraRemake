@@ -3,6 +3,10 @@
     "better-intra@maitoxx.github": {
       "updates": [
         {
+          "version": "1.8.9",
+          "update_link": "https://github.com/MaiToxx/BetterIntraRemake/releases/download/v1.8.9/better-intra.xpi"
+        },
+        {
           "version": "1.8.8",
           "update_link": "https://github.com/MaiToxx/BetterIntraRemake/releases/download/v1.8.8/better-intra.xpi"
         },

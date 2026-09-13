@@ -20,7 +20,7 @@ npm run dev:firefox     # watch + web-ext hot-reload
 
 ## Build quirks
 
-Always set **both** `TARGET` and `BUILD_OUT_DIR` env vars (cross-env handles this). The build pipeline is: `tsc` → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker).
+Always set **both** `TARGET` and `BUILD_OUT_DIR` env vars (cross-env handles this). The build pipeline is: `tsc` → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker) → `vite build --config vite.auth.config.ts` (content script for the worker's OAuth callback page, `src/auth-callback.ts`).
 
 ```bash
 cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.popup.config.ts && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.background.config.ts
