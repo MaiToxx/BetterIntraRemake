@@ -81,6 +81,57 @@ async function renderUpdateBanner(root: HTMLElement) {
   );
 }
 
+const REQUIRED_ORIGINS = [
+  "https://*.intra.42.fr/*",
+  "https://api.betterintra.com/*",
+];
+
+/**
+ * Firefox (Manifest V3) does not grant host permissions automatically: the
+ * extension then silently does nothing on the Intranet. Show a one-click fix.
+ */
+async function renderPermissionBanner(root: HTMLElement) {
+  let granted = true;
+  try {
+    granted = await chrome.permissions.contains({ origins: REQUIRED_ORIGINS });
+  } catch {
+    return; // API unavailable: nothing we can do here
+  }
+  if (granted) return;
+  const banner = document.createElement("div");
+  banner.id = "permission-banner";
+  root.parentElement?.insertBefore(banner, root);
+  render(
+    html`
+      <div
+        class="flex items-center justify-between gap-3 px-4 py-2 bg-warning text-warning-content text-sm"
+      >
+        <span>
+          <strong>Site access required.</strong> Better Intra needs access to
+          intra.42.fr and api.betterintra.com.
+        </span>
+        <button
+          type="button"
+          class="btn btn-xs font-bold"
+          @click="${async () => {
+            try {
+              const ok = await chrome.permissions.request({
+                origins: REQUIRED_ORIGINS,
+              });
+              if (ok) banner.remove();
+            } catch {
+              /* refused */
+            }
+          }}"
+        >
+          Allow
+        </button>
+      </div>
+    `,
+    banner,
+  );
+}
+
 async function main() {
   const root = document.getElementById("account-root");
   if (!root) return;
@@ -94,6 +145,7 @@ async function main() {
     document.documentElement.style.colorScheme = theme;
   }
 
+  await renderPermissionBanner(root);
   await renderUpdateBanner(root);
   // refresh the check in the background so the badge never stays stale
   void chrome.runtime.sendMessage({ type: "FT_CHECK_UPDATE" }).catch(() => {});

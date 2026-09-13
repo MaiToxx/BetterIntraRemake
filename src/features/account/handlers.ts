@@ -10,8 +10,30 @@ import {
 } from "./account";
 import { AccountState, resetButtonState } from "./state";
 
+/** Hosts the extension must be allowed on for the login flow to complete. */
+const REQUIRED_ORIGINS = [
+  "https://*.intra.42.fr/*",
+  "https://api.betterintra.com/*",
+];
+
+/**
+ * Firefox treats the host permissions of a Manifest V3 extension as optional:
+ * until the user grants them, no content script runs, including the one that
+ * finishes the login on the worker's callback page. Ask from the click
+ * handler (a user gesture is required); on Chrome, and once granted, this
+ * resolves immediately without any prompt.
+ */
+async function ensureHostPermissions(): Promise<void> {
+  try {
+    await chrome.permissions.request({ origins: REQUIRED_ORIGINS });
+  } catch {
+    /* API unavailable or refused: the opener path may still work */
+  }
+}
+
 export function createHandlers(state: AccountState, updateUI: () => void) {
-  const handleLogin42 = () => {
+  const handleLogin42 = async () => {
+    await ensureHostPermissions();
     loginWith42(async () => {
       await clearAuthFailed();
       void chrome.runtime
