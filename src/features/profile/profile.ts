@@ -45,6 +45,10 @@ export async function initProfile() {
 
   let isUpdating = false;
   let needsRerun = false;
+  // On /users/* the observer is disconnected after a pass, but only once the
+  // profile card has actually been found: a first pass on a still-loading
+  // page used to disconnect immediately and no feature ever initialised.
+  let initialised = false;
 
   const scheduleUpdate = () => {
     needsRerun = false;
@@ -58,6 +62,7 @@ export async function initProfile() {
       await updateVisuals();
       if (location.pathname === "/" || location.pathname.startsWith("/users")) {
         if (!findProfileCard()) return;
+        initialised = true;
 
         await Promise.allSettled([
           initLayoutManager(),
@@ -87,7 +92,7 @@ export async function initProfile() {
       isUpdating = false;
       if (needsRerun) {
         scheduleUpdate();
-      } else if (location.pathname.startsWith("/users")) {
+      } else if (initialised && location.pathname.startsWith("/users")) {
         observer.disconnect();
       }
     }

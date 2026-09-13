@@ -34,9 +34,23 @@ import type {
   StudentsView,
 } from "./data.ts";
 
-export async function openStudentsDialog() {
+// Guard against double-clicks: the dialog is only appended after several
+// awaits, and nothing else prevented opening it twice.
+let studentsOpening: Promise<void> | null = null;
+
+export function openStudentsDialog(): Promise<void> {
+  if (document.getElementById("students-dialog")) return Promise.resolve();
+  if (studentsOpening) return studentsOpening;
+  studentsOpening = openStudentsDialogImpl().finally(() => {
+    studentsOpening = null;
+  });
+  return studentsOpening;
+}
+
+async function openStudentsDialogImpl() {
   const campusId = await getConfig("CLUSTERS_CAMPUS");
   if (campusId !== "12") return;
+  if (document.getElementById("students-dialog")) return;
 
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -211,7 +225,11 @@ export async function openStudentsDialog() {
     if (dd) dd.open = false;
   });
 
+  // Generation counter: switching tabs quickly used to let an older response
+  // overwrite the entries of the tab that is now displayed.
+  let loadGen = 0;
   const load = async () => {
+    const gen = ++loadGen;
     loading = true;
     authError = false;
     rerender();
@@ -229,6 +247,7 @@ export async function openStudentsDialog() {
     } else {
       res = await fetchStudents();
     }
+    if (gen !== loadGen || !dialog.isConnected) return; // stale or closed
     if (res?.unauthorized) {
       entries = [];
       lastFetched = 0;

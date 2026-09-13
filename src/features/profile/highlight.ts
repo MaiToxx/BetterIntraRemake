@@ -60,8 +60,9 @@ function clearExistingHighlight() {
  * @returns An array of matching SVG elements.
  */
 function getSeatElements(seatId: string): SVGGraphicsElement[] {
+  // seatId comes from the URL: escape it or a quote makes querySelectorAll throw
   const exact = document.querySelectorAll<SVGGraphicsElement>(
-    `[id="${seatId}"]`,
+    `[id="${CSS.escape(seatId)}"]`,
   );
   if (exact.length > 0) return Array.from(exact);
 
@@ -151,9 +152,15 @@ function checkRouteAndHighlight() {
       return;
     }
 
-    if (getSeatElements(targetSeat).length > 0) {
-      highlightSeatFromURL();
+    try {
+      if (getSeatElements(targetSeat).length > 0) {
+        highlightSeatFromURL();
+        clearInterval(interval);
+      }
+    } catch (err) {
+      // never let a bad seat id keep this interval alive forever
       clearInterval(interval);
+      console.warn("Better Intra: could not highlight seat", err);
     }
   }, 500);
 }

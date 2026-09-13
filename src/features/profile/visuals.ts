@@ -1,8 +1,13 @@
-import { getConfig } from "../../config.ts";
+import { getConfig, getConfigMany } from "../../config.ts";
 import { getCloudLogin, fetchUserVisuals } from "../account/account.ts";
 import { createSettingsModal } from "./profile.modal.ts";
 import { applyThemeToProfileCard } from "./profile-card.ts";
 import { applyPublicLogtimeSettings, initLogtime } from "../logtime/logtime.ts";
+import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
+
+/** Logins known to have no cloud visuals, with the time we learned it. */
+const noVisualsCache = new Map<string, number>();
+const NO_VISUALS_TTL_MS = 10 * 60 * 1000;
 import {
   AVATAR_SELECTOR,
   BANNER_SELECTOR,
@@ -315,8 +320,11 @@ const modeCss: Record<string, string> = {
   tile: "background-size: auto !important; background-repeat: repeat !important; background-position: top left !important;",
 };
 
-export const applyImgs = (urls: VisualUrls | null) => {
-  if (!urls) return;
+export const applyImgs = (rawUrls: VisualUrls | null) => {
+  if (!rawUrls) return;
+  // Values may come from another user's cloud settings and end up in <style>
+  // text and class names: never trust them as-is.
+  const urls = sanitizeVisualUrls(rawUrls);
 
   const avatar = document.querySelector(AVATAR_SELECTOR) as HTMLElement | null;
 
@@ -421,7 +429,12 @@ export const applyImgs = (urls: VisualUrls | null) => {
 
   if (urls.logtime) {
     const logtime = urls.logtime;
-    initLogtime().then(() => applyPublicLogtimeSettings(logtime));
+    // Respect the user's feature toggle: viewing a profile that publishes
+    // logtime settings must not render the widget for someone who disabled it.
+    getConfig("ACTIVE_SCRIPTS").then((scripts) => {
+      if (!Array.isArray(scripts) || !scripts.includes("logtime")) return;
+      return initLogtime().then(() => applyPublicLogtimeSettings(logtime));
+    });
   }
 };
 
@@ -555,20 +568,36 @@ export const updateVisuals = async () => {
 
   if (!isFetching) {
     if (targetLogin === myLogin) {
+      // one storage read instead of thirteen serial ones
+      const c = await getConfigMany([
+        "PROFILE_IMAGE_URL",
+        "PROFILE_BANNER_URL",
+        "PROFILE_BANNER_MODE",
+        "PROFILE_BANNER_COLOR",
+        "PROFILE_BACKGROUND_URL",
+        "PROFILE_BACKGROUND_MODE",
+        "PROFILE_BACKGROUND_COLOR",
+        "PROFILE_AVATAR_BG",
+        "PROFILE_DECORATION",
+        "PROFILE_AVATAR_POSITION_X",
+        "PROFILE_AVATAR_POSITION_Y",
+        "PROFILE_AVATAR_SCALE",
+        "PROFILE_BADGE_BG",
+      ] as const);
       visualCache = {
-        avatar: await getConfig("PROFILE_IMAGE_URL"),
-        banner: await getConfig("PROFILE_BANNER_URL"),
-        bannerMode: (await getConfig("PROFILE_BANNER_MODE")) || "fill",
-        bannerColor: await getConfig("PROFILE_BANNER_COLOR"),
-        background: await getConfig("PROFILE_BACKGROUND_URL"),
-        backgroundMode: (await getConfig("PROFILE_BACKGROUND_MODE")) || "fill",
-        backgroundColor: await getConfig("PROFILE_BACKGROUND_COLOR"),
-        avatarBg: await getConfig("PROFILE_AVATAR_BG"),
-        decoration: await getConfig("PROFILE_DECORATION"),
-        avatarPosX: await getConfig("PROFILE_AVATAR_POSITION_X"),
-        avatarPosY: await getConfig("PROFILE_AVATAR_POSITION_Y"),
-        avatarScale: await getConfig("PROFILE_AVATAR_SCALE"),
-        badgeBg: await getConfig("PROFILE_BADGE_BG"),
+        avatar: c.PROFILE_IMAGE_URL,
+        banner: c.PROFILE_BANNER_URL,
+        bannerMode: c.PROFILE_BANNER_MODE || "fill",
+        bannerColor: c.PROFILE_BANNER_COLOR,
+        background: c.PROFILE_BACKGROUND_URL,
+        backgroundMode: c.PROFILE_BACKGROUND_MODE || "fill",
+        backgroundColor: c.PROFILE_BACKGROUND_COLOR,
+        avatarBg: c.PROFILE_AVATAR_BG,
+        decoration: c.PROFILE_DECORATION,
+        avatarPosX: c.PROFILE_AVATAR_POSITION_X,
+        avatarPosY: c.PROFILE_AVATAR_POSITION_Y,
+        avatarScale: c.PROFILE_AVATAR_SCALE,
+        badgeBg: c.PROFILE_BADGE_BG,
       };
 
       if (
@@ -605,6 +634,13 @@ export const updateVisuals = async () => {
         if (cached.avatar) attachToggleListener(avatarEl);
         revalidateVisuals(targetLogin, cached);
       } else {
+        // Negative cache: a user without cloud visuals used to be re-fetched
+        // on every mutation pass of the profile page.
+        const knownEmptyAt = noVisualsCache.get(targetLogin);
+        if (knownEmptyAt && Date.now() - knownEmptyAt < NO_VISUALS_TTL_MS) {
+          avatarEl.style.setProperty("opacity", "1", "important");
+          return;
+        }
         isFetching = true;
         const fetchForLogin = targetLogin;
         try {
@@ -630,6 +666,7 @@ export const updateVisuals = async () => {
             lastAppliedKey = getVisualKey(visualCache);
             if (cloudUrls.avatar) attachToggleListener(avatarEl);
           } else {
+            if (cloudUrls) noVisualsCache.set(targetLogin, Date.now());
             avatarEl.style.setProperty("opacity", "1", "important");
           }
         } finally {

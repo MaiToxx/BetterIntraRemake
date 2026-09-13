@@ -2,6 +2,7 @@ import { BetterIntraConfig, getConfig, CLOUD_SYNC_KEYS } from "../../config.ts";
 import type { VisualUrls } from "../profile/visuals.ts";
 import { hashLogin } from "../../utils/crypto.ts";
 import { showConfirmDialog } from "../../utils/confirm-dialog.ts";
+import { markAuthFlowPending } from "./auth-callback.ts";
 
 export { hashLogin };
 
@@ -29,6 +30,9 @@ export async function loginWith42(
 ): Promise<void> {
   const extensionFakeCallback = window.location.href;
   const authUrl = `${WORKER_URL}/login?redirect_uri=${encodeURIComponent(extensionFakeCallback)}`;
+
+  // Record that a login is in progress so that main.ts accepts the callback.
+  await markAuthFlowPending("cloud");
 
   const popup = window.open(
     authUrl,

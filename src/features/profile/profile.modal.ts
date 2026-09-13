@@ -744,7 +744,12 @@ export const createSettingsModal = async (
   dialog.showModal();
 
   content.addEventListener("click", (e) => e.stopPropagation());
-  dialog.addEventListener("click", () => close());
+  // Escape triggers the native close without going through close(): the host
+  // stayed in the DOM and the editor could not be reopened until a reload.
+  dialog.addEventListener("close", () => dialog.remove());
+  // `close` is declared further down; referencing it lazily avoids a
+  // ReferenceError when the backdrop is clicked while settings are loading.
+  dialog.addEventListener("click", () => dialog.close());
 
   if (isConnected) {
     const cloudSettings = await fetchMySettings();

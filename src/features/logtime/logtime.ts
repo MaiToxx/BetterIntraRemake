@@ -1,5 +1,5 @@
 import { render } from "lit-html";
-import { getConfig } from "../../config.ts";
+import { getConfig, getConfigMany } from "../../config.ts";
 import { resolveRainbowColors } from "./rainbow-presets.ts";
 import { hashLogin } from "../../utils/crypto.ts";
 import {
@@ -125,24 +125,41 @@ function mergeHistoryWithHook(
   return merged;
 }
 
-const getConfigs = async () => ({
-  goal_hours: await getConfig("LOGTIME_GOAL_HOURS"),
-  show_average: await getConfig("LOGTIME_SHOW_AVERAGE"),
-  show_goal: await getConfig("LOGTIME_SHOW_GOAL"),
-  show_tacos: await getConfig("LOGTIME_SHOW_TACOS"),
-  emoji: limit(await getConfig("LOGTIME_EMOJI")),
-  divisor: await getConfig("LOGTIME_EMOJI_DIVISOR"),
-  rate: await getConfig("LOGTIME_EMOJI_RATE"),
-  show_days_mode: await getConfig("LOGTIME_SHOW_DAYS_MODE"),
-  calendar_color: await getConfig("LOGTIME_CALENDAR_COLOR"),
-  labels_color: await getConfig("LOGTIME_LABELS_COLOR"),
-  rainbow_colors: resolveRainbowColors(
-    await getConfig("LOGTIME_RAINBOW_PALETTE"),
-  ),
-  disable_animations: await getConfig("DISABLE_ANIMATIONS"),
-  max_earnings: await getConfig("LOGTIME_MAX_EARNINGS"),
-  calendar_view: await getConfig("LOGTIME_CALENDAR_VIEW"),
-});
+// One storage read for all logtime settings instead of fifteen serial ones.
+const getConfigs = async () => {
+  const c = await getConfigMany([
+    "LOGTIME_GOAL_HOURS",
+    "LOGTIME_SHOW_AVERAGE",
+    "LOGTIME_SHOW_GOAL",
+    "LOGTIME_SHOW_TACOS",
+    "LOGTIME_EMOJI",
+    "LOGTIME_EMOJI_DIVISOR",
+    "LOGTIME_EMOJI_RATE",
+    "LOGTIME_SHOW_DAYS_MODE",
+    "LOGTIME_CALENDAR_COLOR",
+    "LOGTIME_LABELS_COLOR",
+    "LOGTIME_RAINBOW_PALETTE",
+    "DISABLE_ANIMATIONS",
+    "LOGTIME_MAX_EARNINGS",
+    "LOGTIME_CALENDAR_VIEW",
+  ] as const);
+  return {
+    goal_hours: c.LOGTIME_GOAL_HOURS,
+    show_average: c.LOGTIME_SHOW_AVERAGE,
+    show_goal: c.LOGTIME_SHOW_GOAL,
+    show_tacos: c.LOGTIME_SHOW_TACOS,
+    emoji: limit(c.LOGTIME_EMOJI),
+    divisor: c.LOGTIME_EMOJI_DIVISOR,
+    rate: c.LOGTIME_EMOJI_RATE,
+    show_days_mode: c.LOGTIME_SHOW_DAYS_MODE,
+    calendar_color: c.LOGTIME_CALENDAR_COLOR,
+    labels_color: c.LOGTIME_LABELS_COLOR,
+    rainbow_colors: resolveRainbowColors(c.LOGTIME_RAINBOW_PALETTE),
+    disable_animations: c.DISABLE_ANIMATIONS,
+    max_earnings: c.LOGTIME_MAX_EARNINGS,
+    calendar_view: c.LOGTIME_CALENDAR_VIEW,
+  };
+};
 
 export type LogtimeConfig = Awaited<ReturnType<typeof getConfigs>>;
 
@@ -287,6 +304,10 @@ function renderLogtime(
 ): void {
   if (!stats || !CONFIG) return;
   lastStats = stats;
+  // Let other modules (tracker badge) react to the *current* stats: a plain
+  // 42_LOGTIME_DATA listener would run before this assignment and read the
+  // previous value.
+  document.dispatchEvent(new CustomEvent("42_LOGTIME_RENDERED"));
 
   const byMonth: Record<string, Record<string, number>> = {};
   Object.keys(stats)
@@ -491,6 +512,13 @@ function renderLogtime(
       scrollHandlersCleanup();
       scrollHandlersCleanup = null;
     }
+    if (heatmapScrollHandler) {
+      scrollWrapper.removeEventListener("scroll", heatmapScrollHandler);
+      heatmapScrollHandler = null;
+    }
+    // consume the one-shot scroll flags so they do not leak into the next view
+    skipScroll = false;
+    restoreScrollLeft = -1;
     scrollWrapper.scrollLeft = 0;
   } else if (scrollWrapper) {
     if (scrollHandlersCleanup) {
@@ -524,6 +552,10 @@ function renderLogtime(
       scrollWrapper.addEventListener("scroll", handleYearScroll, {
         passive: true,
       });
+    } else if (heatmapScrollHandler) {
+      // leaving the heatmap view: drop its scroll listener
+      scrollWrapper.removeEventListener("scroll", heatmapScrollHandler);
+      heatmapScrollHandler = null;
     }
     if (skipScroll) {
       skipScroll = false;
@@ -543,7 +575,11 @@ function renderLogtime(
       requestAnimationFrame(() => {
         requestAnimationFrame(scrollToLatest);
       });
-      window.addEventListener("load", scrollToLatest, { once: true });
+      // once the page has loaded, the "load" event will never fire again:
+      // registering it on every render only accumulated dead listeners
+      if (document.readyState !== "complete") {
+        window.addEventListener("load", scrollToLatest, { once: true });
+      }
       setTimeout(scrollToLatest, 100);
     }
   }
@@ -558,8 +594,17 @@ function isProfileV3TargetPage() {
 
 function installFetchHook() {
   document.addEventListener("42_LOGTIME_DATA", async (event: Event) => {
-    const detail = (event as CustomEvent<Record<string, string>>).detail;
-    if (!detail) return;
+    const raw = (event as CustomEvent<Record<string, string>>).detail;
+    if (!raw || typeof raw !== "object") return;
+
+    // Keep only "YYYY-MM-DD": "HH:MM:SS" entries. An error payload such as
+    // {"error": "..."} used to reach renderLogtime, throw on an invalid date
+    // and poison lastStats for every later re-render.
+    const detail: Record<string, string> = {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(k) && typeof v === "string") detail[k] = v;
+    }
+    if (Object.keys(detail).length === 0) return;
 
     const hookDates = Object.keys(detail).sort();
     const before =
@@ -619,15 +664,30 @@ export function applyPublicLogtimeSettings(logtime: {
 }) {
   if (!isLoaded || !logtime) return;
 
-  CONFIG.calendar_color = logtime.calendarColor ?? CONFIG.calendar_color;
-  CONFIG.labels_color = logtime.labelsColor ?? CONFIG.labels_color;
+  // These values belong to the viewed user and are interpolated into <style>
+  // text: only accept plain hex colours and finite, positive numbers.
+  const isHex = (v: unknown): v is string =>
+    typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v.trim());
+  const positive = (v: unknown, fallback: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+
+  CONFIG.calendar_color = isHex(logtime.calendarColor)
+    ? logtime.calendarColor.trim()
+    : CONFIG.calendar_color;
+  CONFIG.labels_color = isHex(logtime.labelsColor)
+    ? logtime.labelsColor.trim()
+    : CONFIG.labels_color;
   CONFIG.emoji = logtime.emoji ? limit(logtime.emoji) : CONFIG.emoji;
   CONFIG.divisor =
     logtime.emojiDivisor !== undefined
-      ? Number(logtime.emojiDivisor)
+      ? positive(logtime.emojiDivisor, CONFIG.divisor)
       : CONFIG.divisor;
   CONFIG.rate =
-    logtime.emojiRate !== undefined ? Number(logtime.emojiRate) : CONFIG.rate;
+    logtime.emojiRate !== undefined
+      ? positive(logtime.emojiRate, CONFIG.rate)
+      : CONFIG.rate;
   if (logtime.rainbowPalette !== undefined) {
     CONFIG.rainbow_colors = resolveRainbowColors(logtime.rainbowPalette);
   }
@@ -637,21 +697,37 @@ export function applyPublicLogtimeSettings(logtime: {
   }
 }
 
-export async function initLogtime() {
-  if (isLoaded) return;
-  if ("scrollRestoration" in history) {
-    history.scrollRestoration = "manual";
-  }
+// Memoized so that concurrent callers (main.ts and visuals.ts) share a single
+// initialization: `isLoaded` is only set after many awaited storage reads, and
+// a second caller during that window used to install a second data listener,
+// which rendered the widget and fetched events twice.
+let initPromise: Promise<void> | null = null;
 
-  CONFIG = await getConfigs();
-  currentTheme = await getEffectiveTheme();
-  const presetKey = await getConfig("PROFILE_THEME_PRESET");
-  const preset = THEMES[presetKey] ?? THEMES["dark"];
-  primaryColor = `hsl(${preset.primary})`;
-  primaryContent = `hsl(${preset.primaryForeground})`;
-  installFetchHook();
+export function initLogtime(): Promise<void> {
+  if (isLoaded) return Promise.resolve();
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
+    }
 
-  if (isProfileV3TargetPage()) {
-    isLoaded = true;
-  }
+    CONFIG = await getConfigs();
+    currentTheme = await getEffectiveTheme();
+    const presetKey = await getConfig("PROFILE_THEME_PRESET");
+    const preset = THEMES[presetKey] ?? THEMES["dark"];
+    primaryColor = `hsl(${preset.primary})`;
+    primaryContent = `hsl(${preset.primaryForeground})`;
+    installFetchHook();
+
+    if (isProfileV3TargetPage()) {
+      isLoaded = true;
+    }
+    // The page may have fetched /locations_stats before this listener existed
+    // (the hook runs at document_start, we run after DOMContentLoaded and
+    // several storage reads). Ask the hook to replay the last payload.
+    document.dispatchEvent(new CustomEvent("42_LOGTIME_REQUEST"));
+  })().finally(() => {
+    initPromise = null;
+  });
+  return initPromise;
 }

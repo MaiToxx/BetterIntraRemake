@@ -70,7 +70,9 @@ export const getLastSeenFormatted = (
     return `${d}/${m}`;
   }
 
-  const lastDate = new Date(lastDateStr);
+  // "YYYY-MM-DD" alone parses as UTC midnight, which is the previous local day
+  // west of Greenwich ("today" would read as "yesterday"). Parse as local time.
+  const lastDate = new Date(lastDateStr + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   lastDate.setHours(0, 0, 0, 0);

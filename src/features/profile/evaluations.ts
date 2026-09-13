@@ -204,7 +204,13 @@ export async function initEvaluations() {
 
   const show = await getConfig("PROFILE_SHOW_EVALUATIONS");
 
+  // Give up after ~10 s: pages without a pending-evaluations card (every
+  // /users/* page, or a dashboard with nothing pending) used to run this
+  // full-page text scan on every animation frame for the life of the tab.
+  let attempts = 0;
+  const MAX_ATTEMPTS = 600;
   const check = () => {
+    if (attempts++ > MAX_ATTEMPTS) return;
     const native = findNativeCard();
     if (!native) {
       requestAnimationFrame(check);

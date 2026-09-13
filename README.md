@@ -2,6 +2,23 @@
 
 UI and UX improvements for 42 Intra v3: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.
 
+> **About this repository**
+>
+> This is a fork of [nicopasla/better-intra](https://github.com/nicopasla/better-intra) (MIT licensed, see [LICENSE](LICENSE)). It carries a set of security and stability fixes on top of upstream 1.8.6 — see the commit history for the details of each fix.
+>
+> **Install from this repository**
+>
+> ```bash
+> git clone <this repository>
+> cd better-intra
+> npm install
+> npm run build:chrome    # -> dist-chrome/
+> npm run build:firefox   # -> dist-firefox/
+> ```
+>
+> - **Chrome / Brave / Edge**: open `chrome://extensions`, enable *Developer mode*, click *Load unpacked* and select `dist-chrome/`.
+> - **Firefox**: open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on...* and select `dist-firefox/manifest.json`. Temporary add-ons are removed when Firefox restarts unless you use Developer Edition / Nightly with `xpinstall.signatures.required` set to `false`.
+
 
 ## ⚡ Quick Start
 

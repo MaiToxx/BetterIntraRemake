@@ -186,9 +186,12 @@ export async function loadCluster(
     }
     if (id !== state.loadId) return;
 
-    const svgDoc =
-      state.parsedDocs.get(keyOf(state.activeCampusId, cluster.id)) ||
-      new DOMParser().parseFromString(svgText, "image/svg+xml");
+    let svgDoc = state.parsedDocs.get(keyOf(state.activeCampusId, cluster.id));
+    if (!svgDoc) {
+      // never import an unsanitized document into the page
+      svgDoc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+      sanitizeAndParseSeats(svgDoc);
+    }
 
     mapArea.style.position = "relative";
     const imported = document.importNode(svgDoc.documentElement, true);
@@ -263,9 +266,17 @@ export async function loadCampus(
   const { shadow } = state;
   state.activeCampusId = campusId;
   state.zoomLevel = 1.0;
-  state.loadId++;
-  state.campusExits = (await getCampusExits(campusId)) ?? null;
-  state.clusters = await buildClusters(campusId);
+  // Generation token: if another campus is selected (or the dialog closed)
+  // while this one is loading, the stale result must not overwrite state nor
+  // be cached under the newer campus id.
+  const gen = ++state.loadId;
+  const stale = () => gen !== state.loadId || signal?.aborted === true;
+  const exits = await getCampusExits(campusId);
+  if (stale()) return;
+  state.campusExits = exits ?? null;
+  const clusters = await buildClusters(campusId);
+  if (stale()) return;
+  state.clusters = clusters;
   if (!state.clusters.some((c) => c.svg)) {
     const mapArea = shadow.getElementById("map-area");
     if (mapArea) {
@@ -275,6 +286,8 @@ export async function loadCampus(
       div.textContent = "No cluster data for this campus";
       mapArea.replaceChildren(div);
     }
+    // keep the header in sync, otherwise the previous campus' tabs stay clickable
+    rebuildHeader(state);
     return;
   }
   state.activeCluster =
@@ -295,14 +308,17 @@ export async function loadCampus(
   updateDefaultSelect(state);
   updateCampusTime(state);
   await loadCluster(state, state.activeCluster, signal);
+  if (stale()) return;
   await loadOccupancy(state, signal);
+  if (stale()) return;
   (async () => {
     const rest = state.clusters.filter(
       (c) => c.id !== state.activeCluster.id && c.svg,
     );
     for (const c of rest) {
+      if (stale()) return;
       await ensureClusterData(state, c, campusId, signal);
     }
-    reapplyOccupancy(state);
+    if (!stale()) reapplyOccupancy(state);
   })();
 }

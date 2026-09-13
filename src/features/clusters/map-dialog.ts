@@ -35,7 +35,20 @@ export {
   findClusterForSeat,
 } from "./map-dialog/helpers.ts";
 
-export async function openClusterDialog(opts?: { seatId?: string }) {
+// The dialog is only appended after several awaits: without this guard a
+// double-click opened two dialogs with two sets of timers.
+let opening: Promise<void> | null = null;
+
+export function openClusterDialog(opts?: { seatId?: string }): Promise<void> {
+  if (document.getElementById("cluster-map-dialog")) return Promise.resolve();
+  if (opening) return opening;
+  opening = openClusterDialogImpl(opts).finally(() => {
+    opening = null;
+  });
+  return opening;
+}
+
+async function openClusterDialogImpl(opts?: { seatId?: string }) {
   if (document.getElementById("cluster-map-dialog")) return;
 
   const detectedCampus = (await getConfig("CLUSTERS_CAMPUS")) || "";
@@ -442,8 +455,12 @@ export async function openClusterDialog(opts?: { seatId?: string }) {
     ),
     loadOccupancy(state, abortController.signal),
   ]);
+  // The dialog may have been closed while loading: cleanup() already ran and
+  // found no timers, so anything created below would leak for the page's life.
+  if (abortController.signal.aborted) return;
   if (targetSeat) {
     await loadCluster(state, activeCluster, abortController.signal);
+    if (abortController.signal.aborted) return;
     flashSeat(state, targetSeat);
   } else {
     loadCluster(state, activeCluster, abortController.signal);

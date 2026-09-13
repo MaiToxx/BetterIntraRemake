@@ -187,6 +187,9 @@ async function openTranscriptDialog(
 
   content.addEventListener("click", (e) => e.stopPropagation());
   dialog.addEventListener("click", () => close());
+  // Escape closes natively without close(): remove the element so the
+  // "Transcript" button works again afterwards.
+  dialog.addEventListener("close", () => dialog.remove());
 
   dialog.showModal();
   renderFormContent(0);

@@ -21,16 +21,19 @@ import { loadCluster } from "./map-load";
 async function fetchOccupancy(
   campusId: string,
   signal?: AbortSignal,
-): Promise<Map<string, OccupancyEntry>> {
+): Promise<Map<string, OccupancyEntry> | null> {
   const url = campusId
     ? `https://meta.intra.42.fr/campus/${campusId}/clusters.json`
     : CLUSTERS_JSON_URL;
+  // Returns null on failure (HTTP error, network error, abort). Returning an
+  // empty map used to render a transient failure as "everyone left" and could
+  // evict the user from the Active tab.
   try {
     const res = await fetch(url, {
       credentials: "include",
       signal,
     });
-    if (!res.ok) return new Map();
+    if (!res.ok) return null;
     const data = (await res.json()) as Record<string, OccupancyEntry>;
     const map = new Map<string, OccupancyEntry>();
     for (const [, entry] of Object.entries(data)) {
@@ -40,7 +43,7 @@ async function fetchOccupancy(
     }
     return map;
   } catch {
-    return new Map();
+    return null;
   }
 }
 
@@ -76,8 +79,13 @@ export function applyOccupancy(
   if (clustersChanged) {
     rebuildHeader(state);
     if (activeChange.removed && activeCluster.id === "active") {
-      state.activeCluster = state.clusters[0];
-      if (state.activeCluster) loadCluster(state, state.activeCluster);
+      // Only switch when there is a real cluster to switch to; leaving
+      // activeCluster undefined made every later poll throw on `.id`.
+      const next = state.clusters[0];
+      if (next) {
+        state.activeCluster = next;
+        loadCluster(state, next);
+      }
     }
   }
   const positions = state.seatPosCache.get(
@@ -183,7 +191,14 @@ export async function loadOccupancy(state: DialogState, signal?: AbortSignal) {
   const reloadIcon = state.shadow.getElementById("reload-icon");
   if (reloadIcon) reloadIcon.classList.add("spinning");
   try {
-    const occupancy = await fetchOccupancy(state.activeCampusId, signal);
+    const campusId = state.activeCampusId;
+    const occupancy = await fetchOccupancy(campusId, signal);
+    // Discard the result if the dialog was closed or the campus changed while
+    // the request was in flight: host ids collide across campuses, so a late
+    // answer for campus A would show A's occupants on B's map.
+    if (signal?.aborted) return;
+    if (campusId !== state.activeCampusId) return;
+    if (occupancy === null) return; // fetch failed: keep the previous data
     state.occupancyCache = occupancy;
     state.lastUpdated = Date.now();
     applyOccupancy(state, occupancy);

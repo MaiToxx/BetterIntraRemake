@@ -183,6 +183,10 @@ export function applyTitleBadgeWrap() {
     const wrap = await getConfig("PROFILE_BADGE_WRAP");
     const key = `${JSON.stringify(order || [])}|${wrap}`;
     if (key === lastAppliedKey) return;
+    // Only remember the key once badges were actually laid out: the title
+    // badge row often renders after the first pass, and marking it applied
+    // too early meant the configured order never took effect.
+    if (getTitleBadges(document).length === 0) return;
     lastAppliedKey = key;
     applyBadgeLayout(document, {
       order: order || [],
@@ -195,11 +199,13 @@ let badgesInitialized = false;
 
 export async function initBadges() {
   if (badgesInitialized) return;
-  badgesInitialized = true;
 
   if (location.pathname !== "/") return;
 
   const badgeEls = document.querySelectorAll<HTMLElement>(TITLE_BADGE_SELECTOR);
+  // nothing rendered yet: try again on the next mutation pass
+  if (badgeEls.length === 0) return;
+  badgesInitialized = true;
 
   for (const el of badgeEls) {
     const name = el.textContent?.trim() || "";

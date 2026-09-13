@@ -72,7 +72,11 @@ export async function initClusters() {
     }
 
     const findAndAttach = () => {
-      const svg = document.querySelector<SVGSVGElement>("svg");
+      // The cluster map is the SVG that contains seat <image> elements; the
+      // first <svg> of the document is a navigation icon on Intra v3.
+      const svg =
+        document.querySelector("svg image")?.closest<SVGSVGElement>("svg") ??
+        null;
       if (svg && svg !== observedSvgRoot) {
         if (svgObserver) svgObserver.disconnect();
         observedSvgRoot = svg;
@@ -106,11 +110,18 @@ export async function initClusters() {
       setTimeout(() => clearInterval(checkInterval), 3000);
     }
 
+    // Poll until the map SVG and our UI are both present, but never for more
+    // than ~30 s: this feature is initialised on every intra page, and the
+    // old stop condition checked an id that nothing ever creates, so the poll
+    // ran twice a second for the life of every tab.
+    let pollAttempts = 0;
+    const MAX_POLL_ATTEMPTS = 60;
     const pollTimer = setInterval(() => {
       findAndAttach();
       injectUI(shadowHost);
       refreshMarkersSoon();
-      if (observedSvgRoot && document.getElementById("ft-cluster-ui")) {
+      const uiReady = !!document.getElementById("cluster-shadow-host");
+      if ((observedSvgRoot && uiReady) || ++pollAttempts >= MAX_POLL_ATTEMPTS) {
         clearInterval(pollTimer);
       }
     }, 500);
@@ -148,5 +159,6 @@ export async function initClusters() {
     }
   }
 
-  start();
+  // awaited so that failures are reported by the caller's try/catch in main.ts
+  await start();
 }

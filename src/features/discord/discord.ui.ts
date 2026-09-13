@@ -6,6 +6,14 @@ import DISCORD_SVG from "../../assets/svg/discord.svg?raw";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { hashLogin } from "../../utils/crypto";
 import { loginWith42, clearAuthFailed } from "../account/account.ts";
+import { markAuthFlowPending } from "../account/auth-callback.ts";
+
+// Single storage listener for the panel: the ref callback below runs with
+// `undefined` when the panel is removed, at which point the previous listener
+// must be dropped or it keeps firing network calls forever.
+let discordPanelListener:
+  | ((changes: { [key: string]: chrome.storage.StorageChange }) => void)
+  | null = null;
 
 const WORKER_URL = "https://api.betterintra.com";
 
@@ -42,13 +50,12 @@ function stepCard(
 
 export function renderDiscordPanel() {
   const renderPanel = (el: Element | undefined) => {
+    if (discordPanelListener) {
+      chrome.storage.onChanged.removeListener(discordPanelListener);
+      discordPanelListener = null;
+    }
     if (!el) return;
     const container = el as HTMLElement;
-
-    const prev = (container as any).__discordPanelListener;
-    if (prev) {
-      chrome.storage.onChanged.removeListener(prev);
-    }
 
     const update = async () => {
       const [store, discordEnabled, quietEnabled, quietStart, quietEnd] =
@@ -156,7 +163,9 @@ export function renderDiscordPanel() {
         ? html`<button
             type="button"
             class="btn bg-[#5865F2] text-white border-none hover:bg-[#4752C4] h-12 text-base flex items-center justify-center gap-3 transition-colors duration-200"
-            @click="${() => {
+            @click="${async () => {
+              // let main.ts know a Discord link is in progress (see auth-callback.ts)
+              await markAuthFlowPending("discord");
               window.open(authUrl, "_blank");
             }}"
           >
@@ -405,7 +414,7 @@ export function renderDiscordPanel() {
       }
     };
     chrome.storage.onChanged.addListener(listener);
-    (container as any).__discordPanelListener = listener;
+    discordPanelListener = listener;
 
     update();
   };

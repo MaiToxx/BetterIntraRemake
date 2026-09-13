@@ -373,5 +373,9 @@ export async function colorTrackerBadge(): Promise<void> {
 
   updateBadgeIndicator();
 
-  document.addEventListener("42_LOGTIME_DATA", updateBadgeIndicator);
+  // 42_LOGTIME_RENDERED is dispatched by logtime.ts right after lastStats is
+  // assigned; listening to the raw 42_LOGTIME_DATA event ran this before the
+  // logtime module had stored the new stats (it awaits storage first), so the
+  // badge reflected the previous payload, or none on first load.
+  document.addEventListener("42_LOGTIME_RENDERED", updateBadgeIndicator);
 }
