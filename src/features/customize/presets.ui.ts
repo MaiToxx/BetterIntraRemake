@@ -17,12 +17,39 @@ import {
   type CustomPreset,
 } from "./presets.ts";
 
+/**
+ * The hub renders each control once with the value read at open time. After
+ * a preset is applied the storage is right but the inputs still show the old
+ * values: push the new ones into the controls of the same hub.
+ */
+function syncHubControls(
+  root: ParentNode,
+  values: Record<string, unknown>,
+): void {
+  for (const [key, val] of Object.entries(values)) {
+    const controls = root.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      `[data-setting-key="${key}"]`,
+    );
+    controls.forEach((control) => {
+      const input = control as HTMLInputElement;
+      if (input.type === "radio") input.checked = input.value === String(val);
+      else if (input.type === "checkbox") input.checked = Boolean(val);
+      else control.value = String(val ?? "");
+    });
+  }
+}
+
 export function renderPresetsPanel() {
   const setup = (el: Element | undefined) => {
     if (!el) return;
     const container = el as HTMLElement;
     if (container.dataset.presetsReady) return;
     container.dataset.presetsReady = "1";
+    const hubRoot = container.getRootNode() as ParentNode;
+    const applyAndSync = async (values: Parameters<typeof applyCustomization>[0]) => {
+      await applyCustomization(values);
+      syncHubControls(hubRoot, values as unknown as Record<string, unknown>);
+    };
 
     let presets: CustomPreset[] = [];
     let status = "";
@@ -50,7 +77,7 @@ export function renderPresetsPanel() {
     };
 
     const onApply = async (p: CustomPreset) => {
-      await applyCustomization(p.values);
+      await applyAndSync(p.values);
       say(`Applied "${p.name}".`);
     };
 
@@ -74,13 +101,14 @@ export function renderPresetsPanel() {
       if (code === null) return;
       const values = decodePresetCode(code);
       if (!values) return say("This is not a valid theme code.", false);
-      await applyCustomization(values);
+      await applyAndSync(values);
       say("Theme applied from code.");
     };
 
     const onReset = async () => {
       if (!window.confirm("Reset every Customize setting to the defaults?")) return;
       await resetCustomization();
+      syncHubControls(hubRoot, await snapshotCustomization());
       say("Customization reset.");
     };
 

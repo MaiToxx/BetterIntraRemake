@@ -35,6 +35,15 @@ describe("parseLatestRelease", () => {
     });
   });
 
+  it("ignores a release whose build files are not attached yet", () => {
+    const base = { tag_name: "v1.8.21", html_url: "https://github.com/o/r/releases/tag/v1.8.21" };
+    expect(parseLatestRelease({ ...base, assets: [] })).toBeNull();
+    expect(parseLatestRelease({ ...base, assets: [{ name: "sources.zip" }] })).toBeNull();
+    expect(parseLatestRelease({ ...base, assets: [{ name: "better-intra.xpi" }] })?.version).toBe("1.8.21");
+    // no assets field at all (older API shape): accept
+    expect(parseLatestRelease(base)?.version).toBe("1.8.21");
+  });
+
   it("rejects drafts, odd tags and non-GitHub urls", () => {
     expect(parseLatestRelease(null)).toBeNull();
     expect(

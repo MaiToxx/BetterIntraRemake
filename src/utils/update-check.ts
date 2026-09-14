@@ -32,9 +32,22 @@ export function parseLatestRelease(
   json: unknown,
 ): { version: string; url: string } | null {
   if (!json || typeof json !== "object") return null;
-  const rel = json as { tag_name?: unknown; html_url?: unknown; draft?: unknown };
+  const rel = json as {
+    tag_name?: unknown;
+    html_url?: unknown;
+    draft?: unknown;
+    assets?: unknown;
+  };
   if (rel.draft === true) return null;
   if (typeof rel.tag_name !== "string") return null;
+  // A release whose build is still being signed/attached has no files yet:
+  // do not send users to an empty page.
+  if (Array.isArray(rel.assets)) {
+    const names = rel.assets
+      .map((a) => (a && typeof a === "object" ? (a as { name?: unknown }).name : null))
+      .filter((n): n is string => typeof n === "string");
+    if (!names.some((n) => /^better-intra.*\.(zip|xpi|crx)$/.test(n))) return null;
+  }
   const version = rel.tag_name.replace(/^v/i, "");
   if (!/^\d+(\.\d+)*$/.test(version)) return null;
   const url =
