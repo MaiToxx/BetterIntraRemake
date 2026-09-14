@@ -16,6 +16,12 @@ manifests' host permissions and the callback content script match pattern.
 > synced settings and shared visuals live in the worker's storage and are not
 > migrated. Users simply click *Connect with 42* again.
 
+The public visuals endpoint (`/api/v1/public/visuals`) also returns a `look`
+object when the user turned on *Publish my look on my profile*: the subset of
+their Customize settings listed in `PUBLIC_LOOK_KEYS` (worker
+`src/handlers/settings.ts`, extension `src/features/customize/public-look.ts`).
+The extension validates every value again before applying it.
+
 ## Without a 42 OAuth application: "intra" auth mode
 
 Creating a 42 API application requires student status (pisciners get

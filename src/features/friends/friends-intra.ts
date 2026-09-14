@@ -14,10 +14,15 @@ import type { FriendData } from "./friends.ts";
 import { waitForIntrapyToken } from "../../utils/intrapy.ts";
 import { WORKER_URL } from "../../utils/worker.ts";
 import { hashLogin } from "../../utils/crypto.ts";
+import {
+  sanitizeCssColor,
+  sanitizeCssUrl,
+} from "../profile/visuals-sanitize.ts";
 
 const INTRAPY = "https://intrapy.intra.42.fr/api/v1";
 const LAST_ONLINE_KEY = "FRIENDS_LAST_ONLINE";
 const CONCURRENCY = 6;
+const AVATAR_BG_KEYWORDS = new Set(["transparent"]);
 
 type Raw = Record<string, unknown>;
 
@@ -49,6 +54,31 @@ function poolLabel(user: Raw): string | null {
   return `${String(m + 1).padStart(2, "0")}/${year}`;
 }
 
+function pictureUrl(picture: string | null): string | null {
+  return picture && /^https?:\/\//.test(picture) ? picture : null;
+}
+
+/** Whether the /users payload already carries a usable profile picture. */
+export function hasProfilePicture(user: Raw | null): boolean {
+  return pictureUrl(str(user?.profile_picture)) !== null;
+}
+
+/**
+ * Apply the worker's public visuals (another user's settings) to a friend.
+ * The values end up in an inline style, so anything that is not a plain
+ * http(s) URL or a plain colour is dropped, like the profile page does.
+ */
+export function applyIntraVisuals(friend: FriendData, visuals: Raw | null): FriendData {
+  if (!visuals) return friend;
+  friend.customAvatar = sanitizeCssUrl(visuals.avatar) || null;
+  friend.avatarBg =
+    sanitizeCssColor(visuals.avatarBg, AVATAR_BG_KEYWORDS) || "transparent";
+  friend.avatarPosX = num(visuals.avatarPosX, 50);
+  friend.avatarPosY = num(visuals.avatarPosY, 50);
+  friend.avatarScale = num(visuals.avatarScale, 100);
+  return friend;
+}
+
 /** Pure mapping from the three intrapy payloads to the widget's FriendData. */
 export function buildFriendFromIntra(
   login: string,
@@ -70,10 +100,7 @@ export function buildFriendFromIntra(
     str(u.displayed_login) ??
     login;
   const picture = str(s.profile_picture) ?? str(u.profile_picture);
-  const avatar =
-    picture && /^https?:\/\//.test(picture)
-      ? picture
-      : null;
+  const avatar = pictureUrl(picture);
 
   return {
     login,
@@ -148,32 +175,32 @@ export async function fetchFriendsDataViaIntra(
   const now = Date.now();
 
   const results = await mapLimit(logins, CONCURRENCY, async (login) => {
-    const [user, summary, cursus, visuals] = await Promise.all([
-      getJson(`${INTRAPY}/users/${encodeURIComponent(login)}`, token),
-      getJson(`${INTRAPY}/users/${encodeURIComponent(login)}/summary`, token),
-      getJson(`${INTRAPY}/users/${encodeURIComponent(login)}/cursus`, token),
+    const base = `${INTRAPY}/users/${encodeURIComponent(login)}`;
+    const [userRaw, cursus, visuals] = await Promise.all([
+      getJson(base, token),
+      getJson(`${base}/cursus`, token),
       fetchVisuals(login),
     ]);
+    const user = Array.isArray(userRaw) ? null : userRaw;
+    // /summary only adds the profile picture: skip it when /users already has
+    // one (it is still consulted for an unknown login, see below)
+    const summaryRaw = hasProfilePicture(user)
+      ? null
+      : await getJson(`${base}/summary`, token);
+    const summary = Array.isArray(summaryRaw) ? null : summaryRaw;
     // unknown login (add-friend validation relies on an empty result)
     if (!user && !summary) return null;
 
     const friend = buildFriendFromIntra(
       login,
-      Array.isArray(user) ? null : user,
-      Array.isArray(summary) ? null : summary,
+      user,
+      summary,
       cursus,
       lastOnline[login] ?? null,
     );
     if (friend.isOnline) lastOnline[login] = now;
 
-    if (visuals) {
-      friend.customAvatar = str(visuals.avatar);
-      friend.avatarBg = str(visuals.avatarBg) ?? "transparent";
-      friend.avatarPosX = num(visuals.avatarPosX, 50);
-      friend.avatarPosY = num(visuals.avatarPosY, 50);
-      friend.avatarScale = num(visuals.avatarScale, 100);
-    }
-    return friend;
+    return applyIntraVisuals(friend, visuals);
   });
 
   await chrome.storage.local.set({ [LAST_ONLINE_KEY]: lastOnline });

@@ -49,13 +49,26 @@ const MONTHS: Record<string, number> = {
   décembre: 11, decembre: 11,
 };
 
-/** "September 13, 2026 14:30" / "Septembre 13, 2026 19:15" -> "2026-09" */
+/**
+ * "September 13, 2026 14:30" / "Septembre 13, 2026 19:15" -> "2026-09".
+ * The French locale also writes the day first: "13 septembre 2026 14:30".
+ */
 export function monthKeyFromText(text: string): string | null {
-  const m = /([A-Za-zÀ-ÿ]+)\s+(\d{1,2}),\s*(\d{4})/.exec(text);
-  if (!m) return null;
-  const month = MONTHS[m[1].toLowerCase()];
+  let monthName: string | undefined;
+  let year: string | undefined;
+  const en = /([A-Za-zÀ-ÿ]+)\s+(\d{1,2}),\s*(\d{4})/.exec(text);
+  if (en) {
+    monthName = en[1];
+    year = en[3];
+  } else {
+    const fr = /(?:^|[^\d])(\d{1,2})\s+([A-Za-zÀ-ÿ]+)\s+(\d{4})/.exec(text);
+    if (!fr) return null;
+    monthName = fr[2];
+    year = fr[3];
+  }
+  const month = MONTHS[monthName.toLowerCase()];
   if (month === undefined) return null;
-  return `${m[3]}-${String(month + 1).padStart(2, "0")}`;
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
 }
 
 export function parseCorrectorFeedbacks(html: string): CorrectorFeedback[] {
@@ -136,6 +149,103 @@ export function parseRouletteHistorics(html: string): RouletteEntryLike[] {
     out.push({ historic_id: titles.length - index, sum, total, created_at: date });
   });
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Local cache of the parsed stats (one hour per login)
+// ---------------------------------------------------------------------------
+
+export interface ProfileStatsData {
+  roulette: RouletteEntryLike[];
+  evalStats: EvalStatsLike | null;
+}
+
+export type ProfileStatsCache = Record<string, { at: number; data: ProfileStatsData }>;
+
+/** Single storage key: `{ [login]: { at, data } }`, pruned on every write. */
+export const PROFILE_STATS_CACHE_KEY = "FT_PROFILE_STATS_CACHE";
+export const PROFILE_STATS_TTL_MS = 60 * 60 * 1000;
+export const PROFILE_STATS_CACHE_MAX = 40;
+/** Older builds stored one `FT_PROFILE_STATS_<login>` key per visited profile. */
+const LEGACY_PROFILE_STATS_PREFIX = "FT_PROFILE_STATS_";
+
+let legacyStatsKeysCleaned = false;
+
+/** Test hook: run the legacy key cleanup again on the next write. */
+export function resetProfileStatsCacheState(): void {
+  legacyStatsKeysCleaned = false;
+}
+
+function isCacheEntry(v: unknown): v is { at: number; data: ProfileStatsData } {
+  if (!v || typeof v !== "object") return false;
+  const e = v as { at?: unknown; data?: unknown };
+  return typeof e.at === "number" && !!e.data && typeof e.data === "object";
+}
+
+async function readCacheMap(): Promise<ProfileStatsCache> {
+  try {
+    const raw = (await chrome.storage.local.get(PROFILE_STATS_CACHE_KEY))[
+      PROFILE_STATS_CACHE_KEY
+    ];
+    if (!raw || typeof raw !== "object") return {};
+    const out: ProfileStatsCache = {};
+    for (const [login, entry] of Object.entries(raw as Record<string, unknown>)) {
+      if (isCacheEntry(entry)) out[login] = entry;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** Drop expired entries, then keep only the most recent PROFILE_STATS_CACHE_MAX. */
+export function pruneProfileStatsCache(
+  cache: ProfileStatsCache,
+  now: number = Date.now(),
+): ProfileStatsCache {
+  const fresh = Object.entries(cache).filter(
+    ([, e]) => now - e.at < PROFILE_STATS_TTL_MS,
+  );
+  fresh.sort((a, b) => b[1].at - a[1].at);
+  return Object.fromEntries(fresh.slice(0, PROFILE_STATS_CACHE_MAX));
+}
+
+export async function readProfileStatsCache(
+  login: string,
+  now: number = Date.now(),
+): Promise<ProfileStatsData | null> {
+  const entry = (await readCacheMap())[login];
+  if (!entry || now - entry.at >= PROFILE_STATS_TTL_MS) return null;
+  return entry.data;
+}
+
+export async function writeProfileStatsCache(
+  login: string,
+  data: ProfileStatsData,
+  now: number = Date.now(),
+): Promise<void> {
+  const cache = await readCacheMap();
+  cache[login] = { at: now, data };
+  await chrome.storage.local.set({
+    [PROFILE_STATS_CACHE_KEY]: pruneProfileStatsCache(cache, now),
+  });
+  if (!legacyStatsKeysCleaned) {
+    legacyStatsKeysCleaned = true;
+    await removeLegacyProfileStatsKeys();
+  }
+}
+
+async function removeLegacyProfileStatsKeys(): Promise<void> {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const legacy = Object.keys(all).filter(
+      (k) =>
+        k.startsWith(LEGACY_PROFILE_STATS_PREFIX) && k !== PROFILE_STATS_CACHE_KEY,
+    );
+    if (legacy.length > 0) await chrome.storage.local.remove(legacy);
+  } catch {
+    /* best effort */
+  }
 }
 
 async function fetchIntraPage(url: string): Promise<string | null> {

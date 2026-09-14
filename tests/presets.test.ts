@@ -84,3 +84,22 @@ describe("new customize rules", () => {
     expect(css).not.toContain("#0f2027");
   });
 });
+
+describe("review fixes", () => {
+  it("accepts numbers stored as strings by the hub", () => {
+    const out = sanitizeCustomization({ CUSTOM_FONT_SCALE: "110", CUSTOM_PAGE_BG_DIM: "55", CUSTOM_CARD_OPACITY: "abc" });
+    expect(out.CUSTOM_FONT_SCALE).toBe(110);
+    expect(out.CUSTOM_PAGE_BG_DIM).toBe(55);
+    expect(out.CUSTOM_CARD_OPACITY).toBe(CONFIG_DEFAULT.CUSTOM_CARD_OPACITY);
+  });
+
+  it("never carries custom CSS in a theme code", () => {
+    const values = { ...defaults(), CUSTOM_CSS: "body { display: none }", CUSTOM_FONT: "mono" as const };
+    const code = encodePresetCode(values);
+    expect(atob(code.slice(CODE_PREFIX.length).replace(/-/g, "+").replace(/_/g, "/"))).not.toContain("CUSTOM_CSS");
+    expect(decodePresetCode(code)?.CUSTOM_CSS).toBe("");
+    // a hand-crafted code smuggling CSS is stripped too
+    const forged = CODE_PREFIX + btoa(JSON.stringify({ CUSTOM_CSS: "body { display: none }" })).replace(/=+$/, "");
+    expect(decodePresetCode(forged)?.CUSTOM_CSS).toBe("");
+  });
+});

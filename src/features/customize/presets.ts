@@ -31,7 +31,13 @@ export function sanitizeCustomization(raw: unknown): CustomizeConfig {
   const out = {} as Record<string, unknown>;
   for (const key of CUSTOMIZE_KEYS) {
     const def = CONFIG_DEFAULT[key];
-    const v = src[key];
+    let v = src[key];
+    // The hub stores <input type="number"> values as strings: accept them
+    // (a snapshot used to silently reset size, dim and opacity to defaults).
+    if (typeof def === "number" && typeof v === "string" && v.trim() !== "") {
+      const n = Number(v);
+      if (Number.isFinite(n)) v = n;
+    }
     out[key] = sameShape(v, def) ? v : def;
   }
   return out as CustomizeConfig;
@@ -64,10 +70,18 @@ function b64urlDecode(s: string): string {
   return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
 }
 
+/**
+ * Theme codes travel between users, so the free-form stylesheet never rides
+ * along: a pasted code could otherwise hide parts of the Intra or draw fake
+ * prompts on every page. Local presets keep it.
+ */
+const CODE_EXCLUDED_KEYS: ReadonlySet<string> = new Set(["CUSTOM_CSS"]);
+
 /** Only the values that differ from the defaults are encoded (shorter codes). */
 export function encodePresetCode(values: CustomizeConfig): string {
   const diff: Record<string, unknown> = {};
   for (const key of CUSTOMIZE_KEYS) {
+    if (CODE_EXCLUDED_KEYS.has(key)) continue;
     if (JSON.stringify(values[key]) !== JSON.stringify(CONFIG_DEFAULT[key])) {
       diff[key] = values[key];
     }
@@ -83,7 +97,17 @@ export function decodePresetCode(code: unknown): CustomizeConfig | null {
   try {
     const parsed = JSON.parse(b64urlDecode(trimmed.slice(CODE_PREFIX.length)));
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    for (const key of CODE_EXCLUDED_KEYS) delete (parsed as Record<string, unknown>)[key];
     return sanitizeCustomization(parsed);
+  } catch {
+    return null;
+  }
+}
+
+/** Host of the background image a code would load, if any (shown before applying). */
+export function presetImageHost(values: CustomizeConfig): string | null {
+  try {
+    return values.CUSTOM_PAGE_BG_URL ? new URL(values.CUSTOM_PAGE_BG_URL).host : null;
   } catch {
     return null;
   }

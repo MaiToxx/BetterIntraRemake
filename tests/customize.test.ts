@@ -147,3 +147,32 @@ describe("buildCustomizeCss", () => {
     ).toBe("");
   });
 });
+
+describe("customize: accent gradient, layout and new presets", () => {
+  it("emits the accent gradient only with a valid second colour", () => {
+    const on = buildCustomizeCss({ ...base, CUSTOM_ACCENT_ENABLED: true, CUSTOM_ACCENT_COLOR: "#00babc", CUSTOM_ACCENT_GRADIENT: true, CUSTOM_ACCENT_COLOR_2: "#7c3aed" });
+    expect(on).toContain("linear-gradient(135deg, #00babc, #7c3aed)");
+    const off = buildCustomizeCss({ ...base, CUSTOM_ACCENT_ENABLED: true, CUSTOM_ACCENT_COLOR: "#00babc", CUSTOM_ACCENT_GRADIENT: false, CUSTOM_ACCENT_COLOR_2: "#7c3aed" });
+    expect(off).not.toContain("linear-gradient(135deg");
+    const bad = buildCustomizeCss({ ...base, CUSTOM_ACCENT_ENABLED: true, CUSTOM_ACCENT_COLOR: "#00babc", CUSTOM_ACCENT_GRADIENT: true, CUSTOM_ACCENT_COLOR_2: "red" });
+    expect(bad).not.toContain("linear-gradient(135deg");
+  });
+
+  it("emits density, footer, glass, stripe and animated gradient rules", () => {
+    expect(buildCustomizeCss({ ...base, CUSTOM_DENSITY: "compact" })).toContain(".gap-4 { gap: 0.625rem !important; }");
+    expect(buildCustomizeCss({ ...base, CUSTOM_HIDE_FOOTER: true })).toContain("footer { display: none !important; }");
+    expect(buildCustomizeCss({ ...base, CUSTOM_CARD_STYLE: "glass" })).toContain("backdrop-filter: blur(14px)");
+    expect(buildCustomizeCss({ ...base, CUSTOM_CARD_STYLE: "stripe" })).toContain("border-left: 4px solid hsl(var(--primary))");
+    const anim = buildCustomizeCss({ ...base, CUSTOM_PAGE_BG_PRESET: "lava", CUSTOM_BG_ANIMATE: true });
+    expect(anim).toContain("@keyframes bi-bg-drift");
+    expect(anim).toContain("prefers-reduced-motion");
+    // no animation without a gradient preset
+    expect(buildCustomizeCss({ ...base, CUSTOM_BG_ANIMATE: true })).not.toContain("bi-bg-drift");
+  });
+
+  it("knows every new background preset", () => {
+    for (const p of ["midnight", "candy", "lava", "nord", "dracula", "teal", "space", "mesh"] as const) {
+      expect(buildCustomizeCss({ ...base, CUSTOM_PAGE_BG_PRESET: p })).toContain("background:");
+    }
+  });
+});

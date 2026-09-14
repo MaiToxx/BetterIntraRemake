@@ -4,6 +4,9 @@ import { createSettingsModal } from "./profile.modal.ts";
 import { applyThemeToProfileCard } from "./profile-card.ts";
 import { applyPublicLogtimeSettings, initLogtime } from "../logtime/logtime.ts";
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
+import { applyVisitorLook } from "../customize/customize.ts";
+import type { PublicLook } from "../customize/public-look.ts";
+import { html, render } from "lit-html";
 
 /** Logins known to have no cloud visuals, with the time we learned it. */
 const noVisualsCache = new Map<string, number>();
@@ -38,6 +41,8 @@ export interface VisualUrls {
     emojiRate?: string | number;
     rainbowPalette?: string;
   } | null;
+  /** Look (accent, palette, background, cards) published by this user. */
+  look?: PublicLook | null;
 }
 
 let isFetching = false;
@@ -107,6 +112,7 @@ const getVisualKey = (urls: VisualUrls) =>
     badgeBg: urls.badgeBg || "",
     theme: urls.theme || null,
     logtime: urls.logtime || null,
+    look: urls.look || null,
   });
 
 const CACHE_PREFIX = "visuals_cache_";
@@ -321,6 +327,58 @@ const modeCss: Record<string, string> = {
   tile: "background-size: auto !important; background-repeat: repeat !important; background-position: top left !important;",
 };
 
+const LOOK_BADGE_ID = "ft-visitor-look-badge";
+let lookBadgeLogin: string | null = null;
+
+/**
+ * Apply the look published by the profile's owner (or clear it) and show a
+ * small badge saying whose look is displayed, with a way to hide it for
+ * this visit. Skipped when the viewer hid it for this login in this tab.
+ */
+function showVisitorLook(look: PublicLook | null): void {
+  const login = lastUser && lastUser !== "me" ? lastUser : null;
+  const hiddenKey = login ? `ft-look-hidden-${login}` : "";
+  const hidden = hiddenKey ? sessionStorage.getItem(hiddenKey) === "1" : false;
+  const active = !!look && !!login && !hidden;
+  void applyVisitorLook(active ? look : null);
+
+  const existing = document.getElementById(LOOK_BADGE_ID);
+  if (!active) {
+    existing?.remove();
+    lookBadgeLogin = null;
+    return;
+  }
+  if (existing && lookBadgeLogin === login) return;
+  lookBadgeLogin = login;
+  const host = existing ?? document.createElement("div");
+  host.id = LOOK_BADGE_ID;
+  const hide = () => {
+    sessionStorage.setItem(hiddenKey, "1");
+    showVisitorLook(null);
+  };
+  render(
+    html`<style>
+        #${LOOK_BADGE_ID} {
+          position: fixed; right: 16px; bottom: 16px; z-index: 99990;
+          display: flex; align-items: center; gap: 8px;
+          padding: 6px 8px 6px 12px; border-radius: 999px;
+          font: 500 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif;
+          background: hsl(var(--card, 220 20% 10%)); color: hsl(var(--card-foreground, 0 0% 95%));
+          border: 1px solid hsl(var(--border, 220 20% 18%));
+          box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+        }
+        #${LOOK_BADGE_ID} button {
+          all: unset; cursor: pointer; opacity: 0.6; padding: 2px 6px; border-radius: 999px; line-height: 1;
+        }
+        #${LOOK_BADGE_ID} button:hover { opacity: 1; background: hsl(var(--muted, 220 20% 15%)); }
+      </style>
+      <span title="This profile is shown with the look its owner published with Better Intra">🎨 ${login}'s look</span>
+      <button type="button" title="Show my own style instead (this visit only)" @click=${hide}>✕</button>`,
+    host,
+  );
+  if (!existing) (document.body || document.documentElement).appendChild(host);
+}
+
 export const applyImgs = (rawUrls: VisualUrls | null) => {
   if (!rawUrls) return;
   // Values may come from another user's cloud settings and end up in <style>
@@ -421,6 +479,8 @@ export const applyImgs = (rawUrls: VisualUrls | null) => {
   if (urls.theme) {
     applyThemeToProfileCard(urls.theme);
   }
+
+  showVisitorLook(urls.look ?? null);
 
   setStyleForSelector(
     "ft-badge-color-style",
@@ -523,6 +583,7 @@ export const updateVisuals = async () => {
     isFetching = false;
     lastAppliedUser = null;
     lastAppliedKey = null;
+    showVisitorLook(null);
     if (avatarEl) avatarEl.style.setProperty("opacity", "1", "important");
   }
 
@@ -630,7 +691,8 @@ export const updateVisuals = async () => {
           cached.backgroundColor ||
           cached.badgeBg ||
           cached.theme ||
-          cached.logtime)
+          cached.logtime ||
+          cached.look)
       ) {
         visualCache = sanitizeVisualUrls(cached);
         applyImgs(visualCache);
@@ -662,7 +724,8 @@ export const updateVisuals = async () => {
               cloudUrls.backgroundColor ||
               cloudUrls.badgeBg ||
               cloudUrls.theme ||
-              cloudUrls.logtime)
+              cloudUrls.logtime ||
+              cloudUrls.look)
           ) {
             visualCache = cloudUrls;
             setCachedVisuals(targetLogin, cloudUrls);

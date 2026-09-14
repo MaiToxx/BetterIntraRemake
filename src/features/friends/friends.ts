@@ -57,7 +57,10 @@ export async function isFriend(login: string): Promise<boolean> {
 }
 
 const CACHE_KEY = "FRIENDS_DATA_CACHE";
-const CACHE_TTL = 30_000;
+// In intra mode every friend costs up to 3 intrapy calls plus a worker call
+// on the user's own Intra session, so the list is kept longer.
+export const FRIENDS_CACHE_TTL = AUTH_MODE === "intra" ? 3 * 60_000 : 30_000;
+const CACHE_TTL = FRIENDS_CACHE_TTL;
 
 async function getCachedData(): Promise<{
   data: FriendData[];

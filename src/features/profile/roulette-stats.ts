@@ -11,7 +11,11 @@ import { getIsLight } from "./theme/theme-manager.ts";
 import { createSkeleton, createSkeletonLines } from "../../utils/skeleton.ts";
 
 import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
-import { fetchProfileStatsViaIntra } from "./profile-stats-intra.ts";
+import {
+  fetchProfileStatsViaIntra,
+  readProfileStatsCache,
+  writeProfileStatsCache,
+} from "./profile-stats-intra.ts";
 const CARD_ID = "ft-roulette-card";
 
 let rouletteStatsInitialized = false;
@@ -107,15 +111,10 @@ async function fetchProfileStats(targetLogin: string): Promise<{
   if (AUTH_MODE === "intra") {
     // No 42 API on the self-hosted worker: read the Intra v2 pages instead
     // (see profile-stats-intra.ts), cached locally for an hour per login.
-    const cacheKey = `FT_PROFILE_STATS_${targetLogin}`;
-    const cached = (await chrome.storage.local.get(cacheKey))[cacheKey] as
-      | { at: number; data: { roulette: RouletteEntry[]; evalStats: EvalStatsData | null } }
-      | undefined;
-    if (cached && Date.now() - cached.at < 60 * 60 * 1000) return cached.data;
+    const cached = await readProfileStatsCache(targetLogin);
+    if (cached) return cached;
     const data = await fetchProfileStatsViaIntra(targetLogin);
-    if (data.evalStats) {
-      await chrome.storage.local.set({ [cacheKey]: { at: Date.now(), data } });
-    }
+    if (data.evalStats) await writeProfileStatsCache(targetLogin, data);
     return data;
   }
 

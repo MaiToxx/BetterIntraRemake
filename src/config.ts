@@ -129,10 +129,33 @@ export interface BetterIntraConfig {
   CUSTOM_PAGE_BG_DIM: number;
   CUSTOM_CARD_OPACITY: number;
   CUSTOM_AVATAR_SHAPE: "circle" | "rounded" | "square";
-  CUSTOM_PAGE_BG_PRESET: "none" | "aurora" | "sunset" | "ocean" | "forest" | "mono";
-  CUSTOM_CARD_STYLE: "default" | "flat" | "soft" | "strong" | "outlined";
+  CUSTOM_PAGE_BG_PRESET:
+    | "none"
+    | "aurora"
+    | "sunset"
+    | "ocean"
+    | "forest"
+    | "mono"
+    | "midnight"
+    | "candy"
+    | "lava"
+    | "nord"
+    | "dracula"
+    | "teal"
+    | "space"
+    | "mesh";
+  CUSTOM_CARD_STYLE: "default" | "flat" | "soft" | "strong" | "outlined" | "glass" | "stripe";
   CUSTOM_SCROLLBAR: "default" | "thin" | "accent" | "hidden";
+  CUSTOM_ACCENT_GRADIENT: boolean;
+  CUSTOM_ACCENT_COLOR_2: string;
+  CUSTOM_BG_ANIMATE: boolean;
+  CUSTOM_DENSITY: "default" | "compact" | "comfortable";
+  CUSTOM_HIDE_FOOTER: boolean;
   CUSTOM_PRESETS: { name: string; values: Record<string, unknown> }[];
+  /** Publish my look (accent, palette, background, cards) on my profile for other Better Intra users. */
+  CUSTOM_SHARE_LOOK: boolean;
+  /** Apply the look other users publish when I visit their profile. */
+  CUSTOM_SHOW_OTHERS_LOOK: boolean;
 
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
@@ -268,7 +291,14 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_PAGE_BG_PRESET: "none",
   CUSTOM_CARD_STYLE: "default",
   CUSTOM_SCROLLBAR: "default",
+  CUSTOM_ACCENT_GRADIENT: false,
+  CUSTOM_ACCENT_COLOR_2: "#7c3aed",
+  CUSTOM_BG_ANIMATE: false,
+  CUSTOM_DENSITY: "default",
+  CUSTOM_HIDE_FOOTER: false,
   CUSTOM_PRESETS: [],
+  CUSTOM_SHARE_LOOK: false,
+  CUSTOM_SHOW_OTHERS_LOOK: true,
 };
 
 /**
@@ -365,7 +395,14 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CUSTOM_PAGE_BG_PRESET",
   "CUSTOM_CARD_STYLE",
   "CUSTOM_SCROLLBAR",
+  "CUSTOM_ACCENT_GRADIENT",
+  "CUSTOM_ACCENT_COLOR_2",
+  "CUSTOM_BG_ANIMATE",
+  "CUSTOM_DENSITY",
+  "CUSTOM_HIDE_FOOTER",
   "CUSTOM_PRESETS",
+  "CUSTOM_SHARE_LOOK",
+  "CUSTOM_SHOW_OTHERS_LOOK",
 ];
 
 export const VISUAL_CLOUD_KEYS: ConfigKey[] = [

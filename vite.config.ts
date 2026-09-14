@@ -73,7 +73,7 @@ export default defineConfig({
   build: {
     outDir: outDir,
     emptyOutDir: false,
-    minify: false,
+    minify: true,
     rollupOptions: {
       input: { content: resolve(import.meta.dirname, "src/main.ts") },
       output: {

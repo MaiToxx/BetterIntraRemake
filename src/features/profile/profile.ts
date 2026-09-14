@@ -50,9 +50,19 @@ export async function initProfile() {
   // page used to disconnect immediately and no feature ever initialised.
   let initialised = false;
 
-  const scheduleUpdate = () => {
+  // Mutations arrive in bursts while the React page renders; one pass per
+  // burst (trailing 80ms) instead of one per animation frame.
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const scheduleUpdate = (immediate = false) => {
     needsRerun = false;
-    requestAnimationFrame(() => updateUI());
+    if (pending !== null) return;
+    pending = setTimeout(
+      () => {
+        pending = null;
+        requestAnimationFrame(() => updateUI());
+      },
+      immediate ? 0 : 80,
+    );
   };
 
   const updateUI = async () => {
@@ -109,7 +119,7 @@ export async function initProfile() {
     childList: true,
     subtree: true,
   });
-  scheduleUpdate();
+  scheduleUpdate(true);
 
   if (location.pathname !== "/") {
     setTimeout(() => observer.disconnect(), 10000);

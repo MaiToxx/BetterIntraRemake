@@ -58,7 +58,7 @@ export default defineConfig({
   build: {
     outDir: outDir,
     emptyOutDir: false,
-    minify: false,
+    minify: true,
     rollupOptions: {
       input: { popup: resolve(import.meta.dirname, "src/popup/popup.ts") },
       output: {

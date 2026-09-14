@@ -317,6 +317,7 @@ export async function fetchUserVisuals(
       badgeBg: String(data.badgeBg || ""),
       theme: (data.theme as { profileColor?: string }) || null,
       logtime: (data.logtime as Record<string, unknown>) || null,
+      look: (data.look as Record<string, unknown>) || null,
     });
   } catch (error) {
     console.error(error);

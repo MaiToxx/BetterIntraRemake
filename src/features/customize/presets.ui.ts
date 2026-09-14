@@ -11,11 +11,13 @@ import {
   deletePreset,
   encodePresetCode,
   listPresets,
+  presetImageHost,
   resetCustomization,
   savePreset,
   snapshotCustomization,
   type CustomPreset,
 } from "./presets.ts";
+import { publishLookIfShared } from "./publish.ts";
 
 /**
  * The hub renders each control once with the value read at open time. After
@@ -49,6 +51,10 @@ export function renderPresetsPanel() {
     const applyAndSync = async (values: Parameters<typeof applyCustomization>[0]) => {
       await applyCustomization(values);
       syncHubControls(hubRoot, values as unknown as Record<string, unknown>);
+      container.dispatchEvent(
+        new CustomEvent("bi-settings-synced", { bubbles: true, composed: true }),
+      );
+      publishLookIfShared("CUSTOM_ACCENT_COLOR");
     };
 
     let presets: CustomPreset[] = [];
@@ -101,6 +107,14 @@ export function renderPresetsPanel() {
       if (code === null) return;
       const values = decodePresetCode(code);
       if (!values) return say("This is not a valid theme code.", false);
+      const imageHost = presetImageHost(values);
+      if (
+        imageHost &&
+        !window.confirm(
+          `This theme loads a background image from ${imageHost} on every Intra page. Apply it anyway?`,
+        )
+      )
+        return;
       await applyAndSync(values);
       say("Theme applied from code.");
     };
@@ -109,6 +123,10 @@ export function renderPresetsPanel() {
       if (!window.confirm("Reset every Customize setting to the defaults?")) return;
       await resetCustomization();
       syncHubControls(hubRoot, await snapshotCustomization());
+      container.dispatchEvent(
+        new CustomEvent("bi-settings-synced", { bubbles: true, composed: true }),
+      );
+      publishLookIfShared("CUSTOM_ACCENT_COLOR");
       say("Customization reset.");
     };
 

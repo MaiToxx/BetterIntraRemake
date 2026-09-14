@@ -22,6 +22,10 @@ import {
   getIsLight,
 } from "../profile/theme/theme-manager.ts";
 import { bindTooltips } from "../../utils/tooltip.ts";
+import {
+  sanitizeCssColor,
+  sanitizeCssUrl,
+} from "../profile/visuals-sanitize.ts";
 import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
 import FRIENDS_SVG from "../../assets/svg/friends.svg?raw";
 import WARNING_SVG from "../../assets/svg/triangle-exclamation.svg?raw";
@@ -40,6 +44,7 @@ const HOST_ID = "friends-widget-host";
 const MEDALS = ["medal-glow-gold", "medal-glow-silver", "medal-glow-bronze"];
 
 const showingOriginalAvatars = new Map<string, boolean>();
+const AVATAR_BG_KEYWORDS = new Set(["transparent"]);
 
 function levelFraction(level: number): number {
   return level % 1;
@@ -79,9 +84,16 @@ function renderFriendRow(
     friend.customAvatar !== friend.avatar
   );
   const showingOriginal = showingOriginalAvatars.get(friend.login) ?? false;
-  const showCustom = hasCustom && !showingOriginal;
   const currentSrc =
     hasCustom && !showingOriginal ? friend.customAvatar : friend.avatar;
+  // Custom avatars are interpolated into an inline style: whatever the data
+  // source (worker friends endpoint or intrapy + visuals), only a plain
+  // http(s) URL and a plain colour may reach the CSS.
+  const customBgUrl =
+    hasCustom && !showingOriginal ? sanitizeCssUrl(currentSrc) : "";
+  const showCustom = customBgUrl !== "";
+  const avatarBg =
+    sanitizeCssColor(friend.avatarBg, AVATAR_BG_KEYWORDS) || "transparent";
   const toggleTitle = hasCustom
     ? showingOriginal
       ? "Click to view custom avatar"
@@ -113,11 +125,10 @@ function renderFriendRow(
               ${showCustom
                 ? html`<div
                     class="w-14 h-14 rounded-full cursor-pointer ${medalClass}"
-                    style="background-image:url(${currentSrc});background-size:${friend.avatarScale ??
+                    style="background-image:url(${customBgUrl});background-size:${friend.avatarScale ??
                     100}%;background-position:${friend.avatarPosX ??
                     50}% ${friend.avatarPosY ??
-                    50}%;background-color:${friend.avatarBg ||
-                    "transparent"};background-repeat:no-repeat;"
+                    50}%;background-color:${avatarBg};background-repeat:no-repeat;"
                     data-tip="${toggleTitle}"
                     @click="${toggleCustom}"
                   ></div>`

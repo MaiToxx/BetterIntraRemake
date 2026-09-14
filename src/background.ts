@@ -13,6 +13,8 @@ import { WORKER_URL } from "./utils/worker";
 const UPDATE_ALARM = "better-intra-update-check";
 const UPDATE_PERIOD_MINUTES = 6 * 60;
 const RELEASES_API = __REPO_RELEASES_API__;
+/** Delay between a new CLOUD_TOKEN and the Intra tabs reload (see onChanged). */
+const RELOAD_AFTER_LOGIN_DELAY_MS = 500;
 
 async function checkForUpdate(): Promise<void> {
   const current = chrome.runtime.getManifest().version;
@@ -79,7 +81,9 @@ chrome.storage.onChanged.addListener((changes) => {
     syncDiscordQuiet();
   }
   if ("CLOUD_TOKEN" in changes && changes.CLOUD_TOKEN.newValue) {
-    reloadIntraTabs();
+    // Give the content script that just stored the session time to answer
+    // the popup (FT_INTRA_LOGIN) before its tab is torn down by the reload.
+    setTimeout(() => void reloadIntraTabs(), RELOAD_AFTER_LOGIN_DELAY_MS);
   }
 });
 
@@ -244,16 +248,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return undefined;
 });
 
+/** Reload every open Intra tab so content scripts pick up the new session. */
 async function reloadIntraTabs() {
   const tabs = await chrome.tabs.query({ url: "https://*.intra.42.fr/*" });
-  if (tabs.length === 0) {
-    const [active] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (active?.id) chrome.tabs.reload(active.id);
-    return;
-  }
+  // nothing to refresh: never reload an unrelated active tab
+  if (tabs.length === 0) return;
   for (const tab of tabs) {
     if (tab.id) chrome.tabs.reload(tab.id);
   }

@@ -92,16 +92,17 @@ To install this extension, click the buttons below or visit the [Releases](https
 
 A **Customize** tab in the hub applies your own look & feel to every Intra page (v2 and v3), live, and syncs with your cloud settings.
 
-* **Accent colour** — pick any colour for buttons, links, highlights and progress bars, on top of any theme preset.
+* **Show your look to others ☁️** — turn on *Publish my look on my profile* and every Better Intra user who opens your profile sees it with your accent, palette, background and card style (a small badge says whose look it is, with a button to go back to their own style). Only presentation values are shared: fonts, size, density, scrollbar and custom CSS never leave your browser, and every received value is validated before it touches the page. Visitors can turn *Show other people's looks* off to always keep their own style.
+* **Accent colour** — pick any colour for buttons, links, highlights and progress bars, on top of any theme preset; optional **two-colour gradient** for buttons and progress bars.
 * **Font** — System UI, Humanist, Rounded, Serif, Monospace, or any CSS `font-family` of your own. System fonts only: nothing is downloaded.
-* **Size** — scale the whole interface from 70 % (dense) to 140 % (large text).
+* **Size & density** — scale the whole interface from 70 % (dense) to 140 % (large text); compact or comfortable spacing between cards.
 * **Corners** — square, slightly rounded, rounded or very rounded cards, buttons and inputs.
 * **Custom palette** — your own page, card and text colours; secondary tones (borders, muted text, inputs) are derived automatically.
 * **Page background** — an image behind every Intra page, with an adjustable dark overlay and card opacity (glass effect).
 * **Avatar shape** — circle, rounded square or square profile picture.
-* **Presets & sharing** — save your look under a name and switch in one click; copy a *theme code* and send it to friends, who paste it to get the same look.
-* **Background presets** — built-in gradients (Aurora, Sunset, Ocean, Forest, Monochrome) when you have no image to host.
-* **Card style & scrollbar** — flat, soft or strong shadow, accent outline; thin, accent-coloured or hidden scrollbars.
+* **Presets & sharing** — save your look under a name and switch in one click; copy a *theme code* and send it to friends, who paste it to get the same look. Codes never carry custom CSS, and a code that loads a background image asks for confirmation first.
+* **Background presets** — 13 built-in gradients (Aurora, Sunset, Ocean, Forest, Monochrome, Midnight, Candy, Lava, Nord, Dracula, 42 teal, Space, Mesh), optionally animated, when you have no image to host.
+* **Card style & scrollbar** — flat, soft or strong shadow, accent outline, glass, accent stripe; thin, accent-coloured or hidden scrollbars. Hide the footer if you never use it.
 * **Custom CSS** — a free-form stylesheet applied last on every page.
 
 ---

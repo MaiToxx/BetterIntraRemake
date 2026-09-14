@@ -1,16 +1,20 @@
 /**
  * "Customize" feature: user-level look & feel tweaks applied to every Intra
  * page (v2 and v3):
- *   - custom accent colour (overrides the theme preset's --primary)
- *   - font family and global font scale
+ *   - custom accent colour (overrides the theme preset's --primary), with an
+ *     optional second colour for a gradient
+ *   - font family, global font scale, density
+ *   - full palette, page background (image or built-in gradient), card style
  *   - free-form custom CSS
  *
  * Everything is the user's own setting for their own browser (cloud-synced
  * for the same user only), so values are validated for robustness, not
- * against a hostile author.
+ * against a hostile author. The one exception is the "visitor look": the
+ * subset of these settings another user publishes on their profile (see
+ * public-look.ts), which is validated key by key before reaching this file.
  */
-import { getConfigMany, type BetterIntraConfig } from "../../config.ts";
-import { sanitizeCssUrl } from "../profile/visuals-sanitize.ts";
+import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../config.ts";
+import { sanitizeCssUrl } from "../../utils/css-sanitize.ts";
 
 /** Elements the Intra v3 theme paints with the page background colour. */
 const PAGE_SURFACES =
@@ -28,7 +32,7 @@ export function shiftLightness(hsl: string, delta: number): string {
   return `${m[1]} ${m[2]}% ${l}%`;
 }
 
-const AVATAR_RADIUS: Record<string, string> = {
+export const AVATAR_RADIUS: Record<string, string> = {
   circle: "",
   rounded: "1.25rem",
   square: "0",
@@ -37,10 +41,14 @@ const AVATAR_RADIUS: Record<string, string> = {
 export const CUSTOMIZE_KEYS = [
   "CUSTOM_ACCENT_ENABLED",
   "CUSTOM_ACCENT_COLOR",
+  "CUSTOM_ACCENT_GRADIENT",
+  "CUSTOM_ACCENT_COLOR_2",
   "CUSTOM_FONT",
   "CUSTOM_FONT_FAMILY",
   "CUSTOM_FONT_SCALE",
   "CUSTOM_RADIUS",
+  "CUSTOM_DENSITY",
+  "CUSTOM_HIDE_FOOTER",
   "CUSTOM_CSS",
   "CUSTOM_THEME_ENABLED",
   "CUSTOM_THEME_BG",
@@ -48,10 +56,11 @@ export const CUSTOMIZE_KEYS = [
   "CUSTOM_THEME_TEXT",
   "CUSTOM_PAGE_BG_URL",
   "CUSTOM_PAGE_BG_DIM",
-  "CUSTOM_CARD_OPACITY",
-  "CUSTOM_AVATAR_SHAPE",
   "CUSTOM_PAGE_BG_PRESET",
+  "CUSTOM_BG_ANIMATE",
+  "CUSTOM_CARD_OPACITY",
   "CUSTOM_CARD_STYLE",
+  "CUSTOM_AVATAR_SHAPE",
   "CUSTOM_SCROLLBAR",
 ] as const;
 
@@ -67,21 +76,52 @@ export const BG_PRESETS: Record<string, string> = {
   forest:
     "linear-gradient(160deg, #0b3d2e 0%, #14532d 50%, #1a2e1a 100%)",
   mono: "linear-gradient(180deg, #111111 0%, #2a2a2a 100%)",
+  midnight:
+    "linear-gradient(180deg, #020617 0%, #0f172a 55%, #1e1b4b 100%)",
+  candy:
+    "linear-gradient(135deg, #ff9a9e 0%, #fad0c4 40%, #a18cd1 100%)",
+  lava: "linear-gradient(160deg, #1a0000 0%, #7a1010 50%, #ff6a00 100%)",
+  nord: "linear-gradient(180deg, #2e3440 0%, #3b4252 50%, #434c5e 100%)",
+  dracula:
+    "linear-gradient(160deg, #282a36 0%, #44475a 55%, #6272a4 100%)",
+  teal: "linear-gradient(160deg, #001b1b 0%, #004d4d 50%, #00babc 100%)",
+  space:
+    "radial-gradient(circle at 15% 20%, rgba(255,255,255,0.12) 0 1px, transparent 2px), radial-gradient(circle at 70% 60%, rgba(255,255,255,0.10) 0 1px, transparent 2px), radial-gradient(circle at 40% 85%, rgba(255,255,255,0.08) 0 1px, transparent 2px), radial-gradient(at 80% 0%, #1d0b3a 0%, transparent 60%), #05030f",
+  mesh:
+    "radial-gradient(at 0% 0%, #7c3aed66 0%, transparent 50%), radial-gradient(at 100% 0%, #06b6d466 0%, transparent 50%), radial-gradient(at 100% 100%, #f43f5e55 0%, transparent 50%), radial-gradient(at 0% 100%, #22c55e55 0%, transparent 50%), #0b0f1a",
 };
 
-const CARD_STYLES: Record<string, string> = {
+export const CARD_STYLES: Record<string, string> = {
   default: "",
   flat: "box-shadow: none !important; border: none !important;",
   soft: "box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important; border: none !important;",
   strong: "box-shadow: 0 16px 48px rgba(0,0,0,0.45) !important; border: none !important;",
   outlined:
     "box-shadow: none !important; border: 1px solid hsl(var(--primary) / 0.45) !important;",
+  glass:
+    "background-color: hsl(var(--card) / 0.55) !important; backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); border: 1px solid rgba(255,255,255,0.08) !important; box-shadow: 0 8px 32px rgba(0,0,0,0.25) !important;",
+  stripe:
+    "border-left: 4px solid hsl(var(--primary)) !important; box-shadow: 0 4px 16px rgba(0,0,0,0.15) !important;",
+};
+
+/**
+ * Spacing presets. The v3 pages are built with Tailwind utilities, so the
+ * densities re-map the handful of gap/padding classes the layout uses.
+ */
+export const DENSITY: Record<string, string> = {
+  default: "",
+  compact:
+    ".gap-6 { gap: 1rem !important; } .gap-4 { gap: 0.625rem !important; } .gap-3 { gap: 0.5rem !important; } .p-6 { padding: 1rem !important; } .p-4 { padding: 0.75rem !important; } .px-6 { padding-left: 1rem !important; padding-right: 1rem !important; } .py-4 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; } .mb-6 { margin-bottom: 1rem !important; } .mb-4 { margin-bottom: 0.75rem !important; } .space-y-4 > * + * { margin-top: 0.625rem !important; }",
+  comfortable:
+    ".gap-6 { gap: 2rem !important; } .gap-4 { gap: 1.5rem !important; } .p-6 { padding: 2rem !important; } .p-4 { padding: 1.5rem !important; } .mb-6 { margin-bottom: 2rem !important; } .mb-4 { margin-bottom: 1.5rem !important; }",
 };
 
 export type CustomizeConfig = Pick<BetterIntraConfig, (typeof CUSTOMIZE_KEYS)[number]>;
 
 const STYLE_ID = "better-intra-customize";
 const CSS_ID = "better-intra-custom-css";
+/** Look published by the profile being visited (see applyVisitorLook). */
+export const VISITOR_STYLE_ID = "better-intra-visitor-look";
 
 /** Built-in font choices (system fonts only: no external requests). */
 export const FONT_PRESETS: Record<string, string> = {
@@ -148,13 +188,18 @@ export function clampFontScale(value: unknown): number {
   return Math.min(140, Math.max(70, Math.round(n)));
 }
 
-const RADIUS: Record<string, string> = {
+export const RADIUS: Record<string, string> = {
   default: "",
   none: "0px",
   small: "0.375rem",
   large: "1rem",
   full: "1.5rem",
 };
+
+const TRANSPARENT_SURFACES = PAGE_SURFACES.split(", ")
+  .filter((s) => s !== "html")
+  .map((s) => `html.dark ${s}, html:not(.dark) ${s}`)
+  .join(", ");
 
 /** Build the stylesheet for the current customisation settings. */
 export function buildCustomizeCss(c: CustomizeConfig): string {
@@ -172,6 +217,15 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
       rules.push(
         `:root { --better-intra-accent: ${c.CUSTOM_ACCENT_COLOR}; --theme-color: ${c.CUSTOM_ACCENT_COLOR}; }`,
       );
+      // Two-colour accent: buttons, progress fills and other solid accent
+      // surfaces get a gradient (translucent "bg-primary/20" variants are
+      // left alone so they stay see-through).
+      const hex2 = c.CUSTOM_ACCENT_GRADIENT ? hexToHslTriplet(c.CUSTOM_ACCENT_COLOR_2) : null;
+      if (hex2) {
+        rules.push(
+          `.bg-primary, .btn-primary, progress::-webkit-progress-value { background-image: linear-gradient(135deg, ${c.CUSTOM_ACCENT_COLOR}, ${c.CUSTOM_ACCENT_COLOR_2}) !important; }`,
+        );
+      }
     }
   }
 
@@ -196,6 +250,13 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
     rules.push(
       `html { --radius: ${radius} !important; } .rounded-xl, .rounded-lg, .rounded-md, .rounded-2xl, .card, .btn, .input, .select { border-radius: ${radius} !important; }`,
     );
+  }
+
+  const density = DENSITY[c.CUSTOM_DENSITY] ?? "";
+  if (density) rules.push(density);
+
+  if (c.CUSTOM_HIDE_FOOTER) {
+    rules.push(`footer { display: none !important; }`);
   }
 
   // Full custom palette: the v3 theme paints everything through these
@@ -237,7 +298,7 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
       `html, html.dark, html:not(.dark) { background: linear-gradient(rgba(0,0,0,${dim}), rgba(0,0,0,${dim})), url("${pageBg}") center / cover fixed no-repeat !important; }`,
     );
     rules.push(
-      `${PAGE_SURFACES.split(", ").filter((s) => s !== "html").map((s) => `html.dark ${s}, html:not(.dark) ${s}`).join(", ")} { background-color: transparent !important; background-image: none !important; }`,
+      `${TRANSPARENT_SURFACES} { background-color: transparent !important; background-image: none !important; }`,
     );
   }
 
@@ -262,11 +323,24 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
       `html, html.dark, html:not(.dark) { background: ${gradient} fixed !important; }`,
     );
     rules.push(
-      `${PAGE_SURFACES.split(", ").filter((s) => s !== "html").map((s) => `html.dark ${s}, html:not(.dark) ${s}`).join(", ")} { background-color: transparent !important; background-image: none !important; }`,
+      `${TRANSPARENT_SURFACES} { background-color: transparent !important; background-image: none !important; }`,
     );
     if (cardOpacity === 100) {
       rules.push(
         `html.dark ${CARD_SURFACES.split(", ").join(", html.dark ")} { background-color: hsl(var(--card) / 0.92) !important; }`,
+      );
+    }
+    if (c.CUSTOM_BG_ANIMATE) {
+      // Slow drift of the gradient; off for people who asked their OS for
+      // less motion.
+      rules.push(
+        `@keyframes bi-bg-drift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }`,
+      );
+      rules.push(
+        `html, html.dark, html:not(.dark) { background-size: 200% 200% !important; animation: bi-bg-drift 45s ease-in-out infinite; }`,
+      );
+      rules.push(
+        `@media (prefers-reduced-motion: reduce) { html { animation: none !important; } }`,
       );
     }
   }
@@ -298,6 +372,18 @@ function num(v: unknown, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Every Customize setting at its default value. */
+export function defaultCustomization(): CustomizeConfig {
+  const out = {} as Record<string, unknown>;
+  for (const key of CUSTOMIZE_KEYS) out[key] = CONFIG_DEFAULT[key];
+  return out as CustomizeConfig;
+}
+
+/** Stylesheet for a partial look (missing keys at their defaults). */
+export function buildLookCss(look: Partial<CustomizeConfig>): string {
+  return buildCustomizeCss({ ...defaultCustomization(), ...look });
+}
+
 function setStyle(id: string, css: string) {
   let el = document.getElementById(id) as HTMLStyleElement | null;
   if (!css) {
@@ -319,6 +405,43 @@ export async function applyCustomizations(): Promise<void> {
   setStyle(CSS_ID, typeof c.CUSTOM_CSS === "string" ? c.CUSTOM_CSS : "");
 }
 
+let visitorLook: Partial<CustomizeConfig> | null = null;
+let visitorLookKey = "";
+
+/**
+ * Apply (or clear, with null) the look published by the profile being
+ * visited. It is rendered after the viewer's own customisation so that it
+ * wins on the shared declarations, but the viewer's custom CSS stays last.
+ * Honours the viewer's CUSTOM_SHOW_OTHERS_LOOK setting.
+ */
+export async function applyVisitorLook(look: Partial<CustomizeConfig> | null): Promise<void> {
+  visitorLook = look && Object.keys(look).length > 0 ? look : null;
+  if (!visitorLook) {
+    visitorLookKey = "";
+    setStyle(VISITOR_STYLE_ID, "");
+    return;
+  }
+  // Called on every mutation pass of the profile page: skip the storage
+  // round-trip when the same look is already on screen.
+  const key = JSON.stringify(visitorLook);
+  if (key === visitorLookKey && document.getElementById(VISITOR_STYLE_ID)) return;
+  visitorLookKey = key;
+  const { CUSTOM_SHOW_OTHERS_LOOK } = await getConfigMany(["CUSTOM_SHOW_OTHERS_LOOK"]);
+  if (CUSTOM_SHOW_OTHERS_LOOK === false) {
+    visitorLookKey = "";
+    setStyle(VISITOR_STYLE_ID, "");
+    return;
+  }
+  setStyle(VISITOR_STYLE_ID, buildLookCss(visitorLook));
+  const own = document.getElementById(CSS_ID);
+  if (own && own.nextElementSibling) own.parentElement?.appendChild(own);
+}
+
+/** True while a visitor look is displayed. */
+export function hasVisitorLook(): boolean {
+  return !!document.getElementById(VISITOR_STYLE_ID);
+}
+
 let initialised = false;
 
 export async function initCustomize(): Promise<void> {
@@ -328,5 +451,9 @@ export async function initCustomize(): Promise<void> {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
     if (CUSTOMIZE_KEYS.some((k) => k in changes)) void applyCustomizations();
+    if ("CUSTOM_SHOW_OTHERS_LOOK" in changes) {
+      visitorLookKey = "";
+      void applyVisitorLook(visitorLook);
+    }
   });
 }

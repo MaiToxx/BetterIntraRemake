@@ -35,6 +35,7 @@ import CHEVRON_DOWN_SVG from "../../assets/svg/chevron-down.svg?raw";
 import { renderAboutPanel } from "./hub.about.ts";
 import { exportableSettings, sanitizeBackup } from "./backup.ts";
 import { renderPresetsPanel } from "../customize/presets.ui.ts";
+import { publishLookIfShared } from "../customize/publish.ts";
 import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
@@ -46,6 +47,13 @@ import { bindTooltips } from "../../utils/tooltip.ts";
 
 async function saveSetting(key: string, value: unknown): Promise<void> {
   await chrome.storage.local.set({ [key]: value });
+  publishLookIfShared(key);
+}
+
+/** <input type="number"> gives a string: store a number when it is one. */
+function numericValue(raw: string): unknown {
+  const n = Number(raw);
+  return raw.trim() !== "" && Number.isFinite(n) ? n : raw;
 }
 
 import { fetchCampusList, fetchEventTypes } from "../clusters/clusters.data.ts";
@@ -481,7 +489,7 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
                   @change="${(e: Event) =>
                     saveSetting(
                       def.key!,
-                      (e.target as HTMLInputElement).value,
+                      numericValue((e.target as HTMLInputElement).value),
                     )}"
                 />
                 <span class="opacity-70">€</span>
@@ -493,7 +501,7 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
                 data-setting-key="${def.key}"
                 ?disabled="${!enabled}"
                 @change="${(e: Event) =>
-                  saveSetting(def.key!, (e.target as HTMLInputElement).value)}"
+                  saveSetting(def.key!, numericValue((e.target as HTMLInputElement).value))}"
               />`;
         }
 
@@ -1454,40 +1462,51 @@ async function createModal(active: FeatureId[]): Promise<void> {
   });
 
   shadow.addEventListener("change", (e) => {
-    const target = e.target as HTMLElement;
-    const parentKey = target.dataset.settingKey;
-    if (!parentKey) return;
+    const parentKey = (e.target as HTMLElement).dataset.settingKey;
+    if (parentKey) refreshDependents(shadow, parentKey);
+  });
+  // Presets, theme codes and Reset rewrite many controls at once without
+  // firing "change": they announce it and every dependency is re-evaluated.
+  shadow.addEventListener("bi-settings-synced", () => refreshDependents(shadow));
+}
 
-    const depKeys: string[] = [];
-    for (const defs of Object.values(HUB_SETTING_DEFS)) {
-      for (const def of defs) {
-        if (def.dependsOn === parentKey && def.key) depKeys.push(def.key);
-      }
-    }
-    if (depKeys.length === 0) return;
+/** Whether a parent control currently enables its dependants. */
+function parentIsOn(el: HTMLElement): boolean {
+  if (el instanceof HTMLInputElement) {
+    if (el.type === "checkbox" || el.type === "radio") return el.checked;
+    return el.value.trim() !== "";
+  }
+  if (el instanceof HTMLSelectElement) return el.value !== "" && el.value !== "none";
+  return true;
+}
 
-    const on =
-      target instanceof HTMLInputElement && target.type === "checkbox"
-        ? target.checked
-        : true;
-
-    for (const key of depKeys) {
-      const el = shadow.querySelector<HTMLElement>(
-        `[data-setting-key="${key}"]`,
+/**
+ * Show/enable the controls that depend on `parentKey` (every parent when
+ * omitted) according to the parent control's current state.
+ */
+function refreshDependents(root: ParentNode, parentKey?: string): void {
+  for (const defs of Object.values(HUB_SETTING_DEFS)) {
+    for (const def of defs) {
+      if (!def.dependsOn || !def.key) continue;
+      if (parentKey && def.dependsOn !== parentKey) continue;
+      const parent = root.querySelector<HTMLElement>(
+        `[data-setting-key="${def.dependsOn}"]`,
+      );
+      if (!parent) continue;
+      const on = parentIsOn(parent);
+      const el = root.querySelector<HTMLElement>(
+        `[data-setting-key="${def.key}"]`,
       );
       if (!el) continue;
       const card = el.closest<HTMLElement>(".card");
       if (card) {
         card.classList.toggle("hidden", !on);
-        if (on) {
-          card.classList.remove("opacity-40", "grayscale");
-        } else {
-          card.classList.add("opacity-40", "grayscale");
-        }
+        card.classList.toggle("opacity-40", !on);
+        card.classList.toggle("grayscale", !on);
       }
-      (el as any).disabled = !on;
+      (el as HTMLInputElement).disabled = !on;
     }
-  });
+  }
 }
 
 async function resetFeatureSettings(
