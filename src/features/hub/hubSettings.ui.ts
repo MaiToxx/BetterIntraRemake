@@ -34,6 +34,7 @@ import LINK_SVG from "../../assets/svg/link.svg?raw";
 import CHEVRON_DOWN_SVG from "../../assets/svg/chevron-down.svg?raw";
 import { renderAboutPanel } from "./hub.about.ts";
 import { exportableSettings, sanitizeBackup } from "./backup.ts";
+import { renderPresetsPanel } from "../customize/presets.ui.ts";
 import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
@@ -414,6 +415,7 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
 
   if (def.kind === "discord-panel") return renderDiscordPanel();
   if (def.kind === "calendar-panel") return renderCalendarPanel();
+  if (def.kind === "custom-presets") return renderPresetsPanel();
 
   return until(
     (async () => {

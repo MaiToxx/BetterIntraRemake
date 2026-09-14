@@ -1,0 +1,153 @@
+/**
+ * "Presets & sharing" panel of the Customize tab.
+ * Save the current look under a name, apply or delete saved presets, copy a
+ * theme code to share it, paste a code received from someone else, or reset.
+ */
+import { html, render } from "lit-html";
+import { ref } from "lit-html/directives/ref.js";
+import {
+  applyCustomization,
+  decodePresetCode,
+  deletePreset,
+  encodePresetCode,
+  listPresets,
+  resetCustomization,
+  savePreset,
+  snapshotCustomization,
+  type CustomPreset,
+} from "./presets.ts";
+
+export function renderPresetsPanel() {
+  const setup = (el: Element | undefined) => {
+    if (!el) return;
+    const container = el as HTMLElement;
+    if (container.dataset.presetsReady) return;
+    container.dataset.presetsReady = "1";
+
+    let presets: CustomPreset[] = [];
+    let status = "";
+    let statusOk = true;
+
+    const say = (msg: string, ok = true) => {
+      status = msg;
+      statusOk = ok;
+      draw();
+      setTimeout(() => {
+        if (status === msg) {
+          status = "";
+          draw();
+        }
+      }, 3500);
+    };
+
+    const onSave = async () => {
+      const input = container.querySelector<HTMLInputElement>("[data-preset-name]");
+      const name = input?.value.trim() ?? "";
+      if (!name) return say("Give the preset a name first.", false);
+      presets = await savePreset(name, await snapshotCustomization());
+      if (input) input.value = "";
+      say(`Saved "${name}".`);
+    };
+
+    const onApply = async (p: CustomPreset) => {
+      await applyCustomization(p.values);
+      say(`Applied "${p.name}".`);
+    };
+
+    const onDelete = async (p: CustomPreset) => {
+      presets = await deletePreset(p.name);
+      say(`Deleted "${p.name}".`);
+    };
+
+    const onCopy = async () => {
+      const code = encodePresetCode(await snapshotCustomization());
+      try {
+        await navigator.clipboard.writeText(code);
+        say("Theme code copied. Send it to a friend!");
+      } catch {
+        window.prompt("Copy your theme code:", code);
+      }
+    };
+
+    const onPaste = async () => {
+      const code = window.prompt("Paste a Better Intra theme code:");
+      if (code === null) return;
+      const values = decodePresetCode(code);
+      if (!values) return say("This is not a valid theme code.", false);
+      await applyCustomization(values);
+      say("Theme applied from code.");
+    };
+
+    const onReset = async () => {
+      if (!window.confirm("Reset every Customize setting to the defaults?")) return;
+      await resetCustomization();
+      say("Customization reset.");
+    };
+
+    const draw = () =>
+      render(
+        html`
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                class="input input-accent input-sm w-48"
+                placeholder="Preset name"
+                maxlength="40"
+                data-preset-name
+                @keydown="${(e: KeyboardEvent) => {
+                  if (e.key === "Enter") void onSave();
+                }}"
+              />
+              <button type="button" class="btn btn-sm btn-primary" @click="${onSave}">
+                Save current look
+              </button>
+              <div class="flex-1"></div>
+              <button type="button" class="btn btn-sm" @click="${onCopy}">Copy theme code</button>
+              <button type="button" class="btn btn-sm" @click="${onPaste}">Paste theme code</button>
+              <button type="button" class="btn btn-sm btn-ghost" @click="${onReset}">Reset</button>
+            </div>
+            ${presets.length === 0
+              ? html`<p class="text-xs opacity-60">
+                  No preset yet. Adjust the settings below, then save them under a name to switch looks in one click.
+                </p>`
+              : html`<ul class="flex flex-wrap gap-2">
+                  ${presets.map(
+                    (p) => html`<li class="join">
+                      <button
+                        type="button"
+                        class="btn btn-sm join-item"
+                        title="Apply this preset"
+                        @click="${() => onApply(p)}"
+                      >
+                        ${p.name}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-ghost join-item px-2"
+                        title="Delete this preset"
+                        aria-label="Delete ${p.name}"
+                        @click="${() => onDelete(p)}"
+                      >
+                        ✕
+                      </button>
+                    </li>`,
+                  )}
+                </ul>`}
+            ${status
+              ? html`<p class="text-xs ${statusOk ? "text-success" : "text-error"}">${status}</p>`
+              : ""}
+          </div>
+        `,
+        container,
+      );
+
+    void listPresets().then((p) => {
+      presets = p;
+      draw();
+    });
+    draw();
+  };
+
+  return html`<div ${ref(setup)} class="col-span-full"></div>`;
+}

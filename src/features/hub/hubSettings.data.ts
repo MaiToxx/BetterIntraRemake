@@ -103,6 +103,7 @@ export type SettingKind =
   | "number"
   | "text"
   | "textarea"
+  | "custom-presets"
   | "url"
   | "select"
   | "color"
@@ -632,6 +633,13 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     },
   ],
   customize: [
+    {
+      feature: "customize",
+      label: "Presets & sharing",
+      desc: "Save your look under a name, switch between presets, and share a theme code with friends.",
+      kind: "custom-presets",
+      fullWidth: true,
+    },
     { feature: "customize", label: "Accent", kind: "divider" },
     {
       feature: "customize",
@@ -715,6 +723,24 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     },
     {
       feature: "customize",
+      key: "CUSTOM_PAGE_BG_PRESET",
+      label: "Background preset",
+      desc: "Built-in gradient behind every page, used when no image URL is set.",
+      kind: "select",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_PAGE_BG_PRESET,
+      options: [
+        { label: "None", value: "none" },
+        { label: "Aurora", value: "aurora" },
+        { label: "Sunset", value: "sunset" },
+        { label: "Ocean", value: "ocean" },
+        { label: "Forest", value: "forest" },
+        { label: "Monochrome", value: "mono" },
+      ],
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
       key: "CUSTOM_PAGE_BG_DIM",
       label: "Darken image (%)",
       desc: "Dark overlay on the background image to keep text readable. 0–90.",
@@ -737,6 +763,39 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       max: 100,
       step: 5,
       defaultValue: CONFIG_DEFAULT.CUSTOM_CARD_OPACITY,
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_CARD_STYLE",
+      label: "Card style",
+      desc: "Shadow and border of cards.",
+      kind: "select",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_CARD_STYLE,
+      options: [
+        { label: "Intra default", value: "default" },
+        { label: "Flat", value: "flat" },
+        { label: "Soft shadow", value: "soft" },
+        { label: "Strong shadow", value: "strong" },
+        { label: "Outlined (accent)", value: "outlined" },
+      ],
+      grid: true,
+      colSpan: 1,
+    },
+    {
+      feature: "customize",
+      key: "CUSTOM_SCROLLBAR",
+      label: "Scrollbar",
+      desc: "Style of the page scrollbars.",
+      kind: "select",
+      defaultValue: CONFIG_DEFAULT.CUSTOM_SCROLLBAR,
+      options: [
+        { label: "Browser default", value: "default" },
+        { label: "Thin", value: "thin" },
+        { label: "Thin, accent colour", value: "accent" },
+        { label: "Hidden", value: "hidden" },
+      ],
       grid: true,
       colSpan: 1,
     },

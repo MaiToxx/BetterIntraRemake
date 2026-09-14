@@ -50,7 +50,33 @@ export const CUSTOMIZE_KEYS = [
   "CUSTOM_PAGE_BG_DIM",
   "CUSTOM_CARD_OPACITY",
   "CUSTOM_AVATAR_SHAPE",
+  "CUSTOM_PAGE_BG_PRESET",
+  "CUSTOM_CARD_STYLE",
+  "CUSTOM_SCROLLBAR",
 ] as const;
+
+/** Built-in page backgrounds (CSS gradients, no image hosting needed). */
+export const BG_PRESETS: Record<string, string> = {
+  none: "",
+  aurora:
+    "radial-gradient(at 20% 10%, #1a2a6c 0%, transparent 55%), radial-gradient(at 80% 20%, #b21f1f33 0%, transparent 50%), radial-gradient(at 50% 90%, #0f9b8e 0%, transparent 55%), #0b0f1a",
+  sunset:
+    "linear-gradient(160deg, #2b1055 0%, #7597de 45%, #ffb88c 100%)",
+  ocean:
+    "linear-gradient(180deg, #0f2027 0%, #203a43 50%, #2c5364 100%)",
+  forest:
+    "linear-gradient(160deg, #0b3d2e 0%, #14532d 50%, #1a2e1a 100%)",
+  mono: "linear-gradient(180deg, #111111 0%, #2a2a2a 100%)",
+};
+
+const CARD_STYLES: Record<string, string> = {
+  default: "",
+  flat: "box-shadow: none !important; border: none !important;",
+  soft: "box-shadow: 0 8px 24px rgba(0,0,0,0.18) !important; border: none !important;",
+  strong: "box-shadow: 0 16px 48px rgba(0,0,0,0.45) !important; border: none !important;",
+  outlined:
+    "box-shadow: none !important; border: 1px solid hsl(var(--primary) / 0.45) !important;",
+};
 
 export type CustomizeConfig = Pick<BetterIntraConfig, (typeof CUSTOMIZE_KEYS)[number]>;
 
@@ -226,6 +252,42 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
   const avatarRadius = AVATAR_RADIUS[c.CUSTOM_AVATAR_SHAPE] ?? "";
   if (avatarRadius !== "" && c.CUSTOM_AVATAR_SHAPE !== "circle") {
     rules.push(`${AVATAR} { border-radius: ${avatarRadius} !important; }`);
+  }
+
+  // Built-in gradient background (only when no image is set; same surface
+  // handling as the image).
+  const gradient = BG_PRESETS[c.CUSTOM_PAGE_BG_PRESET] ?? "";
+  if (!pageBg && gradient) {
+    rules.push(
+      `html, html.dark, html:not(.dark) { background: ${gradient} fixed !important; }`,
+    );
+    rules.push(
+      `${PAGE_SURFACES.split(", ").filter((s) => s !== "html").map((s) => `html.dark ${s}, html:not(.dark) ${s}`).join(", ")} { background-color: transparent !important; background-image: none !important; }`,
+    );
+    if (cardOpacity === 100) {
+      rules.push(
+        `html.dark ${CARD_SURFACES.split(", ").join(", html.dark ")} { background-color: hsl(var(--card) / 0.92) !important; }`,
+      );
+    }
+  }
+
+  const cardStyle = CARD_STYLES[c.CUSTOM_CARD_STYLE] ?? "";
+  if (cardStyle) {
+    rules.push(`${CARD_SURFACES}, .card { ${cardStyle} }`);
+  }
+
+  if (c.CUSTOM_SCROLLBAR && c.CUSTOM_SCROLLBAR !== "default") {
+    if (c.CUSTOM_SCROLLBAR === "hidden") {
+      rules.push(
+        `html { scrollbar-width: none !important; } html::-webkit-scrollbar { width: 0 !important; height: 0 !important; }`,
+      );
+    } else {
+      const thumb =
+        c.CUSTOM_SCROLLBAR === "accent" ? "hsl(var(--primary))" : "rgba(128,128,128,0.55)";
+      rules.push(
+        `html { scrollbar-width: thin !important; scrollbar-color: ${thumb} transparent !important; } ::-webkit-scrollbar { width: 8px; height: 8px; } ::-webkit-scrollbar-thumb { background: ${thumb}; border-radius: 8px; } ::-webkit-scrollbar-track { background: transparent; }`,
+      );
+    }
   }
 
   return rules.join("\n");

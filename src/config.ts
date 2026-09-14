@@ -129,6 +129,10 @@ export interface BetterIntraConfig {
   CUSTOM_PAGE_BG_DIM: number;
   CUSTOM_CARD_OPACITY: number;
   CUSTOM_AVATAR_SHAPE: "circle" | "rounded" | "square";
+  CUSTOM_PAGE_BG_PRESET: "none" | "aurora" | "sunset" | "ocean" | "forest" | "mono";
+  CUSTOM_CARD_STYLE: "default" | "flat" | "soft" | "strong" | "outlined";
+  CUSTOM_SCROLLBAR: "default" | "thin" | "accent" | "hidden";
+  CUSTOM_PRESETS: { name: string; values: Record<string, unknown> }[];
 
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
@@ -261,6 +265,10 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_PAGE_BG_DIM: 40,
   CUSTOM_CARD_OPACITY: 100,
   CUSTOM_AVATAR_SHAPE: "circle",
+  CUSTOM_PAGE_BG_PRESET: "none",
+  CUSTOM_CARD_STYLE: "default",
+  CUSTOM_SCROLLBAR: "default",
+  CUSTOM_PRESETS: [],
 };
 
 /**
@@ -354,6 +362,10 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CUSTOM_PAGE_BG_DIM",
   "CUSTOM_CARD_OPACITY",
   "CUSTOM_AVATAR_SHAPE",
+  "CUSTOM_PAGE_BG_PRESET",
+  "CUSTOM_CARD_STYLE",
+  "CUSTOM_SCROLLBAR",
+  "CUSTOM_PRESETS",
 ];
 
 export const VISUAL_CLOUD_KEYS: ConfigKey[] = [

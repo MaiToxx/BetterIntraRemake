@@ -99,6 +99,9 @@ A **Customize** tab in the hub applies your own look & feel to every Intra page 
 * **Custom palette** — your own page, card and text colours; secondary tones (borders, muted text, inputs) are derived automatically.
 * **Page background** — an image behind every Intra page, with an adjustable dark overlay and card opacity (glass effect).
 * **Avatar shape** — circle, rounded square or square profile picture.
+* **Presets & sharing** — save your look under a name and switch in one click; copy a *theme code* and send it to friends, who paste it to get the same look.
+* **Background presets** — built-in gradients (Aurora, Sunset, Ocean, Forest, Monochrome) when you have no image to host.
+* **Card style & scrollbar** — flat, soft or strong shadow, accent outline; thin, accent-coloured or hidden scrollbars.
 * **Custom CSS** — a free-form stylesheet applied last on every page.
 
 ---
