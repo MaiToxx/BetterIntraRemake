@@ -10,6 +10,29 @@
  * against a hostile author.
  */
 import { getConfigMany, type BetterIntraConfig } from "../../config.ts";
+import { sanitizeCssUrl } from "../profile/visuals-sanitize.ts";
+
+/** Elements the Intra v3 theme paints with the page background colour. */
+const PAGE_SURFACES =
+  "html, body, main, footer, header, #root, #root > div, [class*=\"min-h-screen\"]";
+/** Selector used by the theme for dashboard/profile cards. */
+const CARD_SURFACES = "div.bg-white, .bg-white.md\\:h-96";
+/** Profile avatar (kept in sync with selectors.ts AVATAR_SELECTOR). */
+const AVATAR = "div.rounded-full.w-52.h-52";
+
+/** "H S% L%" -> the same with the lightness shifted (clamped 0-100). */
+export function shiftLightness(hsl: string, delta: number): string {
+  const m = /^(\d+) (\d+)% (\d+)%$/.exec(hsl);
+  if (!m) return hsl;
+  const l = Math.min(100, Math.max(0, Number(m[3]) + delta));
+  return `${m[1]} ${m[2]}% ${l}%`;
+}
+
+const AVATAR_RADIUS: Record<string, string> = {
+  circle: "",
+  rounded: "1.25rem",
+  square: "0",
+};
 
 export const CUSTOMIZE_KEYS = [
   "CUSTOM_ACCENT_ENABLED",
@@ -19,6 +42,14 @@ export const CUSTOMIZE_KEYS = [
   "CUSTOM_FONT_SCALE",
   "CUSTOM_RADIUS",
   "CUSTOM_CSS",
+  "CUSTOM_THEME_ENABLED",
+  "CUSTOM_THEME_BG",
+  "CUSTOM_THEME_CARD",
+  "CUSTOM_THEME_TEXT",
+  "CUSTOM_PAGE_BG_URL",
+  "CUSTOM_PAGE_BG_DIM",
+  "CUSTOM_CARD_OPACITY",
+  "CUSTOM_AVATAR_SHAPE",
 ] as const;
 
 export type CustomizeConfig = Pick<BetterIntraConfig, (typeof CUSTOMIZE_KEYS)[number]>;
@@ -141,7 +172,68 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
     );
   }
 
+  // Full custom palette: the v3 theme paints everything through these
+  // variables, so overriding them recolours the whole interface. Secondary
+  // tones (muted, border, input, popover, accent) derive from the two
+  // surfaces so a single pair of colours stays coherent.
+  if (c.CUSTOM_THEME_ENABLED) {
+    const bg = hexToHslTriplet(c.CUSTOM_THEME_BG);
+    const card = hexToHslTriplet(c.CUSTOM_THEME_CARD);
+    const text = hexToHslTriplet(c.CUSTOM_THEME_TEXT);
+    if (bg && card && text) {
+      const dark = Number(/(\d+)%$/.exec(bg)?.[1] ?? 50) < 50;
+      const step = dark ? 6 : -6;
+      const vars = [
+        `--background: ${bg}`,
+        `--card: ${card}`,
+        `--popover: ${card}`,
+        `--foreground: ${text}`,
+        `--card-foreground: ${text}`,
+        `--popover-foreground: ${text}`,
+        `--accent-foreground: ${text}`,
+        `--muted: ${shiftLightness(bg, step)}`,
+        `--muted-foreground: ${shiftLightness(text, dark ? -25 : 25)}`,
+        `--accent: ${shiftLightness(card, step * 1.5)}`,
+        `--border: ${shiftLightness(card, step * 1.5)}`,
+        `--input: ${shiftLightness(card, step / 2)}`,
+      ].map((v) => `${v} !important`);
+      rules.push(`html, html.dark, html:not(.dark) { ${vars.join("; ")}; }`);
+    }
+  }
+
+  // Page background image with a dim overlay; page surfaces become
+  // transparent so the picture shows through, cards keep their colour at the
+  // chosen opacity.
+  const pageBg = sanitizeCssUrl(c.CUSTOM_PAGE_BG_URL);
+  if (pageBg) {
+    const dim = Math.min(90, Math.max(0, Math.round(num(c.CUSTOM_PAGE_BG_DIM, 40)))) / 100;
+    rules.push(
+      `html, html.dark, html:not(.dark) { background: linear-gradient(rgba(0,0,0,${dim}), rgba(0,0,0,${dim})), url("${pageBg}") center / cover fixed no-repeat !important; }`,
+    );
+    rules.push(
+      `${PAGE_SURFACES.split(", ").filter((s) => s !== "html").map((s) => `html.dark ${s}, html:not(.dark) ${s}`).join(", ")} { background-color: transparent !important; background-image: none !important; }`,
+    );
+  }
+
+  const cardOpacity = Math.min(100, Math.max(30, Math.round(num(c.CUSTOM_CARD_OPACITY, 100))));
+  if (cardOpacity !== 100 || pageBg) {
+    const alpha = (cardOpacity / 100).toFixed(2);
+    rules.push(
+      `html.dark ${CARD_SURFACES.split(", ").join(", html.dark ")} { background-color: hsl(var(--card) / ${alpha}) !important; backdrop-filter: blur(8px); }`,
+    );
+  }
+
+  const avatarRadius = AVATAR_RADIUS[c.CUSTOM_AVATAR_SHAPE] ?? "";
+  if (avatarRadius !== "" && c.CUSTOM_AVATAR_SHAPE !== "circle") {
+    rules.push(`${AVATAR} { border-radius: ${avatarRadius} !important; }`);
+  }
+
   return rules.join("\n");
+}
+
+function num(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function setStyle(id: string, css: string) {

@@ -96,6 +96,9 @@ A **Customize** tab in the hub applies your own look & feel to every Intra page 
 * **Font** — System UI, Humanist, Rounded, Serif, Monospace, or any CSS `font-family` of your own. System fonts only: nothing is downloaded.
 * **Size** — scale the whole interface from 70 % (dense) to 140 % (large text).
 * **Corners** — square, slightly rounded, rounded or very rounded cards, buttons and inputs.
+* **Custom palette** — your own page, card and text colours; secondary tones (borders, muted text, inputs) are derived automatically.
+* **Page background** — an image behind every Intra page, with an adjustable dark overlay and card opacity (glass effect).
+* **Avatar shape** — circle, rounded square or square profile picture.
 * **Custom CSS** — a free-form stylesheet applied last on every page.
 
 ---

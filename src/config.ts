@@ -121,6 +121,14 @@ export interface BetterIntraConfig {
   CUSTOM_FONT_SCALE: number;
   CUSTOM_RADIUS: "default" | "none" | "small" | "large" | "full";
   CUSTOM_CSS: string;
+  CUSTOM_THEME_ENABLED: boolean;
+  CUSTOM_THEME_BG: string;
+  CUSTOM_THEME_CARD: string;
+  CUSTOM_THEME_TEXT: string;
+  CUSTOM_PAGE_BG_URL: string;
+  CUSTOM_PAGE_BG_DIM: number;
+  CUSTOM_CARD_OPACITY: number;
+  CUSTOM_AVATAR_SHAPE: "circle" | "rounded" | "square";
 
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
@@ -245,6 +253,14 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_FONT_SCALE: 100,
   CUSTOM_RADIUS: "default",
   CUSTOM_CSS: "",
+  CUSTOM_THEME_ENABLED: false,
+  CUSTOM_THEME_BG: "#1c2130",
+  CUSTOM_THEME_CARD: "#151a24",
+  CUSTOM_THEME_TEXT: "#e2e8f0",
+  CUSTOM_PAGE_BG_URL: "",
+  CUSTOM_PAGE_BG_DIM: 40,
+  CUSTOM_CARD_OPACITY: 100,
+  CUSTOM_AVATAR_SHAPE: "circle",
 };
 
 /**
@@ -330,6 +346,14 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CUSTOM_FONT_SCALE",
   "CUSTOM_RADIUS",
   "CUSTOM_CSS",
+  "CUSTOM_THEME_ENABLED",
+  "CUSTOM_THEME_BG",
+  "CUSTOM_THEME_CARD",
+  "CUSTOM_THEME_TEXT",
+  "CUSTOM_PAGE_BG_URL",
+  "CUSTOM_PAGE_BG_DIM",
+  "CUSTOM_CARD_OPACITY",
+  "CUSTOM_AVATAR_SHAPE",
 ];
 
 export const VISUAL_CLOUD_KEYS: ConfigKey[] = [
