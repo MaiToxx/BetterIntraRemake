@@ -24,10 +24,14 @@ export interface IntraLoginResult {
 export async function loginWithIntraSession(): Promise<IntraLoginResult> {
   const token = await waitForIntrapyToken(6000);
   if (!token) {
+    // The token is only issued to the Intra v3 front-end: on the old v2 pages
+    // (profile.intra.42.fr, projects.intra.42.fr...) there is nothing to read.
+    const onV3 = location.hostname === "profile-v3.intra.42.fr";
     return {
       ok: false,
-      error:
-        "No Intra session token found on this page. Reload the Intra page and try again.",
+      error: onV3
+        ? "No Intra session token found on this page yet. Reload the page, wait a few seconds and try again."
+        : "Sign in from the Intra v3 profile page: open https://profile-v3.intra.42.fr/ and click Connect with 42 there.",
     };
   }
 
@@ -39,11 +43,17 @@ export async function loginWithIntraSession(): Promise<IntraLoginResult> {
       body: JSON.stringify({ token }),
     });
   } catch {
-    return { ok: false, error: "Could not reach the Better Intra server." };
+    return {
+      ok: false,
+      error: `Could not reach the Better Intra server (${new URL(WORKER_URL).host}). If the extension asked for access to that site, click Allow, then retry.\nBetter Intra ${__APP_VERSION__}`,
+    };
   }
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    return { ok: false, error: `Server refused the login (${res.status}): ${text}` };
+    return {
+      ok: false,
+      error: `Server refused the login (${res.status}): ${text.slice(0, 200)}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`,
+    };
   }
 
   const data = (await res.json()) as { token?: string; login?: string };
@@ -66,10 +76,18 @@ export async function loginWithIntraSession(): Promise<IntraLoginResult> {
  */
 export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab?.id || !/^https:\/\/[^/]*intra\.42\.fr\//.test(tab.url || "")) {
+  if (!tab?.id || !/^https:\/\/profile-v3\.intra\.42\.fr\//.test(tab.url || "")) {
+    // open the v3 profile (the only place the Intra token exists) and let the
+    // user click Connect with 42 in the hub there
+    try {
+      await chrome.tabs.create({ url: "https://profile-v3.intra.42.fr/" });
+    } catch {
+      /* ignore */
+    }
     return {
       ok: false,
-      error: "Open an Intra page (profile-v3.intra.42.fr) in the current tab first.",
+      error:
+        "Sign in from the Intra v3 profile page (just opened): click Connect with 42 in the Better Intra hub there.",
     };
   }
   try {
