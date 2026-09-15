@@ -153,7 +153,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                     (found) =>
                       html`<span
                         class="badge badge-sm badge-ghost"
-                        title="Easter eggs found. Hints: a famous cheat code, a barrel, a spoon, a stubborn gear, a late night, a Thursday, the answer, a spinning cat."
+                        title="Easter eggs found. Hints: a famous cheat code, a barrel, a spoon, a stubborn gear, a late night, a Thursday, the answer, a spinning cat, and the same cat again."
                         >🥚 ${found.length}/${EGG_IDS.length}</span
                       >`,
                   ),

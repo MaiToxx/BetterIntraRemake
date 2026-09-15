@@ -1,5 +1,5 @@
 /**
- * Easter eggs. Eight small secrets hidden in the Intra, all local, all
+ * Easter eggs. Nine small secrets hidden in the Intra, all local, all
  * harmless, all switched off together with the "Easter eggs" setting.
  *
  *   konami    ↑ ↑ ↓ ↓ ← → ← → B A          party mode (confetti + colours)
@@ -10,6 +10,7 @@
  *   thursday  visit the dashboard on a Thursday (roulette day)
  *   fortytwo  a month at exactly 42h of logtime
  *   maxwell   type "maxwell"                a certain cat crosses the screen, spinning
+ *   invasion  type it again while he is there  the screen fills with Maxwells
  *
  * Every secret found is remembered in EGGS_FOUND (local only) and counted
  * in the About tab.
@@ -28,6 +29,7 @@ export const EGG_IDS = [
   "thursday",
   "fortytwo",
   "maxwell",
+  "invasion",
 ] as const;
 export type EggId = (typeof EGG_IDS)[number];
 export const EGGS_KEY = "EGGS_FOUND";
@@ -218,26 +220,9 @@ export function matrixRain(seconds = 7): void {
  * the bottom of the screen while spinning, as the meme demands. Click it
  * for a faster spin.
  */
-export function maxwell(seconds = 9): void {
-  const id = "ft-egg-maxwell";
-  if (document.getElementById(id)) return;
-  const host = document.createElement("div");
-  host.id = id;
-  const remove = () => host.remove();
-  render(
-    html`<style>
-        #${id} {
-          position: fixed; bottom: 12px; left: -160px; z-index: 2147482500;
-          width: 140px; height: 120px; cursor: pointer; perspective: 600px;
-          animation: ft-mx-walk ${seconds}s linear forwards;
-        }
-        #${id} svg { width: 100%; height: 100%; animation: ft-mx-spin 1.6s linear infinite; transform-style: preserve-3d; }
-        #${id}.fast svg { animation-duration: 0.45s; }
-        @keyframes ft-mx-walk { from { left: -160px; } to { left: 100vw; } }
-        @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
-        @media (prefers-reduced-motion: reduce) { #${id} svg { animation: none; } }
-      </style>
-      <svg viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" @click=${() => host.classList.toggle("fast")}>
+/** The cat itself, reused by the single walk and the invasion. */
+const catSvg = (onClick?: (e: Event) => void) => html`
+      <svg viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" @click=${onClick}>
         <title>Maxwell</title>
         <!-- body -->
         <ellipse cx="70" cy="82" rx="46" ry="30" fill="#111" />
@@ -263,11 +248,74 @@ export function maxwell(seconds = 9): void {
         <path d="M48 55 l4 4 l4 -4 z" fill="#f4a7b9" />
         <path d="M52 59 v4 m0 0 q-4 5 -8 1 m8 -1 q4 5 8 1" stroke="#111" stroke-width="1.5" fill="none" />
         <path d="M20 52 l16 2 M20 60 l16 -2 M84 52 l-16 2 M84 60 l-16 -2" stroke="#ddd" stroke-width="1.2" />
-      </svg>`,
+      </svg>`;
+
+export function maxwell(seconds = 9): void {
+  const id = "ft-egg-maxwell";
+  if (document.getElementById(id)) return;
+  const host = document.createElement("div");
+  host.id = id;
+  const remove = () => host.remove();
+  render(
+    html`<style>
+        #${id} {
+          position: fixed; bottom: 12px; left: -160px; z-index: 2147482500;
+          width: 140px; height: 120px; cursor: pointer; perspective: 600px;
+          animation: ft-mx-walk ${seconds}s linear forwards;
+        }
+        #${id} svg { width: 100%; height: 100%; animation: ft-mx-spin 1.6s linear infinite; transform-style: preserve-3d; }
+        #${id}.fast svg { animation-duration: 0.45s; }
+        @keyframes ft-mx-walk { from { left: -160px; } to { left: 100vw; } }
+        @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        @media (prefers-reduced-motion: reduce) { #${id} svg { animation: none; } }
+      </style>
+      ${catSvg(() => host.classList.toggle("fast"))}`,
     host,
   );
   (document.body || document.documentElement).appendChild(host);
   setTimeout(remove, seconds * 1000 + 200);
+}
+
+/**
+ * Full Maxwell: the whole screen fills with spinning cats of every size,
+ * each on its own drift and spin. Typing "maxwell" again while a cat is
+ * on screen summons them.
+ */
+export function maxwellInvasion(seconds = 12, count = 48): void {
+  const id = "ft-egg-maxwells";
+  if (document.getElementById(id)) return;
+  const host = document.createElement("div");
+  host.id = id;
+  const cats = Array.from({ length: count }, (_, i) => ({
+    left: Math.random() * 100,
+    top: Math.random() * 100,
+    size: 60 + Math.random() * 160,
+    spin: 0.6 + Math.random() * 2,
+    drift: 4 + Math.random() * 8,
+    delay: -Math.random() * 8,
+    dir: i % 2 ? 1 : -1,
+  }));
+  render(
+    html`<style>
+        #${id} { position: fixed; inset: 0; z-index: 2147482400; pointer-events: none; overflow: hidden; perspective: 800px; }
+        #${id} .cat { position: absolute; transform: translate(-50%, -50%); animation: ft-mxs-drift var(--drift) ease-in-out infinite alternate; animation-delay: var(--delay); }
+        #${id} .cat svg { width: 100%; height: 100%; animation: ft-mx-spin var(--spin) linear infinite; transform-style: preserve-3d; }
+        @keyframes ft-mxs-drift { from { margin-top: -6vh; margin-left: calc(var(--dir) * -6vw); } to { margin-top: 6vh; margin-left: calc(var(--dir) * 6vw); } }
+        @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        @media (prefers-reduced-motion: reduce) { #${id} .cat, #${id} .cat svg { animation: none; } }
+      </style>
+      ${cats.map(
+        (c) => html`<div
+          class="cat"
+          style="left:${c.left}%;top:${c.top}%;width:${c.size}px;height:${c.size * 0.86}px;--spin:${c.spin}s;--drift:${c.drift}s;--delay:${c.delay}s;--dir:${c.dir}"
+        >
+          ${catSvg()}
+        </div>`,
+      )}`,
+    host,
+  );
+  (document.body || document.documentElement).appendChild(host);
+  setTimeout(() => host.remove(), seconds * 1000);
 }
 
 /* ------------------------------------------------------------------ */
@@ -383,8 +431,13 @@ export async function initEasterEggs(): Promise<void> {
       matrixRain();
       void found("matrix", "There is no spoon 🥄");
     } else if (id === "maxwell") {
-      maxwell();
-      void found("maxwell", "Maxwell 🐈‍⬛ (click him to spin faster)");
+      if (document.getElementById("ft-egg-maxwell")) {
+        maxwellInvasion();
+        void found("invasion", "FULL MAXWELL 🐈‍⬛🐈‍⬛🐈‍⬛");
+      } else {
+        maxwell();
+        void found("maxwell", "Maxwell 🐈‍⬛ (click him to spin faster, type his name again for more)");
+      }
     }
   });
   document.addEventListener("keydown", (e) => {
