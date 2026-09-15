@@ -27,3 +27,4 @@ tools/cluster-editor/index.html
 
 # CRX signing key (never commit)
 *.pem
+dist-chrome-store

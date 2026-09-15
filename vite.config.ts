@@ -46,9 +46,10 @@ export default defineConfig({
           const gecko = (manifest.browser_specific_settings ??= {}).gecko ??= {};
           gecko.id = repo.geckoId;
           gecko.update_url = repo.updatesJsonUrl;
-        } else {
+        } else if (process.env.CHROME_STORE !== "1") {
           // Chrome self-hosted updates (.crx + updates.xml). Ignored for
-          // unpacked installs and on Windows/macOS, harmless there.
+          // unpacked installs and on Windows/macOS, harmless there. The Chrome
+          // Web Store build (CHROME_STORE=1) must not carry an update_url.
           manifest.update_url = repo.updatesXmlUrl;
         }
         fs.writeFileSync(

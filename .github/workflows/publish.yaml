@@ -68,6 +68,9 @@ jobs:
       # Chrome .crx packaging (self-hosted updates on Linux) needs the private
       # key matching the "key" field of manifests/manifest.chrome.json.
       HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
+      # Chrome Web Store publishing (the only automatic update path on
+      # Windows/macOS). See docs/CHROME-WEB-STORE.md for the four secrets.
+      HAS_CWS: ${{ secrets.CWS_EXTENSION_ID != '' && secrets.CWS_CLIENT_ID != '' && secrets.CWS_CLIENT_SECRET != '' && secrets.CWS_REFRESH_TOKEN != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -150,6 +153,21 @@ jobs:
             better-intra.xpi
             better-intra-chrome.zip
             better-intra.crx
+
+      - name: Build Extension (Chrome Web Store)
+        if: env.HAS_CWS == 'true'
+        run: |
+          npm run build:chrome-store
+          (cd dist-chrome-store && zip -qr ../better-intra-chrome-store.zip .)
+
+      - name: Publish to Chrome Web Store
+        if: env.HAS_CWS == 'true'
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: npx --yes chrome-webstore-upload-cli@3 upload --source better-intra-chrome-store.zip --auto-publish
 
       # Auto-update manifests live on the main branch (the browsers fetch them
       # from raw.githubusercontent.com): publish the new version there once
