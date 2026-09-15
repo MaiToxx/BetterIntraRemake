@@ -16,7 +16,7 @@ When viewing other users' profiles, their public custom visual URLs (avatar, ban
 
 ### Cloud Sync (Optional)
 
-If you enable cloud sync, the following data is transmitted to the extension's Cloudflare Worker at `api.betterintra.com`:
+If you enable cloud sync, the following data is transmitted to the fork's own Cloudflare Worker at `betterintra-remake.maitox.workers.dev`:
 
 - Your **42 login** (hashed) — used to identify your stored settings
 - Your **extension settings** — so they can be synced across devices. The auto-push feature can automatically sync your settings when clicking Reload in the hub footer.
@@ -54,7 +54,7 @@ The Cloudflare Worker runs a cron job every 10 minutes to check for evaluation s
 
 - `storage` — to save and load settings locally
 - `activeTab` — to interact with the 42 Intra page
-- `https://api.betterintra.com/` — to communicate with the extension's Cloudflare Worker for optional cloud features
+- `https://betterintra-remake.maitox.workers.dev/` — to communicate with the fork's Cloudflare Worker for optional cloud features
 
 ## Changes to This Policy
 

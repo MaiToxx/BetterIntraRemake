@@ -349,7 +349,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
         <!-- Footer -->
         <div class="text-center mt-auto shrink-0">
           <p class="text-sm opacity-50 font-medium">
-            Made for 42 Belgium · ${HUB_INFO.license} License
+            Made for 42 Mulhouse · ${HUB_INFO.license} License
           </p>
           <div class="flex justify-center gap-3 mt-2">
             <a
