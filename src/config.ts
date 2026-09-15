@@ -151,6 +151,15 @@ export interface BetterIntraConfig {
   CUSTOM_BG_ANIMATE: boolean;
   CUSTOM_DENSITY: "default" | "compact" | "comfortable";
   CUSTOM_HIDE_FOOTER: boolean;
+  // Dashboard cards (Agenda, Evaluations, Achievements, Projects, Roulette, Logtime)
+  CUSTOM_CARD_BORDER_MODE: "none" | "accent" | "custom";
+  CUSTOM_CARD_BORDER_COLOR: string;
+  CUSTOM_CARD_BORDER_WIDTH: number;
+  CUSTOM_CARD_GLOW: boolean;
+  CUSTOM_CARD_TITLE_MODE: "default" | "accent" | "custom";
+  CUSTOM_CARD_TITLE_COLOR: string;
+  /** Per-card overrides keyed by card id (see CARD_IDS in customize.ts). */
+  CUSTOM_CARDS: Record<string, { bg?: string; border?: string; title?: string; glow?: boolean }>;
   CUSTOM_PRESETS: { name: string; values: Record<string, unknown> }[];
   /** Publish my look (accent, palette, background, cards) on my profile for other Better Intra users. */
   CUSTOM_SHARE_LOOK: boolean;
@@ -296,6 +305,13 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_BG_ANIMATE: false,
   CUSTOM_DENSITY: "default",
   CUSTOM_HIDE_FOOTER: false,
+  CUSTOM_CARD_BORDER_MODE: "none",
+  CUSTOM_CARD_BORDER_COLOR: "#00babc",
+  CUSTOM_CARD_BORDER_WIDTH: 2,
+  CUSTOM_CARD_GLOW: false,
+  CUSTOM_CARD_TITLE_MODE: "default",
+  CUSTOM_CARD_TITLE_COLOR: "#00babc",
+  CUSTOM_CARDS: {},
   CUSTOM_PRESETS: [],
   CUSTOM_SHARE_LOOK: false,
   CUSTOM_SHOW_OTHERS_LOOK: true,
@@ -400,6 +416,13 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CUSTOM_BG_ANIMATE",
   "CUSTOM_DENSITY",
   "CUSTOM_HIDE_FOOTER",
+  "CUSTOM_CARD_BORDER_MODE",
+  "CUSTOM_CARD_BORDER_COLOR",
+  "CUSTOM_CARD_BORDER_WIDTH",
+  "CUSTOM_CARD_GLOW",
+  "CUSTOM_CARD_TITLE_MODE",
+  "CUSTOM_CARD_TITLE_COLOR",
+  "CUSTOM_CARDS",
   "CUSTOM_PRESETS",
   "CUSTOM_SHARE_LOOK",
   "CUSTOM_SHOW_OTHERS_LOOK",

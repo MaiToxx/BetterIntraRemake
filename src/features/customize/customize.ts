@@ -62,7 +62,122 @@ export const CUSTOMIZE_KEYS = [
   "CUSTOM_CARD_STYLE",
   "CUSTOM_AVATAR_SHAPE",
   "CUSTOM_SCROLLBAR",
+  "CUSTOM_CARD_BORDER_MODE",
+  "CUSTOM_CARD_BORDER_COLOR",
+  "CUSTOM_CARD_BORDER_WIDTH",
+  "CUSTOM_CARD_GLOW",
+  "CUSTOM_CARD_TITLE_MODE",
+  "CUSTOM_CARD_TITLE_COLOR",
+  "CUSTOM_CARDS",
 ] as const;
+
+/** Dashboard cards that can be styled one by one (id -> label). */
+export const CARD_IDS = [
+  "agenda",
+  "evaluations",
+  "achievements",
+  "projects",
+  "roulette",
+  "logtime",
+] as const;
+export type CardId = (typeof CARD_IDS)[number];
+export const CARD_LABELS: Record<CardId, string> = {
+  agenda: "Agenda",
+  evaluations: "Pending evaluations",
+  achievements: "Last achievements",
+  projects: "Projects",
+  roulette: "Thursday roulette",
+  logtime: "Logtime",
+};
+/** Intra card titles (upper-cased) -> card id, used to tag the cards. */
+export const CARD_TITLES: Record<string, CardId> = {
+  AGENDA: "agenda",
+  "PENDING EVALUATIONS": "evaluations",
+  "LAST ACHIEVEMENTS": "achievements",
+  PROJECTS: "projects",
+  "THURSDAY ROULETTE": "roulette",
+  LOGTIME: "logtime",
+};
+
+export interface CardLook {
+  bg?: string;
+  border?: string;
+  title?: string;
+  glow?: boolean;
+}
+export type CardLookMap = Partial<Record<CardId, CardLook>>;
+
+const HEX6 = /^#[0-9a-f]{6}$/i;
+
+/** Keep known card ids with valid hex colours only; drops empty entries. */
+export function sanitizeCardMap(raw: unknown): CardLookMap {
+  const out: CardLookMap = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  const src = raw as Record<string, unknown>;
+  for (const id of CARD_IDS) {
+    const v = src[id];
+    if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+    const c = v as Record<string, unknown>;
+    const look: CardLook = {};
+    for (const field of ["bg", "border", "title"] as const) {
+      const val = c[field];
+      if (typeof val === "string" && HEX6.test(val.trim())) look[field] = val.trim();
+    }
+    if (c.glow === true) look.glow = true;
+    if (Object.keys(look).length > 0) out[id] = look;
+  }
+  return out;
+}
+
+/** Selector for a tagged dashboard card (see cards.ts). */
+const CARD = (id?: string) => (id ? `[data-ft-card="${id}"]` : "[data-ft-card]");
+/** Card headings ("AGENDA", "PROJECTS"...). */
+const CARD_TITLE = "[class*=\"uppercase\"]";
+
+function cardRules(c: CustomizeConfig): string[] {
+  const rules: string[] = [];
+  const accent = "hsl(var(--primary))";
+  const both = (sel: string) => `html.dark ${sel}, html:not(.dark) ${sel}`;
+  const glowFor = (color: string) =>
+    `box-shadow: 0 0 0 1px ${color}, 0 0 22px color-mix(in srgb, ${color} 45%, transparent) !important;`;
+
+  const borderColor =
+    c.CUSTOM_CARD_BORDER_MODE === "custom" && HEX6.test(c.CUSTOM_CARD_BORDER_COLOR)
+      ? c.CUSTOM_CARD_BORDER_COLOR
+      : c.CUSTOM_CARD_BORDER_MODE === "accent"
+        ? accent
+        : "";
+  if (borderColor) {
+    const width = Math.min(6, Math.max(1, Math.round(num(c.CUSTOM_CARD_BORDER_WIDTH, 2))));
+    rules.push(`${both(CARD())} { border: ${width}px solid ${borderColor} !important; }`);
+    if (c.CUSTOM_CARD_GLOW) rules.push(`${both(CARD())} { ${glowFor(borderColor)} }`);
+  } else if (c.CUSTOM_CARD_GLOW) {
+    rules.push(`${both(CARD())} { ${glowFor(accent)} }`);
+  }
+
+  const titleColor =
+    c.CUSTOM_CARD_TITLE_MODE === "custom" && HEX6.test(c.CUSTOM_CARD_TITLE_COLOR)
+      ? c.CUSTOM_CARD_TITLE_COLOR
+      : c.CUSTOM_CARD_TITLE_MODE === "accent"
+        ? accent
+        : "";
+  if (titleColor) {
+    rules.push(`${CARD()} ${CARD_TITLE} { color: ${titleColor} !important; }`);
+  }
+
+  const cards = sanitizeCardMap(c.CUSTOM_CARDS);
+  for (const id of CARD_IDS) {
+    const look = cards[id];
+    if (!look) continue;
+    const decl: string[] = [];
+    if (look.bg) decl.push(`background-color: ${look.bg} !important`);
+    if (look.border) decl.push(`border: ${Math.min(6, Math.max(1, Math.round(num(c.CUSTOM_CARD_BORDER_WIDTH, 2))))}px solid ${look.border} !important`);
+    if (look.glow) decl.push(glowFor(look.border || borderColor || accent).replace(/;$/, ""));
+    if (decl.length) rules.push(`${both(CARD(id))} { ${decl.join("; ")}; }`);
+    if (look.title) rules.push(`${CARD(id)} ${CARD_TITLE} { color: ${look.title} !important; }`);
+  }
+  return rules;
+}
 
 /** Built-in page backgrounds (CSS gradients, no image hosting needed). */
 export const BG_PRESETS: Record<string, string> = {
@@ -349,6 +464,10 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
   if (cardStyle) {
     rules.push(`${CARD_SURFACES}, .card { ${cardStyle} }`);
   }
+
+  // Dashboard cards last: their per-card colours must win over the generic
+  // card opacity / style rules above.
+  rules.push(...cardRules(c));
 
   if (c.CUSTOM_SCROLLBAR && c.CUSTOM_SCROLLBAR !== "default") {
     if (c.CUSTOM_SCROLLBAR === "hidden") {

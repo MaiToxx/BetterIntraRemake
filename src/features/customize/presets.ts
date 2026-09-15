@@ -8,7 +8,7 @@
  * defaults before anything is written to storage.
  */
 import { CONFIG_DEFAULT, getConfigMany } from "../../config.ts";
-import { CUSTOMIZE_KEYS, type CustomizeConfig } from "./customize.ts";
+import { CUSTOMIZE_KEYS, sanitizeCardMap, type CustomizeConfig } from "./customize.ts";
 
 export interface CustomPreset {
   name: string;
@@ -37,6 +37,10 @@ export function sanitizeCustomization(raw: unknown): CustomizeConfig {
     if (typeof def === "number" && typeof v === "string" && v.trim() !== "") {
       const n = Number(v);
       if (Number.isFinite(n)) v = n;
+    }
+    if (key === "CUSTOM_CARDS") {
+      out[key] = sanitizeCardMap(v);
+      continue;
     }
     out[key] = sameShape(v, def) ? v : def;
   }

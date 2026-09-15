@@ -36,6 +36,7 @@ import { renderAboutPanel } from "./hub.about.ts";
 import { exportableSettings, sanitizeBackup } from "./backup.ts";
 import { renderPresetsPanel } from "../customize/presets.ui.ts";
 import { publishLookIfShared } from "../customize/publish.ts";
+import { renderCardsPanel } from "../customize/cards.ui.ts";
 import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
@@ -424,6 +425,7 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
   if (def.kind === "discord-panel") return renderDiscordPanel();
   if (def.kind === "calendar-panel") return renderCalendarPanel();
   if (def.kind === "custom-presets") return renderPresetsPanel();
+  if (def.kind === "custom-cards") return renderCardsPanel();
 
   return until(
     (async () => {
@@ -1476,7 +1478,8 @@ function parentIsOn(el: HTMLElement): boolean {
     if (el.type === "checkbox" || el.type === "radio") return el.checked;
     return el.value.trim() !== "";
   }
-  if (el instanceof HTMLSelectElement) return el.value !== "" && el.value !== "none";
+  if (el instanceof HTMLSelectElement)
+    return el.value !== "" && el.value !== "none" && el.value !== "default";
   return true;
 }
 

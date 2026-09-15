@@ -15,6 +15,7 @@ import {
   BG_PRESETS,
   CARD_STYLES,
   RADIUS,
+  sanitizeCardMap,
   type CustomizeConfig,
 } from "./customize.ts";
 
@@ -35,6 +36,13 @@ export const PUBLIC_LOOK_KEYS = [
   "CUSTOM_CARD_OPACITY",
   "CUSTOM_CARD_STYLE",
   "CUSTOM_AVATAR_SHAPE",
+  "CUSTOM_CARD_BORDER_MODE",
+  "CUSTOM_CARD_BORDER_COLOR",
+  "CUSTOM_CARD_BORDER_WIDTH",
+  "CUSTOM_CARD_GLOW",
+  "CUSTOM_CARD_TITLE_MODE",
+  "CUSTOM_CARD_TITLE_COLOR",
+  "CUSTOM_CARDS",
 ] as const;
 
 export type PublicLookKey = (typeof PUBLIC_LOOK_KEYS)[number];
@@ -46,6 +54,8 @@ const HEX_KEYS = new Set<PublicLookKey>([
   "CUSTOM_THEME_BG",
   "CUSTOM_THEME_CARD",
   "CUSTOM_THEME_TEXT",
+  "CUSTOM_CARD_BORDER_COLOR",
+  "CUSTOM_CARD_TITLE_COLOR",
 ]);
 
 const ENUMS: Partial<Record<PublicLookKey, Record<string, string>>> = {
@@ -53,11 +63,14 @@ const ENUMS: Partial<Record<PublicLookKey, Record<string, string>>> = {
   CUSTOM_PAGE_BG_PRESET: BG_PRESETS,
   CUSTOM_CARD_STYLE: CARD_STYLES,
   CUSTOM_AVATAR_SHAPE: AVATAR_RADIUS,
+  CUSTOM_CARD_BORDER_MODE: { none: "", accent: "", custom: "" },
+  CUSTOM_CARD_TITLE_MODE: { default: "", accent: "", custom: "" },
 };
 
 const RANGES: Partial<Record<PublicLookKey, [number, number]>> = {
   CUSTOM_PAGE_BG_DIM: [0, 90],
   CUSTOM_CARD_OPACITY: [30, 100],
+  CUSTOM_CARD_BORDER_WIDTH: [1, 6],
 };
 
 /**
@@ -73,7 +86,10 @@ export function sanitizePublicLook(raw: unknown): PublicLook | null {
     const v = src[key];
     if (v === undefined || v === null) continue;
     const def = CONFIG_DEFAULT[key];
-    if (typeof def === "boolean") {
+    if (key === "CUSTOM_CARDS") {
+      const cards = sanitizeCardMap(v);
+      if (Object.keys(cards).length) out[key] = cards;
+    } else if (typeof def === "boolean") {
       out[key] = v === true;
     } else if (typeof def === "number") {
       const n = Number(v);

@@ -19,6 +19,7 @@ import { initBadges, applyTitleBadgeWrap } from "./badges.ts";
 import { initTranscript } from "./transcript.ts";
 import { initPace } from "./pace.ts";
 import { ensureCampusData } from "../clusters/clusters.data.ts";
+import { tagDashboardCards } from "../customize/cards.ts";
 
 const waitForBody = () =>
   document.body
@@ -71,6 +72,7 @@ export async function initProfile() {
     try {
       await updateVisuals();
       if (location.pathname === "/" || location.pathname.startsWith("/users")) {
+        tagDashboardCards();
         if (!findProfileCard()) return;
         initialised = true;
 

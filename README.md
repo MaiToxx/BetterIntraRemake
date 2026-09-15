@@ -103,6 +103,7 @@ A **Customize** tab in the hub applies your own look & feel to every Intra page 
 * **Presets & sharing** — save your look under a name and switch in one click; copy a *theme code* and send it to friends, who paste it to get the same look. Codes never carry custom CSS, and a code that loads a background image asks for confirmation first.
 * **Background presets** — 13 built-in gradients (Aurora, Sunset, Ocean, Forest, Monochrome, Midnight, Candy, Lava, Nord, Dracula, 42 teal, Space, Mesh), optionally animated, when you have no image to host.
 * **Card style & scrollbar** — flat, soft or strong shadow, accent outline, glass, accent stripe; thin, accent-coloured or hidden scrollbars. Hide the footer if you never use it.
+* **Dashboard cards** — frame every card (Agenda, Pending evaluations, Last achievements, Projects, Thursday roulette, Logtime) with an accent or custom border, add a glow, colour the headings; then give each card its own background, border and title colour. Part of your public look.
 * **Custom CSS** — a free-form stylesheet applied last on every page.
 
 ---
