@@ -105,7 +105,7 @@ A **Customize** tab in the hub applies your own look & feel to every Intra page 
 * **Card style & scrollbar** — flat, soft or strong shadow, accent outline, glass, accent stripe; thin, accent-coloured or hidden scrollbars. Hide the footer if you never use it.
 * **Dashboard cards** — frame every card (Agenda, Pending evaluations, Last achievements, Projects, Thursday roulette, Logtime) with an accent or custom border, add a glow, colour the headings; then give each card its own background, border and title colour. Part of your public look.
 * **Custom CSS** — a free-form stylesheet applied last on every page.
-* **Easter eggs** — seven small secrets are hidden in the Intra; the About tab counts the ones you found. Switch them off in Advanced if you prefer a quiet Intra.
+* **Easter eggs** — eight small secrets are hidden in the Intra; the About tab counts the ones you found. Switch them off in Advanced if you prefer a quiet Intra.
 
 ---
 

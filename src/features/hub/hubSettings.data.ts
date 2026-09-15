@@ -1079,7 +1079,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "advanced",
       key: "EASTER_EGGS_ENABLED",
       label: "Easter eggs",
-      desc: "Seven small secrets are hidden in the Intra. The About tab counts the ones you found.",
+      desc: "Eight small secrets are hidden in the Intra. The About tab counts the ones you found.",
       kind: "toggle",
       defaultValue: CONFIG_DEFAULT.EASTER_EGGS_ENABLED,
       grid: true,

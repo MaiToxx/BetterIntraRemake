@@ -1,5 +1,5 @@
 /**
- * Easter eggs. Seven small secrets hidden in the Intra, all local, all
+ * Easter eggs. Eight small secrets hidden in the Intra, all local, all
  * harmless, all switched off together with the "Easter eggs" setting.
  *
  *   konami    ↑ ↑ ↓ ↓ ← → ← → B A          party mode (confetti + colours)
@@ -9,6 +9,7 @@
  *   night     open the Intra between 2 and 5 am
  *   thursday  visit the dashboard on a Thursday (roulette day)
  *   fortytwo  a month at exactly 42h of logtime
+ *   maxwell   type "maxwell"                a certain cat crosses the screen, spinning
  *
  * Every secret found is remembered in EGGS_FOUND (local only) and counted
  * in the About tab.
@@ -26,6 +27,7 @@ export const EGG_IDS = [
   "night",
   "thursday",
   "fortytwo",
+  "maxwell",
 ] as const;
 export type EggId = (typeof EGG_IDS)[number];
 export const EGGS_KEY = "EGGS_FOUND";
@@ -37,6 +39,7 @@ const SEQUENCES: Record<string, string[]> = {
   ],
   barrel: [..."barrel"],
   matrix: [..."matrix"],
+  maxwell: [..."maxwell"],
 };
 
 /**
@@ -210,6 +213,63 @@ export function matrixRain(seconds = 7): void {
   }, 45);
 }
 
+/**
+ * Maxwell: a tuxedo cat (drawn here, no image download) that walks across
+ * the bottom of the screen while spinning, as the meme demands. Click it
+ * for a faster spin.
+ */
+export function maxwell(seconds = 9): void {
+  const id = "ft-egg-maxwell";
+  if (document.getElementById(id)) return;
+  const host = document.createElement("div");
+  host.id = id;
+  const remove = () => host.remove();
+  render(
+    html`<style>
+        #${id} {
+          position: fixed; bottom: 12px; left: -160px; z-index: 2147482500;
+          width: 140px; height: 120px; cursor: pointer; perspective: 600px;
+          animation: ft-mx-walk ${seconds}s linear forwards;
+        }
+        #${id} svg { width: 100%; height: 100%; animation: ft-mx-spin 1.6s linear infinite; transform-style: preserve-3d; }
+        #${id}.fast svg { animation-duration: 0.45s; }
+        @keyframes ft-mx-walk { from { left: -160px; } to { left: 100vw; } }
+        @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        @media (prefers-reduced-motion: reduce) { #${id} svg { animation: none; } }
+      </style>
+      <svg viewBox="0 0 140 120" xmlns="http://www.w3.org/2000/svg" @click=${() => host.classList.toggle("fast")}>
+        <title>Maxwell</title>
+        <!-- body -->
+        <ellipse cx="70" cy="82" rx="46" ry="30" fill="#111" />
+        <ellipse cx="70" cy="90" rx="26" ry="18" fill="#fff" />
+        <!-- legs -->
+        <rect x="38" y="98" width="12" height="18" rx="5" fill="#111" />
+        <rect x="56" y="100" width="12" height="18" rx="5" fill="#fff" />
+        <rect x="74" y="100" width="12" height="18" rx="5" fill="#fff" />
+        <rect x="92" y="98" width="12" height="18" rx="5" fill="#111" />
+        <!-- tail -->
+        <path d="M114 74 q26 -8 18 -34" stroke="#111" stroke-width="9" fill="none" stroke-linecap="round" />
+        <!-- head -->
+        <circle cx="52" cy="46" r="28" fill="#111" />
+        <polygon points="30,30 26,4 46,20" fill="#111" />
+        <polygon points="74,30 78,4 58,20" fill="#111" />
+        <polygon points="32,27 30,11 42,21" fill="#f4a7b9" />
+        <polygon points="72,27 74,11 62,21" fill="#f4a7b9" />
+        <ellipse cx="52" cy="58" rx="16" ry="11" fill="#fff" />
+        <ellipse cx="40" cy="45" rx="6" ry="7" fill="#7cff5b" />
+        <ellipse cx="64" cy="45" rx="6" ry="7" fill="#7cff5b" />
+        <ellipse cx="40" cy="45" rx="2" ry="6" fill="#111" />
+        <ellipse cx="64" cy="45" rx="2" ry="6" fill="#111" />
+        <path d="M48 55 l4 4 l4 -4 z" fill="#f4a7b9" />
+        <path d="M52 59 v4 m0 0 q-4 5 -8 1 m8 -1 q4 5 8 1" stroke="#111" stroke-width="1.5" fill="none" />
+        <path d="M20 52 l16 2 M20 60 l16 -2 M84 52 l-16 2 M84 60 l-16 -2" stroke="#ddd" stroke-width="1.2" />
+      </svg>`,
+    host,
+  );
+  (document.body || document.documentElement).appendChild(host);
+  setTimeout(remove, seconds * 1000 + 200);
+}
+
 /* ------------------------------------------------------------------ */
 /* Triggers                                                            */
 /* ------------------------------------------------------------------ */
@@ -322,6 +382,9 @@ export async function initEasterEggs(): Promise<void> {
     } else if (id === "matrix") {
       matrixRain();
       void found("matrix", "There is no spoon 🥄");
+    } else if (id === "maxwell") {
+      maxwell();
+      void found("maxwell", "Maxwell 🐈‍⬛ (click him to spin faster)");
     }
   });
   document.addEventListener("keydown", (e) => {

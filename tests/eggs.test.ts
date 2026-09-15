@@ -36,6 +36,7 @@ describe("found eggs", () => {
     expect(await listFoundEggs()).toEqual(["konami", "matrix"]);
     await chrome.storage.local.set({ EGGS_FOUND: ["bogus", "night"] });
     expect(await listFoundEggs()).toEqual(["night"]);
-    expect(EGG_IDS.length).toBe(7);
+    expect(EGG_IDS.length).toBe(8);
+    expect(EGG_IDS).toContain("maxwell");
   });
 });
