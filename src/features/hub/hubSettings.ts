@@ -10,6 +10,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { openStudentsDialog } from "../profile/students/index.ts";
 import { openClusterDialog } from "../clusters/map-dialog.ts";
 import { isPisciner } from "../../utils/intrapy.ts";
+import { gearClicked } from "../eggs/eggs.ts";
 
 function findSidebarMainGroup(): HTMLDivElement | null {
   const profileLink = document.querySelector<HTMLAnchorElement>(
@@ -85,6 +86,7 @@ function renderClustersButton(
 
 export function mountGearButton(): void {
   const open = async () => {
+    void gearClicked();
     const { openHubModal } = await import("./hubSettings.ui.ts");
 
     const active = await getActiveFeatures();

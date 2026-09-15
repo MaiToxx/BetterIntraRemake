@@ -4,6 +4,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { HUB_INFO } from "../hub/hubSettings.data.ts";
 import { UPDATE_KEY, type UpdateInfo } from "../../utils/update-check.ts";
 import { WORKER_URL } from "../../utils/worker.ts";
+import { EGG_IDS, listFoundEggs } from "../eggs/eggs.ts";
 
 import GITHUB_SVG from "../../assets/svg/github.svg?raw";
 import HEART_SVG from "../../assets/svg/heart.svg?raw";
@@ -147,6 +148,17 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                 >
                   <span>v${HUB_INFO.version}</span>
                 </a>
+                ${until(
+                  listFoundEggs().then(
+                    (found) =>
+                      html`<span
+                        class="badge badge-sm badge-ghost"
+                        title="Easter eggs found. Hints: a famous cheat code, a barrel, a spoon, a stubborn gear, a late night, a Thursday, the answer."
+                        >🥚 ${found.length}/${EGG_IDS.length}</span
+                      >`,
+                  ),
+                  "",
+                )}
                 <a
                   href="${HUB_INFO.github}"
                   target="_blank"

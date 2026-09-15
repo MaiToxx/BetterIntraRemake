@@ -16,6 +16,7 @@ import { AVATAR_SELECTOR } from "./features/profile/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
 import { initCustomize } from "./features/customize/customize.ts";
+import { initEasterEggs } from "./features/eggs/eggs.ts";
 import {
   INTRA_LOGIN_MESSAGE,
   loginWithIntraSession,
@@ -36,6 +37,7 @@ import { html, render } from "lit-html";
 initThemeManager();
 // user look & feel tweaks (accent, font, size, custom CSS): always on, like the theme
 void initCustomize();
+void initEasterEggs();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);
 

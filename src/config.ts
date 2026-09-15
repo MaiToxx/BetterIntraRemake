@@ -112,6 +112,9 @@ export interface BetterIntraConfig {
   CALENDAR_SYNC_TOKEN: string;
   CALENDAR_EVENTS_HASH: string;
   ADVANCED_OPEN_LINKS_NEW_TAB: boolean;
+  /** Seven small secrets hidden in the Intra (see features/eggs). */
+  EASTER_EGGS_ENABLED: boolean;
+  EGGS_FOUND: string[];
 
   // Customize (look & feel of every Intra page)
   CUSTOM_ACCENT_ENABLED: boolean;
@@ -277,6 +280,8 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CALENDAR_SYNC_TOKEN: "",
   CALENDAR_EVENTS_HASH: "",
   ADVANCED_OPEN_LINKS_NEW_TAB: true,
+  EASTER_EGGS_ENABLED: true,
+  EGGS_FOUND: [],
 
   SUBJECT_TRACKER_STATE: {},
   SUBJECT_TRACKER_ENABLED: true,
@@ -391,6 +396,7 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CALENDAR_SYNC_TOKEN",
   "CALENDAR_EVENTS_HASH",
   "ADVANCED_OPEN_LINKS_NEW_TAB",
+  "EASTER_EGGS_ENABLED",
   "CLOUD_SYNC_ENABLED",
   "TRACKER_MODE",
   "CUSTOM_ACCENT_ENABLED",
