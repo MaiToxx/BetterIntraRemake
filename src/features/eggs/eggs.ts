@@ -241,8 +241,8 @@ const catSvg = (onClick?: (e: Event) => void) => html`
         <polygon points="32,27 30,11 42,21" fill="#f4a7b9" />
         <polygon points="72,27 74,11 62,21" fill="#f4a7b9" />
         <ellipse cx="52" cy="58" rx="16" ry="11" fill="#fff" />
-        <ellipse cx="40" cy="45" rx="6" ry="7" fill="#7cff5b" />
-        <ellipse cx="64" cy="45" rx="6" ry="7" fill="#7cff5b" />
+        <ellipse cx="40" cy="45" rx="6" ry="7" fill="#f5c518" />
+        <ellipse cx="64" cy="45" rx="6" ry="7" fill="#f5c518" />
         <ellipse cx="40" cy="45" rx="2" ry="6" fill="#111" />
         <ellipse cx="64" cy="45" rx="2" ry="6" fill="#111" />
         <path d="M48 55 l4 4 l4 -4 z" fill="#f4a7b9" />
