@@ -280,3 +280,42 @@ describe("public profile section: dependencies", () => {
     }
   });
 });
+
+describe("colour pickers follow the styles that use them", () => {
+  const defs = HUB_SETTING_DEFS.profile;
+  const byKey = (key: string) => defs.find((d) => d.key === key);
+
+  it("names the exact parent values for every dependent colour", () => {
+    const expected: Record<string, string[]> = {
+      // extras-style.ts: which branch reads which colour
+      PROFILE_PUB_NAME_COLOR: ["custom", "gradient", "glow", "neon"],
+      PROFILE_PUB_NAME_COLOR_2: ["gradient", "neon"],
+      PROFILE_PUB_FRAME_COLOR: ["solid", "double", "dashed", "gradient", "glow", "neon"],
+      PROFILE_PUB_FRAME_COLOR_2: ["double", "gradient", "neon"],
+      PROFILE_PUB_LEVEL_COLOR: ["custom", "gradient", "striped"],
+      PROFILE_PUB_LEVEL_COLOR_2: ["gradient"],
+    };
+    for (const [key, values] of Object.entries(expected)) {
+      const def = byKey(key);
+      expect(def, key).toBeDefined();
+      expect([...(def!.dependsOnValues ?? [])], key).toEqual(values);
+      // every named value must exist in the parent select
+      const parent = byKey(def!.dependsOn!);
+      const options = (parent?.options ?? []).map((o) => o.value);
+      for (const v of values) expect(options, `${key} -> ${v}`).toContain(v);
+    }
+  });
+
+  it("gives every link field its kind, so the hub can validate it", () => {
+    const kinds: Record<string, string> = {
+      PROFILE_PUB_LINK_GITHUB: "github",
+      PROFILE_PUB_LINK_GITLAB: "gitlab",
+      PROFILE_PUB_LINK_LINKEDIN: "linkedin",
+      PROFILE_PUB_LINK_WEBSITE: "website",
+      PROFILE_PUB_LINK_DISCORD: "discord",
+    };
+    for (const [key, kind] of Object.entries(kinds)) {
+      expect(byKey(key)?.linkKind, key).toBe(kind);
+    }
+  });
+});

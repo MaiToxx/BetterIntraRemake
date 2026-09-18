@@ -22,6 +22,11 @@ their Customize settings listed in `PUBLIC_LOOK_KEYS` (worker
 `src/handlers/settings.ts`, extension `src/features/customize/public-look.ts`).
 The extension validates every value again before applying it.
 
+Those two key lists are kept in sync by hand. Each repository pins the list
+in a test (`tests/extras-contract.test.ts` here, `tests/settings.test.ts` in
+the worker), so adding a public setting fails both suites until the worker is
+updated and redeployed.
+
 ## Without a 42 OAuth application: "intra" auth mode
 
 Creating a 42 API application requires student status (pisciners get

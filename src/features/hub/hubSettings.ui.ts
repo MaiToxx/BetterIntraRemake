@@ -37,7 +37,8 @@ import { exportableSettings, sanitizeBackup } from "./backup.ts";
 import { renderPresetsPanel } from "../customize/presets.ui.ts";
 import { publishLookIfShared } from "../customize/publish.ts";
 import { renderCardsPanel } from "../customize/cards.ui.ts";
-import { EXTRAS_KEYS } from "../profile/extras/extras.ts";
+import { EXTRAS_KEYS, type LinkKind } from "../profile/extras/extras.ts";
+import { normalizeLink } from "../profile/extras/extras-sanitize.ts";
 import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
@@ -50,6 +51,30 @@ import { bindTooltips } from "../../utils/tooltip.ts";
 async function saveSetting(key: string, value: unknown): Promise<void> {
   await chrome.storage.local.set({ [key]: value });
   publishLookIfShared(key);
+}
+
+/** Only the shapes normalizeLink() accepts are published: say so live. */
+const LINK_HINTS: Record<string, string> = {
+  github: "Not recognised. Use your user name, or the URL of your GitHub profile.",
+  gitlab: "Not recognised. Use your user name, or the URL of your GitLab profile.",
+  linkedin: "Not recognised. Use your public identifier, or the URL of your profile.",
+  website: "Not recognised. Use a full https address, e.g. https://example.com.",
+  discord: "Not recognised. Use your Discord handle, e.g. student or student#0001.",
+};
+
+function linkFieldIsValid(kind: LinkKind, value: string): boolean {
+  return value.trim() === "" || normalizeLink(kind, value) !== null;
+}
+
+/** Shows or hides the hint under a link field as the user types. */
+function checkLinkField(def: HubSettingDef) {
+  return (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const ok = linkFieldIsValid(def.linkKind!, input.value);
+    input.classList.toggle("input-error", !ok);
+    const hint = input.parentElement?.querySelector<HTMLElement>("[data-link-hint]");
+    if (hint) hint.hidden = ok;
+  };
 }
 
 /** <input type="number"> gives a string: store a number when it is one. */
@@ -757,11 +782,11 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
             </label>
           </div>`;
 
-        case "text":
+        case "text": {
           // fullWidth: renderSetting stacks the label over a w-full wrapper,
           // the input only has to fill it. `nothing` drops the attribute, a
           // def without maxLength keeps an unlimited input.
-          return html`<input
+          const input = html`<input
             type="text"
             class="input input-accent ${def.fullWidth ? "w-full" : "w-60"}"
             placeholder="${def.placeholder || ""}"
@@ -769,9 +794,25 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
             .value="${String(value || "")}"
             data-setting-key="${def.key}"
             ?disabled="${!enabled}"
+            @input="${def.linkKind ? checkLinkField(def) : nothing}"
             @change="${(e: Event) =>
               saveSetting(def.key!, (e.target as HTMLInputElement).value)}"
           />`;
+          if (!def.linkKind) return input;
+          // A link the sanitizer cannot read is dropped silently everywhere
+          // else: say so while it is being typed.
+          return html`<div
+            class="flex flex-col gap-1 ${def.fullWidth ? "w-full" : ""}"
+          >
+            ${input}
+            <span
+              data-link-hint
+              class="text-xs text-error leading-tight"
+              ?hidden="${linkFieldIsValid(def.linkKind, String(value || ""))}"
+              >${LINK_HINTS[def.linkKind]}</span
+            >
+          </div>`;
+        }
 
         case "textarea":
           return html`<textarea
@@ -1172,7 +1213,10 @@ async function createModal(active: FeatureId[]): Promise<void> {
         // A select parent stores a string even when it is off: "none" and
         // "default" count as off here exactly as in parentIsOn(), otherwise
         // its dependants show at open and vanish on the first change.
-        if (!parentVal || parentVal === "none" || parentVal === "default") {
+        const off = def.dependsOnValues
+          ? !def.dependsOnValues.includes(String(parentVal))
+          : !parentVal || parentVal === "none" || parentVal === "default";
+        if (off) {
           disabledDeps.add(def.key);
           hiddenDeps.add(def.key);
         }
@@ -1494,13 +1538,16 @@ async function createModal(active: FeatureId[]): Promise<void> {
 }
 
 /** Whether a parent control currently enables its dependants. */
-function parentIsOn(el: HTMLElement): boolean {
+function parentIsOn(el: HTMLElement, def?: HubSettingDef): boolean {
   if (el instanceof HTMLInputElement) {
     if (el.type === "checkbox" || el.type === "radio") return el.checked;
     return el.value.trim() !== "";
   }
-  if (el instanceof HTMLSelectElement)
+  if (el instanceof HTMLSelectElement) {
+    // a def can name the exact parent values it is useful for
+    if (def?.dependsOnValues) return def.dependsOnValues.includes(el.value);
     return el.value !== "" && el.value !== "none" && el.value !== "default";
+  }
   return true;
 }
 
@@ -1517,7 +1564,7 @@ function refreshDependents(root: ParentNode, parentKey?: string): void {
         `[data-setting-key="${def.dependsOn}"]`,
       );
       if (!parent) continue;
-      const on = parentIsOn(parent);
+      const on = parentIsOn(parent, def);
       const el = root.querySelector<HTMLElement>(
         `[data-setting-key="${def.key}"]`,
       );

@@ -158,6 +158,14 @@ export type HubSettingDef = {
   colSpan?: number;
   fullWidth?: boolean;
   dependsOn?: ConfigKey;
+  /**
+   * Select parents only: the exact values of `dependsOn` that make this
+   * setting useful. Without it every value but "", "none" and "default"
+   * counts as on, which shows colour pickers for styles that ignore them.
+   */
+  dependsOnValues?: readonly string[];
+  /** Public-profile link field: validated live with this link kind. */
+  linkKind?: "github" | "gitlab" | "linkedin" | "website" | "discord";
   requiresCloud?: boolean;
   min?: number;
   max?: number;
@@ -639,6 +647,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     {
       feature: "profile",
       key: "PROFILE_PUB_LINK_GITHUB",
+      linkKind: "github",
       label: "GitHub",
       desc: "User name or profile URL.",
       kind: "text",
@@ -650,6 +659,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     {
       feature: "profile",
       key: "PROFILE_PUB_LINK_GITLAB",
+      linkKind: "gitlab",
       label: "GitLab",
       desc: "User name or profile URL.",
       kind: "text",
@@ -661,6 +671,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     {
       feature: "profile",
       key: "PROFILE_PUB_LINK_LINKEDIN",
+      linkKind: "linkedin",
       label: "LinkedIn",
       desc: "User name or profile URL.",
       kind: "text",
@@ -672,6 +683,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     {
       feature: "profile",
       key: "PROFILE_PUB_LINK_WEBSITE",
+      linkKind: "website",
       label: "Website",
       desc: "Your own site or portfolio. https only.",
       kind: "text",
@@ -683,6 +695,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
     {
       feature: "profile",
       key: "PROFILE_PUB_LINK_DISCORD",
+      linkKind: "discord",
       label: "Discord",
       desc: "Your handle. Visitors copy it with a click.",
       kind: "text",
@@ -716,11 +729,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_NAME_COLOR",
       label: "Name colour",
-      desc: "Main colour of the name style.",
+      desc: "Used by the custom, gradient, glow and neon styles.",
       kind: "color",
       placeholder: "#00babc",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_NAME_COLOR,
       dependsOn: "PROFILE_PUB_NAME_STYLE",
+      dependsOnValues: ["custom", "gradient", "glow", "neon"],
       grid: true,
       colSpan: 1,
     },
@@ -728,11 +742,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_NAME_COLOR_2",
       label: "Second name colour",
-      desc: "End colour of the two-colour gradient.",
+      desc: "Second colour of the gradient and of the neon halo.",
       kind: "color",
       placeholder: "#7c3aed",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_NAME_COLOR_2,
       dependsOn: "PROFILE_PUB_NAME_STYLE",
+      dependsOnValues: ["gradient", "neon"],
       grid: true,
       colSpan: 1,
     },
@@ -780,11 +795,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_FRAME_COLOR",
       label: "Frame colour",
-      desc: "Main colour of the frame.",
+      desc: "Used by every frame but the rainbow ring, which has its own colours.",
       kind: "color",
       placeholder: "#00babc",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_FRAME_COLOR,
       dependsOn: "PROFILE_PUB_FRAME",
+      dependsOnValues: ["solid", "double", "dashed", "gradient", "glow", "neon"],
       grid: true,
       colSpan: 1,
     },
@@ -792,11 +808,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_FRAME_COLOR_2",
       label: "Second frame colour",
-      desc: "End colour of the gradient ring.",
+      desc: "Second colour of the double, gradient and neon rings.",
       kind: "color",
       placeholder: "#7c3aed",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_FRAME_COLOR_2,
       dependsOn: "PROFILE_PUB_FRAME",
+      dependsOnValues: ["double", "gradient", "neon"],
       grid: true,
       colSpan: 1,
     },
@@ -823,11 +840,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_LEVEL_COLOR",
       label: "Level bar colour",
-      desc: "Main colour of the level bar.",
+      desc: "Used by the custom, gradient and striped styles.",
       kind: "color",
       placeholder: "#00babc",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_LEVEL_COLOR,
       dependsOn: "PROFILE_PUB_LEVEL_STYLE",
+      dependsOnValues: ["custom", "gradient", "striped"],
       grid: true,
       colSpan: 1,
     },
@@ -835,11 +853,12 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       feature: "profile",
       key: "PROFILE_PUB_LEVEL_COLOR_2",
       label: "Second level bar colour",
-      desc: "End colour of the gradient.",
+      desc: "End colour of the gradient style.",
       kind: "color",
       placeholder: "#7c3aed",
       defaultValue: CONFIG_DEFAULT.PROFILE_PUB_LEVEL_COLOR_2,
       dependsOn: "PROFILE_PUB_LEVEL_STYLE",
+      dependsOnValues: ["gradient"],
       grid: true,
       colSpan: 1,
     },
@@ -1344,6 +1363,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       placeholder: "#00babc",
       defaultValue: CONFIG_DEFAULT.CUSTOM_CARD_BORDER_COLOR,
       dependsOn: "CUSTOM_CARD_BORDER_MODE",
+      dependsOnValues: ["custom"],
       grid: true,
       colSpan: 1,
     },
@@ -1394,6 +1414,7 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       placeholder: "#00babc",
       defaultValue: CONFIG_DEFAULT.CUSTOM_CARD_TITLE_COLOR,
       dependsOn: "CUSTOM_CARD_TITLE_MODE",
+      dependsOnValues: ["custom"],
       grid: true,
       colSpan: 1,
     },
