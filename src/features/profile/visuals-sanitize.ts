@@ -1,6 +1,7 @@
 import type { VisualUrls } from "./visuals.ts";
 import { sanitizeCssColor, sanitizeCssUrl, sanitizeHexColor } from "../../utils/css-sanitize.ts";
 import { sanitizePublicLook } from "../customize/public-look.ts";
+import { pickRawExtras } from "./extras/extras-apply.ts";
 
 export { sanitizeCssColor, sanitizeCssUrl, sanitizeHexColor };
 
@@ -74,5 +75,7 @@ export function sanitizeVisualUrls(urls: VisualUrls): VisualUrls {
     theme,
     logtime,
     look: sanitizePublicLook(urls.look),
+    // raw PROFILE_PUB_* values, bounded here and validated when applied
+    extras: pickRawExtras(urls.extras),
   };
 }

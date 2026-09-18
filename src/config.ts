@@ -169,6 +169,42 @@ export interface BetterIntraConfig {
   /** Apply the look other users publish when I visit their profile. */
   CUSTOM_SHOW_OTHERS_LOOK: boolean;
 
+  // Public profile extras (features/profile/extras): visible to every
+  // Better Intra user who opens my profile.
+  PROFILE_PUB_ENABLED: boolean;
+  PROFILE_PUB_BIO: string;
+  PROFILE_PUB_STATUS_EMOJI: string;
+  PROFILE_PUB_STATUS_TEXT: string;
+  PROFILE_PUB_PRONOUNS: string;
+  /** Space-separated emoji shown next to the name. */
+  PROFILE_PUB_FLAIR: string;
+  PROFILE_PUB_GREETING: string;
+  PROFILE_PUB_LINK_GITHUB: string;
+  PROFILE_PUB_LINK_GITLAB: string;
+  PROFILE_PUB_LINK_LINKEDIN: string;
+  PROFILE_PUB_LINK_WEBSITE: string;
+  PROFILE_PUB_LINK_DISCORD: string;
+  PROFILE_PUB_NAME_STYLE: "default" | "accent" | "custom" | "gradient" | "rainbow" | "glow" | "neon";
+  PROFILE_PUB_NAME_COLOR: string;
+  PROFILE_PUB_NAME_COLOR_2: string;
+  PROFILE_PUB_NAME_FONT: "default" | "system" | "humanist" | "rounded" | "serif" | "mono";
+  PROFILE_PUB_FRAME: "none" | "solid" | "double" | "dashed" | "gradient" | "rainbow" | "glow" | "neon";
+  PROFILE_PUB_FRAME_COLOR: string;
+  PROFILE_PUB_FRAME_COLOR_2: string;
+  PROFILE_PUB_LEVEL_STYLE: "default" | "custom" | "gradient" | "rainbow" | "striped";
+  PROFILE_PUB_LEVEL_COLOR: string;
+  PROFILE_PUB_LEVEL_COLOR_2: string;
+  PROFILE_PUB_BANNER_GRADIENT: string;
+  PROFILE_PUB_BANNER_DIM: number;
+  PROFILE_PUB_BANNER_BLUR: number;
+  PROFILE_PUB_CARD_GLOW: boolean;
+  PROFILE_PUB_EFFECT: "none" | "snow" | "stars" | "fireflies" | "confetti" | "bubbles" | "sakura" | "rain" | "embers";
+  PROFILE_PUB_EFFECT_INTENSITY: "low" | "medium" | "high";
+  PROFILE_PUB_EFFECT_TINT: boolean;
+  PROFILE_PUB_EFFECT_COLOR: string;
+  /** Viewer side: show the extras other people publish on their profile. */
+  PROFILE_SHOW_OTHERS_EXTRAS: boolean;
+
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
   SUBJECT_TRACKER_SEND_DATA: boolean;
@@ -320,6 +356,38 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_PRESETS: [],
   CUSTOM_SHARE_LOOK: false,
   CUSTOM_SHOW_OTHERS_LOOK: true,
+
+  PROFILE_PUB_ENABLED: true,
+  PROFILE_PUB_BIO: "",
+  PROFILE_PUB_STATUS_EMOJI: "",
+  PROFILE_PUB_STATUS_TEXT: "",
+  PROFILE_PUB_PRONOUNS: "",
+  PROFILE_PUB_FLAIR: "",
+  PROFILE_PUB_GREETING: "",
+  PROFILE_PUB_LINK_GITHUB: "",
+  PROFILE_PUB_LINK_GITLAB: "",
+  PROFILE_PUB_LINK_LINKEDIN: "",
+  PROFILE_PUB_LINK_WEBSITE: "",
+  PROFILE_PUB_LINK_DISCORD: "",
+  PROFILE_PUB_NAME_STYLE: "default",
+  PROFILE_PUB_NAME_COLOR: "#00babc",
+  PROFILE_PUB_NAME_COLOR_2: "#7c3aed",
+  PROFILE_PUB_NAME_FONT: "default",
+  PROFILE_PUB_FRAME: "none",
+  PROFILE_PUB_FRAME_COLOR: "#00babc",
+  PROFILE_PUB_FRAME_COLOR_2: "#7c3aed",
+  PROFILE_PUB_LEVEL_STYLE: "default",
+  PROFILE_PUB_LEVEL_COLOR: "#00babc",
+  PROFILE_PUB_LEVEL_COLOR_2: "#7c3aed",
+  PROFILE_PUB_BANNER_GRADIENT: "none",
+  PROFILE_PUB_BANNER_DIM: 0,
+  PROFILE_PUB_BANNER_BLUR: 0,
+  PROFILE_PUB_CARD_GLOW: false,
+  PROFILE_PUB_EFFECT: "none",
+  PROFILE_PUB_EFFECT_INTENSITY: "medium",
+  PROFILE_PUB_EFFECT_TINT: false,
+  PROFILE_PUB_EFFECT_COLOR: "#ffffff",
+  PROFILE_SHOW_OTHERS_EXTRAS: true,
 };
 
 /**
@@ -432,6 +500,37 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CUSTOM_PRESETS",
   "CUSTOM_SHARE_LOOK",
   "CUSTOM_SHOW_OTHERS_LOOK",
+  "PROFILE_PUB_ENABLED",
+  "PROFILE_PUB_BIO",
+  "PROFILE_PUB_STATUS_EMOJI",
+  "PROFILE_PUB_STATUS_TEXT",
+  "PROFILE_PUB_PRONOUNS",
+  "PROFILE_PUB_FLAIR",
+  "PROFILE_PUB_GREETING",
+  "PROFILE_PUB_LINK_GITHUB",
+  "PROFILE_PUB_LINK_GITLAB",
+  "PROFILE_PUB_LINK_LINKEDIN",
+  "PROFILE_PUB_LINK_WEBSITE",
+  "PROFILE_PUB_LINK_DISCORD",
+  "PROFILE_PUB_NAME_STYLE",
+  "PROFILE_PUB_NAME_COLOR",
+  "PROFILE_PUB_NAME_COLOR_2",
+  "PROFILE_PUB_NAME_FONT",
+  "PROFILE_PUB_FRAME",
+  "PROFILE_PUB_FRAME_COLOR",
+  "PROFILE_PUB_FRAME_COLOR_2",
+  "PROFILE_PUB_LEVEL_STYLE",
+  "PROFILE_PUB_LEVEL_COLOR",
+  "PROFILE_PUB_LEVEL_COLOR_2",
+  "PROFILE_PUB_BANNER_GRADIENT",
+  "PROFILE_PUB_BANNER_DIM",
+  "PROFILE_PUB_BANNER_BLUR",
+  "PROFILE_PUB_CARD_GLOW",
+  "PROFILE_PUB_EFFECT",
+  "PROFILE_PUB_EFFECT_INTENSITY",
+  "PROFILE_PUB_EFFECT_TINT",
+  "PROFILE_PUB_EFFECT_COLOR",
+  "PROFILE_SHOW_OTHERS_EXTRAS",
 ];
 
 export const VISUAL_CLOUD_KEYS: ConfigKey[] = [
@@ -499,8 +598,13 @@ function normalizeConfigValue<T extends ConfigKey>(
   let value: unknown = raw !== undefined ? raw : CONFIG_DEFAULT[key];
 
   // Some legacy callers serialize arrays/objects as JSON strings (e.g. hub settings).
-  // Parse those back so consumers get the declared type.
+  // Parse those back so consumers get the declared type. Only for keys that
+  // hold an array or an object: a plain string setting (a bio reading
+  // "[insert bio]", a custom CSS block) must survive untouched.
+  const wantsStructure =
+    CONFIG_DEFAULT[key] === null || typeof CONFIG_DEFAULT[key] === "object";
   if (
+    wantsStructure &&
     typeof value === "string" &&
     (value.startsWith("[") || value.startsWith("{"))
   ) {

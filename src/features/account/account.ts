@@ -318,6 +318,7 @@ export async function fetchUserVisuals(
       theme: (data.theme as { profileColor?: string }) || null,
       logtime: (data.logtime as Record<string, unknown>) || null,
       look: (data.look as Record<string, unknown>) || null,
+      extras: (data.extras as Record<string, unknown>) || null,
     });
   } catch (error) {
     console.error(error);

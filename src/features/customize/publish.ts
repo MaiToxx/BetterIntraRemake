@@ -7,20 +7,30 @@
 import { getConfigMany } from "../../config.ts";
 import { syncToCloud } from "../account/account.ts";
 import { CUSTOMIZE_KEYS } from "./customize.ts";
+import { EXTRAS_KEYS } from "../profile/extras/extras.ts";
 
 const SHARE_KEY = "CUSTOM_SHARE_LOOK";
-const RELEVANT = new Set<string>([...CUSTOMIZE_KEYS, SHARE_KEY]);
+const RELEVANT = new Set<string>([...CUSTOMIZE_KEYS, SHARE_KEY, ...EXTRAS_KEYS]);
+/** Keys that are public by nature: published as soon as they change. */
+const ALWAYS_PUBLIC = new Set<string>([SHARE_KEY, ...EXTRAS_KEYS]);
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** A key of ALWAYS_PUBLIC changed during the current burst. */
+let forced = false;
 
 export function publishLookIfShared(changedKey: string): void {
   if (!RELEVANT.has(changedKey)) return;
+  if (ALWAYS_PUBLIC.has(changedKey)) forced = true;
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
     timer = null;
+    const force = forced;
+    forced = false;
     const c = await getConfigMany([SHARE_KEY, "CLOUD_TOKEN"]);
     // Turning sharing off must reach the server too (the flag is synced).
     if (!c.CLOUD_TOKEN) return;
-    if (!c.CUSTOM_SHARE_LOOK && changedKey !== SHARE_KEY) return;
+    if (!c.CUSTOM_SHARE_LOOK && !force) return;
     await syncToCloud();
-  }, 1500);
+    // public-by-nature keys are pushed sooner: the user often edits their
+    // profile and immediately reloads the page
+  }, forced ? 600 : 1500);
 }

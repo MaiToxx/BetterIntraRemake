@@ -6,6 +6,12 @@ import { applyPublicLogtimeSettings, initLogtime } from "../logtime/logtime.ts";
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
 import { applyVisitorLook } from "../customize/customize.ts";
 import type { PublicLook } from "../customize/public-look.ts";
+import {
+  applyOwnProfileExtras,
+  applyProfileExtras,
+  clearProfileExtras,
+  extrasAreVisible,
+} from "./extras/extras-apply.ts";
 import { html, render } from "lit-html";
 
 /** Logins known to have no cloud visuals, with the time we learned it. */
@@ -43,6 +49,8 @@ export interface VisualUrls {
   } | null;
   /** Look (accent, palette, background, cards) published by this user. */
   look?: PublicLook | null;
+  /** Raw PROFILE_PUB_* settings published by this user (validated when applied). */
+  extras?: Record<string, unknown> | null;
 }
 
 let isFetching = false;
@@ -113,6 +121,7 @@ const getVisualKey = (urls: VisualUrls) =>
     theme: urls.theme || null,
     logtime: urls.logtime || null,
     look: urls.look || null,
+    extras: urls.extras || null,
   });
 
 const CACHE_PREFIX = "visuals_cache_";
@@ -329,18 +338,37 @@ const modeCss: Record<string, string> = {
 
 const LOOK_BADGE_ID = "ft-visitor-look-badge";
 let lookBadgeLogin: string | null = null;
+/** Login of the signed-in user (null until known), to tell my page from someone else's. */
+let ownLogin: string | null = null;
 
 /**
  * Apply the look published by the profile's owner (or clear it) and show a
  * small badge saying whose look is displayed, with a way to hide it for
  * this visit. Skipped when the viewer hid it for this login in this tab.
  */
-function showVisitorLook(look: PublicLook | null): void {
+function showVisitorLook(
+  look: PublicLook | null,
+  extras: Record<string, unknown> | null = null,
+  hasBackgroundImage = false,
+): void {
   const login = lastUser && lastUser !== "me" ? lastUser : null;
   const hiddenKey = login ? `ft-look-hidden-${login}` : "";
   const hidden = hiddenKey ? sessionStorage.getItem(hiddenKey) === "1" : false;
-  const active = !!look && !!login && !hidden;
-  void applyVisitorLook(active ? look : null);
+  // My own page never shows a "visitor" look; its extras are rendered from
+  // local settings by applyOwnProfileExtras() (see updateVisuals).
+  const own = !login || login === ownLogin;
+  // Everyone who syncs publishes the default colours, so a non-null
+  // `extras` means nothing by itself: ask the sanitizer.
+  const visibleExtras = !!extras && extrasAreVisible(extras);
+  const active = !own && !hidden && (!!look || visibleExtras);
+  void applyVisitorLook(active && look ? look : null);
+  if (!own) {
+    if (active && visibleExtras) {
+      void applyProfileExtras(extras, { login: login!, own: false, hasBackgroundImage });
+    } else {
+      clearProfileExtras();
+    }
+  }
 
   const existing = document.getElementById(LOOK_BADGE_ID);
   if (!active) {
@@ -372,7 +400,7 @@ function showVisitorLook(look: PublicLook | null): void {
         }
         #${LOOK_BADGE_ID} button:hover { opacity: 1; background: hsl(var(--muted, 220 20% 15%)); }
       </style>
-      <span title="This profile is shown with the look its owner published with Better Intra">🎨 ${login}'s look</span>
+      <span title="This profile is shown with the look and extras its owner published with Better Intra">🎨 ${login}'s style</span>
       <button type="button" title="Show my own style instead (this visit only)" @click=${hide}>✕</button>`,
     host,
   );
@@ -480,7 +508,7 @@ export const applyImgs = (rawUrls: VisualUrls | null) => {
     applyThemeToProfileCard(urls.theme);
   }
 
-  showVisitorLook(urls.look ?? null);
+  showVisitorLook(urls.look ?? null, urls.extras ?? null, !!urls.background);
 
   setStyleForSelector(
     "ft-badge-color-style",
@@ -571,6 +599,7 @@ export const updateVisuals = async () => {
 
   let myLogin = await getCloudLogin();
   if (!myLogin) myLogin = "me";
+  ownLogin = myLogin;
 
   const targetLogin =
     pathParts[0] === "users" && pathParts[1] ? pathParts[1] : myLogin;
@@ -598,6 +627,7 @@ export const updateVisuals = async () => {
   }
 
   if (targetLogin === myLogin) {
+    void applyOwnProfileExtras(myLogin);
     if (!avatarEl.dataset.modalListener) {
       avatarEl.dataset.modalListener = "true";
       avatarEl.style.cursor = "pointer";
@@ -619,8 +649,16 @@ export const updateVisuals = async () => {
     if (document.getElementById("profile-modal-host")) return;
     const key = getVisualKey(visualCache);
     const reapply = needsReapply(visualCache);
-    if (lastAppliedUser === targetLogin && lastAppliedKey === key && !reapply)
+    if (lastAppliedUser === targetLogin && lastAppliedKey === key && !reapply) {
+      if (targetLogin !== myLogin) {
+        showVisitorLook(
+          visualCache.look ?? null,
+          visualCache.extras ?? null,
+          !!visualCache.background,
+        );
+      }
       return;
+    }
 
     applyImgs(visualCache);
     lastAppliedUser = targetLogin;
@@ -692,7 +730,8 @@ export const updateVisuals = async () => {
           cached.badgeBg ||
           cached.theme ||
           cached.logtime ||
-          cached.look)
+          cached.look ||
+          cached.extras)
       ) {
         visualCache = sanitizeVisualUrls(cached);
         applyImgs(visualCache);
@@ -725,7 +764,8 @@ export const updateVisuals = async () => {
               cloudUrls.badgeBg ||
               cloudUrls.theme ||
               cloudUrls.logtime ||
-              cloudUrls.look)
+              cloudUrls.look ||
+              cloudUrls.extras)
           ) {
             visualCache = cloudUrls;
             setCachedVisuals(targetLogin, cloudUrls);

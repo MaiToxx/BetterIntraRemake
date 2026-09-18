@@ -137,6 +137,7 @@ describe("sanitizeVisualUrls", () => {
     expect(sanitizeVisualUrls(legit)).toEqual({
       ...legit,
       look: null,
+      extras: null,
       logtime: {
         calendarColor: "#00bcba",
         labelsColor: "#26a641",

@@ -23,6 +23,7 @@ If you enable cloud sync, the following data is transmitted to the fork's own Cl
 - Your **friend logins** — to fetch their online status and location
 - Your **custom profile visuals** (avatar, banner, background URLs) — so other Better Intra users can see them when viewing your profile
 - Your **Discord User ID** (if enabled) — for sending evaluation notifications via DM
+- Your **public profile** (Profile tab → *Public profile*) — the bio, status, pronouns, flair, greeting, links and profile styling you fill in there. Anyone running Better Intra sees them when they open your profile page, and the endpoint that serves them (`/api/v1/public/visuals`) needs no authentication, so treat that text as public. The fields are empty by default: nothing is published until you type something. Clear a field, or switch *Publish my profile extras* off, to stop publishing it.
 - Your **outstanding project flags** — so the extension can show a star on projects that were marked "Outstanding" during evaluation
 
 All your cloud data is keyed under a hash of your login and is only accessible to you. The worker retains **invocation logs** for debugging purposes (request timestamps, endpoints, HTTP status codes, item counts, and state transitions). When relevant, identifiers are truncated to their first 6 characters to prevent full exposure. Discord API error status codes may also appear in logs. These logs are not used for tracking or analytics.

@@ -85,6 +85,18 @@ The worker is deployed at `betterintra-remake.maitox.workers.dev`. Only that hos
 * **Nav bar avatar** — your custom avatar in the site navigation.
 * **Phoenix / Pegasus tracker** — hover the badge for days and hours done vs required.
 
+**Public profile ☁️** — a *Public profile* section at the end of the Profile tab. What you put there is shown to every Better Intra user who opens your page, and on your own page straight away:
+
+* **Identity** — status with an emoji, pronouns, a 160-character bio, up to six flair emoji, and a greeting shown once to each visitor.
+* **Links** — GitHub, GitLab, LinkedIn, a personal site (https only) and a Discord handle that visitors copy in one click.
+* **Name** — accent or custom colour, two-colour gradient, animated rainbow, glow, neon, and six font choices.
+* **Avatar frame** — solid, double, dashed, gradient, rainbow, glow or neon ring.
+* **Level bar** — custom colour, gradient, rainbow or animated stripes.
+* **Header & card** — one of the 13 gradients behind the header, a darkening slider, a blur behind the card, a permanent glow.
+* **Effect** — snow, stars, fireflies, confetti, bubbles, sakura, rain or embers over the page, in three intensities, optionally tinted.
+
+Only presentation values and short texts travel: never your custom CSS, fonts, size or any other setting. Everything you receive from someone else is validated again in your browser before it touches the page (strict colours, fixed lists of styles, https links rebuilt by the extension, text rendered as text), and the block is labelled as written by that student. Visitors who prefer plain profiles turn *Show other people's profile extras* off; the 🎨 badge hides a single profile's style for the current visit.
+
 ### 🎨 Customize
 
 A **Customize** tab in the hub restyles every Intra page live, and syncs with your cloud settings.

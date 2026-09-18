@@ -1,4 +1,4 @@
-import { html, render } from "lit-html";
+import { html, nothing, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { until } from "lit-html/directives/until.js";
 import { getConfig, CONFIG_DEFAULT, type ConfigKey } from "../../config.ts";
@@ -37,6 +37,7 @@ import { exportableSettings, sanitizeBackup } from "./backup.ts";
 import { renderPresetsPanel } from "../customize/presets.ui.ts";
 import { publishLookIfShared } from "../customize/publish.ts";
 import { renderCardsPanel } from "../customize/cards.ui.ts";
+import { EXTRAS_KEYS } from "../profile/extras/extras.ts";
 import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
@@ -485,6 +486,9 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
                 <input
                   type="number"
                   class="w-full"
+                  min="${def.min ?? nothing}"
+                  max="${def.max ?? nothing}"
+                  step="${def.step ?? nothing}"
                   .value="${String(value)}"
                   data-setting-key="${def.key}"
                   ?disabled="${!enabled}"
@@ -499,6 +503,9 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
             : html`<input
                 type="number"
                 class="input input-accent w-24"
+                min="${def.min ?? nothing}"
+                max="${def.max ?? nothing}"
+                step="${def.step ?? nothing}"
                 .value="${String(value)}"
                 data-setting-key="${def.key}"
                 ?disabled="${!enabled}"
@@ -751,10 +758,14 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
           </div>`;
 
         case "text":
+          // fullWidth: renderSetting stacks the label over a w-full wrapper,
+          // the input only has to fill it. `nothing` drops the attribute, a
+          // def without maxLength keeps an unlimited input.
           return html`<input
             type="text"
-            class="input input-accent w-60"
+            class="input input-accent ${def.fullWidth ? "w-full" : "w-60"}"
             placeholder="${def.placeholder || ""}"
+            maxlength="${def.maxLength ?? nothing}"
             .value="${String(value || "")}"
             data-setting-key="${def.key}"
             ?disabled="${!enabled}"
@@ -888,7 +899,7 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
             type="text"
             class="input input-accent w-30 text-center text-xl"
             placeholder="${def.placeholder || "🐝"}"
-            maxlength="6"
+            maxlength="${def.maxLength ?? 6}"
             .value="${String(value || "")}"
             data-setting-key="${def.key}"
             ?disabled="${!enabled}"
@@ -1158,7 +1169,10 @@ async function createModal(active: FeatureId[]): Promise<void> {
       if (def.dependsOn && def.key) {
         const parentVal =
           depValues[def.dependsOn] ?? CONFIG_DEFAULT[def.dependsOn];
-        if (!parentVal) {
+        // A select parent stores a string even when it is off: "none" and
+        // "default" count as off here exactly as in parentIsOn(), otherwise
+        // its dependants show at open and vanish on the first change.
+        if (!parentVal || parentVal === "none" || parentVal === "default") {
           disabledDeps.add(def.key);
           hiddenDeps.add(def.key);
         }
@@ -1459,7 +1473,14 @@ async function createModal(active: FeatureId[]): Promise<void> {
 
   shadow.querySelectorAll("[data-reset-feature]").forEach((btn: any) => {
     btn.addEventListener("click", async () => {
-      await resetFeatureSettings(shadow, btn.dataset.resetFeature);
+      const feature = btn.dataset.resetFeature as FeatureId;
+      if (feature === "profile" && (await hasPublicProfileContent())) {
+        const ok = window.confirm(
+          "Reset the Profile tab? This also clears your public profile (bio, status, links, name style, effect) for everyone who visits your page.",
+        );
+        if (!ok) return;
+      }
+      await resetFeatureSettings(shadow, feature);
     });
   });
 
@@ -1512,6 +1533,15 @@ function refreshDependents(root: ParentNode, parentKey?: string): void {
   }
 }
 
+/** True when the user published anything on their profile (text, links). */
+async function hasPublicProfileContent(): Promise<boolean> {
+  const stored = await chrome.storage.local.get([...EXTRAS_KEYS]);
+  return EXTRAS_KEYS.some((key) => {
+    const v = stored[key];
+    return typeof v === "string" && v.trim() !== "";
+  });
+}
+
 async function resetFeatureSettings(
   root: ShadowRoot | HTMLElement,
   featureId: FeatureId,
@@ -1521,6 +1551,8 @@ async function resetFeatureSettings(
     .filter((k): k is ConfigKey => k !== undefined);
   if (keysToRemove.length > 0) {
     await chrome.storage.local.remove(keysToRemove);
+    // a reset of public settings (look, profile extras) must reach the cloud
+    for (const key of keysToRemove) publishLookIfShared(key);
   }
   (HUB_SETTING_DEFS[featureId] ?? []).forEach((def) => {
     const controls = root.querySelectorAll<HTMLInputElement>(
