@@ -8,6 +8,9 @@ import { readRepoInfo, readWorkerUrl, readAuthMode } from "./scripts/repo-info.j
 
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
+
+/** Same asset as the content script's; see src/assets/shared-styles.ts. */
+const SHARED_CSS_FILE = "shared-styles.css";
 const repo = readRepoInfo();
 const workerUrl = readWorkerUrl();
 const authMode = readAuthMode();
@@ -24,6 +27,9 @@ export default defineConfig({
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Better Intra</title>
+  <!-- The Tailwind/daisyUI sheet as a file: a render-blocking <link> here is
+       ~300 KB the popup bundle no longer has to carry and re-parse. -->
+  <link rel="stylesheet" href="${SHARED_CSS_FILE}" />
   <style>
     html, body { margin: 0; padding: 0; width: 420px; min-height: 320px; }
     #popup-root { width: 100%; min-height: 320px; background: var(--color-base-100, white); color: var(--color-base-content, inherit); }
@@ -59,12 +65,17 @@ export default defineConfig({
     outDir: outDir,
     emptyOutDir: false,
     minify: true,
+    // See vite.config.ts: keeps the compiled sheet out of popup.js and on disk.
+    cssCodeSplit: false,
     rollupOptions: {
       input: { popup: resolve(import.meta.dirname, "src/popup/popup.ts") },
       output: {
         format: "iife",
         entryFileNames: "[name].js",
-        assetFileNames: "[name].[ext]",
+        assetFileNames: (asset: { names?: string[]; name?: string }) => {
+          const name = asset.names?.[0] ?? asset.name ?? "";
+          return name.endsWith(".css") ? SHARED_CSS_FILE : "[name].[ext]";
+        },
       },
     },
   },

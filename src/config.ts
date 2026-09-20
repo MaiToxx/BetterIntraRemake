@@ -205,6 +205,17 @@ export interface BetterIntraConfig {
   /** Viewer side: show the extras other people publish on their profile. */
   PROFILE_SHOW_OTHERS_EXTRAS: boolean;
 
+  // Lighten the Intra (features/performance): make the Intra's own pages
+  // cheaper to render. All four default to on; see features/performance/perf.ts.
+  /** content-visibility on the long repeated lists, so off-screen rows cost nothing. */
+  PERF_DEFER_OFFSCREEN: boolean;
+  /** loading="lazy" / decoding="async" on the page's own off-screen images. */
+  PERF_LAZY_IMAGES: boolean;
+  /** Pause the page's CSS animations and transitions while the tab is hidden. */
+  PERF_PAUSE_HIDDEN: boolean;
+  /** Warm the avatar CDN connection before the page asks for the first avatar. */
+  PERF_PRECONNECT: boolean;
+
   // Subject Tracker
   SUBJECT_TRACKER_ENABLED: boolean;
   SUBJECT_TRACKER_SEND_DATA: boolean;
@@ -322,6 +333,11 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   SUBJECT_TRACKER_STATE: {},
   SUBJECT_TRACKER_ENABLED: true,
   SUBJECT_TRACKER_SEND_DATA: true,
+
+  PERF_DEFER_OFFSCREEN: true,
+  PERF_LAZY_IMAGES: true,
+  PERF_PAUSE_HIDDEN: true,
+  PERF_PRECONNECT: true,
 
   CUSTOM_ACCENT_ENABLED: false,
   CUSTOM_ACCENT_COLOR: "#00babc",
@@ -465,6 +481,10 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "CALENDAR_EVENTS_HASH",
   "ADVANCED_OPEN_LINKS_NEW_TAB",
   "EASTER_EGGS_ENABLED",
+  "PERF_DEFER_OFFSCREEN",
+  "PERF_LAZY_IMAGES",
+  "PERF_PAUSE_HIDDEN",
+  "PERF_PRECONNECT",
   "CLOUD_SYNC_ENABLED",
   "TRACKER_MODE",
   "CUSTOM_ACCENT_ENABLED",

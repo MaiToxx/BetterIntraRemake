@@ -9,7 +9,14 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["hook.js"],
+      "resources": [
+        "hook.js",
+        "shared-styles.css",
+        "theme-dark-v2.css",
+        "theme-dark-v3.css",
+        "theme-light-default-v3.css",
+        "theme-light-v3.css"
+      ],
       "matches": ["https://*.intra.42.fr/*"]
     }
   ],

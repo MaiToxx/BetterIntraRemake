@@ -16,7 +16,23 @@ const RELEASES_API = __REPO_RELEASES_API__;
 /** Delay between a new CLOUD_TOKEN and the Intra tabs reload (see onChanged). */
 const RELOAD_AFTER_LOGIN_DELAY_MS = 500;
 
-async function checkForUpdate(): Promise<void> {
+/**
+ * In-flight update check. The alarm, the browser start-up and the popup's
+ * FT_CHECK_UPDATE can land in the same service-worker lifetime; a second
+ * GitHub request would only get the same answer (and count against the
+ * unauthenticated rate limit twice).
+ */
+let updateCheckInFlight: Promise<void> | null = null;
+
+function checkForUpdate(): Promise<void> {
+  if (updateCheckInFlight) return updateCheckInFlight;
+  updateCheckInFlight = runUpdateCheck().finally(() => {
+    updateCheckInFlight = null;
+  });
+  return updateCheckInFlight;
+}
+
+async function runUpdateCheck(): Promise<void> {
   const current = chrome.runtime.getManifest().version;
   try {
     const res = await fetch(RELEASES_API, {

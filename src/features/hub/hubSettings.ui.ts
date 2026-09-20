@@ -19,7 +19,7 @@ import {
 } from "../shortcuts/shortcuts.ui.ts";
 import { clearAuthFailed } from "../account/account.ts";
 import { loginWith42, syncToCloud } from "../account/account.ts";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../assets/shared-styles.ts";
 import EYE_SVG from "../../assets/svg/eye.svg?raw";
 import EYE_SLASH_SVG from "../../assets/svg/eye-slash.svg?raw";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
@@ -1265,7 +1265,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
         })
       : "--:--";
 
-  const modalTemplate = html`<style>
+  const modalTemplate = html`${sharedStylesLink()}<style>
       :host {
         display: block;
         height: 100%;
@@ -1281,7 +1281,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
       h3 {
         font-family: ${INTRA_FONT} !important;
       }
-      ${unsafeHTML(sharedCSS)} .tab-content {
+      .tab-content {
         height: 100%;
         overflow-y: auto;
       }

@@ -1,12 +1,23 @@
-import { getConfig } from "../../config.ts";
-import { applyManualScreens, applyMarkersVisibility, injectUI } from "./dom.ts";
+import { getConfigMany } from "../../config.ts";
+import {
+  applyManualScreens,
+  applyMarkersVisibility,
+  getClusterTabsList,
+  injectUI,
+} from "./dom.ts";
 import { createShadowUI } from "./ui.ts";
 import { ensureCampusData } from "../campus/campus.ts";
+import { waitForElement, watchDom } from "../../utils/dom-wait.ts";
 
 type Config = {
   show_markers: boolean;
   default_id: string;
 };
+
+/** Same budget as the old 500 ms x 60 poll. */
+const MAP_WATCH_MS = 30000;
+/** Same budget as the old 100 ms x 30 poll. */
+const CLUSTER_TAB_WAIT_MS = 3000;
 
 export async function initClusters() {
   "use strict";
@@ -48,26 +59,53 @@ export async function initClusters() {
     refreshMarkersSoon();
   };
 
-  const { shadowHost, reRender } = createShadowUI(
-    handleClusterChange,
-    handleMarkerToggle,
-  );
+  // The picker lives in a shadow root that carries the whole Tailwind/daisyUI
+  // sheet (~300 KB). initClusters() runs on every Intra page, so it is only
+  // built once we know the page really has a cluster tab list to mount it in.
+  let shadowHost: HTMLElement | null = null;
+  let reRender:
+    | ((currentId: string, showMarkers: boolean) => void)
+    | null = null;
+
+  const ensureShadowUI = (): boolean => {
+    if (shadowHost) return true;
+    if (!getClusterTabsList()) return false;
+    ({ shadowHost, reRender } = createShadowUI(
+      handleClusterChange,
+      handleMarkerToggle,
+    ));
+    return true;
+  };
 
   const reRenderUI = () => {
+    if (!reRender || !CONFIG) return;
     reRender(CONFIG.default_id, CONFIG.show_markers);
+  };
+
+  /** Build the picker if the page has a place for it, then mount it. */
+  const mountUI = () => {
+    if (!ensureShadowUI() || !shadowHost) return;
+    reRenderUI();
+    injectUI(shadowHost);
   };
 
   async function start() {
     await ensureCampusData();
+    // one storage read instead of three serial ones
+    const c = await getConfigMany([
+      "CLUSTERS_SHOW_MARKERS",
+      "CLUSTERS_DEFAULT_ID",
+      "CLUSTERS_OPEN_NEW_TAB",
+    ] as const);
     CONFIG = {
-      show_markers: await getConfig("CLUSTERS_SHOW_MARKERS"),
-      default_id: await getConfig("CLUSTERS_DEFAULT_ID"),
+      show_markers: c.CLUSTERS_SHOW_MARKERS,
+      default_id: c.CLUSTERS_DEFAULT_ID,
     };
 
-    reRenderUI();
+    mountUI();
     refreshMarkersSoon();
 
-    if (await getConfig("CLUSTERS_OPEN_NEW_TAB")) {
+    if (c.CLUSTERS_OPEN_NEW_TAB) {
       document.addEventListener("click", onClusterProfileClick, true);
     }
 
@@ -93,42 +131,36 @@ export async function initClusters() {
     };
 
     findAndAttach();
-    injectUI(shadowHost);
+    mountUI();
 
     const hashMatch = window.location.hash.match(/cluster-(\d+)/);
     const targetId = hashMatch ? hashMatch[1] : CONFIG.default_id;
     if (targetId) {
-      const checkInterval = setInterval(() => {
-        const el = document.querySelector<HTMLAnchorElement>(
-          `a[href="#cluster-${targetId}"]`,
-        );
-        if (el) {
-          el.click();
-          clearInterval(checkInterval);
-        }
-      }, 100);
-      setTimeout(() => clearInterval(checkInterval), 3000);
+      // Observed instead of polled every 100 ms: the tab is clicked on the
+      // microtask that follows its insertion, and a page that never has one
+      // (most Intra pages) costs nothing.
+      void waitForElement<HTMLAnchorElement>(`a[href="#cluster-${targetId}"]`, {
+        timeoutMs: CLUSTER_TAB_WAIT_MS,
+      }).then((el) => el?.click());
     }
 
-    // Poll until the map SVG and our UI are both present, but never for more
-    // than ~30 s: this feature is initialised on every intra page, and the
-    // old stop condition checked an id that nothing ever creates, so the poll
-    // ran twice a second for the life of every tab.
-    let pollAttempts = 0;
-    const MAX_POLL_ATTEMPTS = 60;
-    const pollTimer = setInterval(() => {
-      findAndAttach();
-      injectUI(shadowHost);
-      refreshMarkersSoon();
-      const uiReady = !!document.getElementById("cluster-shadow-host");
-      if ((observedSvgRoot && uiReady) || ++pollAttempts >= MAX_POLL_ATTEMPTS) {
-        clearInterval(pollTimer);
-      }
-    }, 500);
+    // Wait for the map SVG and our UI, but never for more than ~30 s: this
+    // feature is initialised on every Intra page. The old version re-ran the
+    // whole search twice a second for those 30 s even on pages that have no
+    // cluster map at all; now it only runs when the page actually changed.
+    const stopWatch = watchDom(
+      () => {
+        findAndAttach();
+        mountUI();
+        refreshMarkersSoon();
+        return !!observedSvgRoot && !!document.getElementById("cluster-shadow-host");
+      },
+      { timeoutMs: MAP_WATCH_MS, debounceMs: 100, immediate: false },
+    );
     addEventListener(
       "pagehide",
       () => {
-        clearInterval(pollTimer);
+        stopWatch();
         if (svgObserver) svgObserver.disconnect();
       },
       { once: true },

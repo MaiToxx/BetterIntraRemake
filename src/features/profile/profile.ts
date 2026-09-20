@@ -20,22 +20,128 @@ import { initTranscript } from "./transcript.ts";
 import { initPace } from "./pace.ts";
 import { ensureCampusData } from "../clusters/clusters.data.ts";
 import { tagDashboardCards } from "../customize/cards.ts";
+import { waitForElement } from "../../utils/dom-wait.ts";
 
-const waitForBody = () =>
-  document.body
-    ? Promise.resolve()
-    : new Promise<void>((r) => {
-        const id = setInterval(() => {
-          if (document.body) {
-            clearInterval(id);
-            r();
-          }
-        }, 10);
-      });
+/**
+ * Ids (or id prefixes) of the nodes Better Intra injects itself.
+ * Used to tell our own DOM writes apart from the ones the React app makes.
+ */
+const OWN_ID_PREFIXES = [
+  "ft-",
+  "better-intra",
+  "logtime-",
+  "events-shadow",
+  "project-badges",
+  "profile-badges",
+  "friends-widget",
+  "shortcuts-shadow",
+  "hub-",
+  "profile-modal-host",
+  "fire-milestone",
+  "update-banner",
+  "permission-banner",
+];
+
+/**
+ * Overlays that come and go on their own (tooltip, dialogs, toasts). Their
+ * removal never means a feature has to re-mount, so it must not cost a pass.
+ */
+const OWN_EPHEMERAL_IDS = new Set([
+  "ft-floating-tooltip",
+  "ft-confirm-dialog",
+  "ft-egg-toast",
+  "ft-visitor-look-badge",
+  "profile-modal-host",
+]);
+
+/** How far up the tree we look for one of our hosts, to bound the work per record. */
+const MAX_ANCESTOR_DEPTH = 24;
+/** Above this many records a burst is certainly a real React render. */
+const MAX_RECORDS_INSPECTED = 64;
+
+const isOwnElement = (el: Element): boolean => {
+  const id = el.id;
+  if (!id) return false;
+  return OWN_ID_PREFIXES.some((prefix) => id.startsWith(prefix));
+};
+
+const isOwnNode = (node: Node): boolean => {
+  let el: Element | null =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as Element)
+      : node.parentElement;
+  for (let depth = 0; el && depth < MAX_ANCESTOR_DEPTH; depth++) {
+    if (isOwnElement(el)) return true;
+    el = el.parentElement;
+  }
+  return false;
+};
+
+const isEphemeralOwnNode = (node: Node): boolean =>
+  node.nodeType === Node.ELEMENT_NODE &&
+  OWN_EPHEMERAL_IDS.has((node as Element).id);
+
+const every = (nodes: NodeList, fn: (n: Node) => boolean): boolean => {
+  for (const node of nodes) {
+    if (!fn(node)) return false;
+  }
+  return true;
+};
+
+/**
+ * True when a record can only be our own doing.
+ *
+ * WHY: the pass below re-runs ~20 feature inits, and several of them read
+ * chrome.storage before they can decide to do nothing. Our own injections (and
+ * a hovered tooltip, which is appended to <body> and removed again) used to
+ * re-trigger that whole pass, so simply moving the mouse over the dashboard
+ * cost a dozen storage round-trips. The Intra DOM did not change, so no init
+ * can behave differently: skip it.
+ */
+const isSelfInflicted = (record: MutationRecord): boolean => {
+  // A change inside one of our own widgets (lit-html re-render, shadow host).
+  if (isOwnNode(record.target)) return true;
+  // We just injected something into an Intra container.
+  if (
+    record.removedNodes.length === 0 &&
+    record.addedNodes.length > 0 &&
+    every(record.addedNodes, isOwnNode)
+  ) {
+    return true;
+  }
+  // One of our overlays closed.
+  if (
+    record.addedNodes.length === 0 &&
+    record.removedNodes.length > 0 &&
+    every(record.removedNodes, isEphemeralOwnNode)
+  ) {
+    return true;
+  }
+  return false;
+};
+
+/** Does this burst contain at least one change made by the Intra page itself? */
+export const hasIntraMutation = (records: MutationRecord[]): boolean => {
+  if (records.length > MAX_RECORDS_INSPECTED) return true;
+  for (const record of records) {
+    if (!isSelfInflicted(record)) return true;
+  }
+  return false;
+};
+
+/**
+ * Resolve once <body> exists. Observer-based: the previous 10 ms poll woke a
+ * timer up to a hundred times on a slow first paint.
+ */
+const waitForBody = async (): Promise<void> => {
+  if (document.body) return;
+  await waitForElement("body", { timeoutMs: 10000 });
+};
 
 export async function initProfile() {
   injectCustomStyles();
   await waitForBody();
+  if (!document.body) return;
   if (location.origin === "https://projects.intra.42.fr") {
     await redirectDefenseLinks();
     replaceMoulinetteImage();
@@ -110,7 +216,11 @@ export async function initProfile() {
     }
   };
 
-  const observer = new MutationObserver(() => {
+  const observer = new MutationObserver((records) => {
+    // Bursts that only contain our own DOM writes cannot change what any init
+    // would do: skipping them removes the feedback loop where a pass scheduled
+    // the next pass (see hasIntraMutation).
+    if (!hasIntraMutation(records)) return;
     if (isUpdating) {
       needsRerun = true;
     } else {
@@ -123,12 +233,14 @@ export async function initProfile() {
   });
   scheduleUpdate(true);
 
-  if (location.pathname !== "/") {
-    setTimeout(() => observer.disconnect(), 10000);
-  } else {
-    setTimeout(() => observer.disconnect(), 30000);
-    window.addEventListener("pagehide", () => observer.disconnect(), {
-      once: true,
-    });
-  }
+  const stop = () => {
+    observer.disconnect();
+    if (pending !== null) {
+      clearTimeout(pending);
+      pending = null;
+    }
+  };
+  setTimeout(stop, location.pathname !== "/" ? 10000 : 30000);
+  // Leave nothing running behind a bfcached page, whatever the path.
+  window.addEventListener("pagehide", stop, { once: true });
 }

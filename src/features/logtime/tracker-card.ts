@@ -1,6 +1,9 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import {
+  adoptSharedStyles,
+  sharedStylesLink,
+} from "../../assets/shared-styles.ts";
 import { getEffectiveTheme } from "../profile/theme/theme-manager.ts";
 import {
   getTrackerState,
@@ -37,8 +40,9 @@ function renderCard(
   const { thresholds } = trackerState;
 
   return html`
+    ${sharedStylesLink()}
     <style>
-      ${unsafeHTML(sharedCSS)} :host {
+      :host {
         display: block;
         width: 100%;
       }
@@ -237,12 +241,11 @@ function renderPopover() {
   _popoverHost.style.cssText = "position:absolute;z-index:99999;width:200px;";
 
   const shadow = _popoverHost.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = `${sharedCSS}
-    .ft-popover { box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
-    .ft-popover td { padding: 0.2rem 0.4rem; font-size: 0.8125rem; }
-  `;
-  shadow.appendChild(style);
+  adoptSharedStyles(
+    shadow,
+    `.ft-popover { box-shadow: 0 4px 24px rgba(0,0,0,0.3); }
+    .ft-popover td { padding: 0.2rem 0.4rem; font-size: 0.8125rem; }`,
+  );
 
   (async () => {
     const theme = await getEffectiveTheme();

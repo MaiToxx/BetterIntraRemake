@@ -69,8 +69,9 @@ async function fetchHistoricalLogtime(
 
   const promise = (async () => {
     try {
-      const cloudLogin = await getConfig("CLOUD_LOGIN");
-      const sessionToken = await getConfig("CLOUD_TOKEN");
+      // one storage read instead of two serial ones
+      const { CLOUD_LOGIN: cloudLogin, CLOUD_TOKEN: sessionToken } =
+        await getConfigMany(["CLOUD_LOGIN", "CLOUD_TOKEN"] as const);
       if (!cloudLogin || !sessionToken) {
         historyCache.set(login, {});
         return;
@@ -711,9 +712,15 @@ export function initLogtime(): Promise<void> {
       history.scrollRestoration = "manual";
     }
 
-    CONFIG = await getConfigs();
-    currentTheme = await getEffectiveTheme();
-    const presetKey = await getConfig("PROFILE_THEME_PRESET");
+    // Three independent storage round-trips: awaited together, their latency
+    // is paid once instead of three times before the widget can render.
+    const [config, theme, presetKey] = await Promise.all([
+      getConfigs(),
+      getEffectiveTheme(),
+      getConfig("PROFILE_THEME_PRESET"),
+    ]);
+    CONFIG = config;
+    currentTheme = theme;
     const preset = THEMES[presetKey] ?? THEMES["dark"];
     primaryColor = `hsl(${preset.primary})`;
     primaryContent = `hsl(${preset.primaryForeground})`;

@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { adoptSharedStyles } from "../../assets/shared-styles.ts";
 
 const SHADOW_ID = "project-badges-shadow";
 
@@ -32,9 +32,7 @@ function insertBadges(
   const isDark = document.documentElement.classList.contains("dark");
   const theme = isDark ? "dark" : "light";
 
-  const style = document.createElement("style");
-  style.textContent = sharedCSS;
-  shadow.appendChild(style);
+  adoptSharedStyles(shadow);
 
   const wrapper = document.createElement("div");
   wrapper.setAttribute("data-theme", theme);

@@ -11,6 +11,7 @@ import { openStudentsDialog } from "../profile/students/index.ts";
 import { openClusterDialog } from "../clusters/map-dialog.ts";
 import { isPisciner } from "../../utils/intrapy.ts";
 import { gearClicked } from "../eggs/eggs.ts";
+import { watchDom } from "../../utils/dom-wait.ts";
 
 function findSidebarMainGroup(): HTMLDivElement | null {
   const profileLink = document.querySelector<HTMLAnchorElement>(
@@ -84,6 +85,63 @@ function renderClustersButton(
   </a>`;
 }
 
+/**
+ * CLUSTERS_CAMPUS, read once per page instead of once per mount attempt.
+ *
+ * WHY: mountGearButton() used to run every 500 ms for 10 s, and every run
+ * awaited this key - 21 storage round-trips on every Intra page just to decide
+ * whether the campus-12 buttons belong in the sidebar. The value only changes
+ * when the campus is detected, which the listener below picks up.
+ */
+let campusPromise: Promise<string> | null = null;
+let campusIsTwelve: boolean | undefined;
+let campusListenerInstalled = false;
+
+const readCampus = (): Promise<string> => {
+  if (!campusPromise) {
+    campusPromise = getConfig("CLUSTERS_CAMPUS")
+      .then((campus) => {
+        campusIsTwelve = campus === "12";
+        return campus;
+      })
+      .catch(() => {
+        campusIsTwelve = false;
+        return "";
+      });
+  }
+  return campusPromise;
+};
+
+/**
+ * The campus is only known once the page fetches it (42_CAMPUS_DETECTED), so
+ * it can turn into "12" after the sidebar was already skipped. The poll used
+ * to catch that; a storage listener catches it without waking up 20 times.
+ */
+function installCampusListener(): void {
+  if (campusListenerInstalled) return;
+  if (!chrome.storage.onChanged?.addListener) return;
+  campusListenerInstalled = true;
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !("CLUSTERS_CAMPUS" in changes)) return;
+    const campus = String(changes.CLUSTERS_CAMPUS.newValue ?? "");
+    campusIsTwelve = campus === "12";
+    campusPromise = Promise.resolve(campus);
+    mountGearButton();
+  });
+}
+
+/** Everything this feature has to put in the sidebar is in place. */
+function isSidebarComplete(): boolean {
+  if (!document.getElementById("hub-gear-btn")) return false;
+  // Campus still unknown: keep watching, the buttons may still be due.
+  if (campusIsTwelve === undefined) return false;
+  if (!campusIsTwelve) return true;
+  return (
+    !!document.getElementById("ft-students-btn") &&
+    !!document.getElementById("ft-clusters-btn")
+  );
+}
+
 export function mountGearButton(): void {
   const open = async () => {
     void gearClicked();
@@ -114,7 +172,7 @@ export function mountGearButton(): void {
   };
 
   void (async () => {
-    if ((await getConfig("CLUSTERS_CAMPUS")) !== "12") return;
+    if ((await readCampus()) !== "12") return;
     if (!sidebar) return;
 
     if (!document.getElementById("ft-students-btn")) {
@@ -147,13 +205,21 @@ export function mountGearButton(): void {
   }
 }
 
+/** Same budget as the old 500 ms x 20 poll. */
+const SIDEBAR_WATCH_MS = 10000;
+
 export async function initHubSettings(): Promise<FeatureId[]> {
   const active = await getActiveFeatures();
-  mountGearButton();
-  const hubInterval = setInterval(mountGearButton, 500);
-  setTimeout(() => clearInterval(hubInterval), 10000);
-  addEventListener("pagehide", () => clearInterval(hubInterval), {
-    once: true,
-  });
+  installCampusListener();
+  // The sidebar is rendered by React, so we mount when it actually appears
+  // instead of re-trying twice a second for ten seconds. watchDom stops as
+  // soon as everything is in place, on pagehide, and at the deadline.
+  watchDom(
+    () => {
+      mountGearButton();
+      return isSidebarComplete();
+    },
+    { timeoutMs: SIDEBAR_WATCH_MS, debounceMs: 50 },
+  );
   return active;
 }

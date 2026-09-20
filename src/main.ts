@@ -16,6 +16,10 @@ import { AVATAR_SELECTOR } from "./features/profile/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
 import { initCustomize } from "./features/customize/customize.ts";
+import {
+  initPerfObservers,
+  initPerfStyles,
+} from "./features/performance/perf.ts";
 import { initEasterEggs } from "./features/eggs/eggs.ts";
 import {
   INTRA_LOGIN_MESSAGE,
@@ -37,6 +41,17 @@ import { html, render } from "lit-html";
 initThemeManager();
 // user look & feel tweaks (accent, font, size, custom CSS): always on, like the theme
 void initCustomize();
+// "Lighten the Intra": the stylesheet and the preconnect hints have to be in
+// place before the React app paints, so they go here with the other styles.
+// The image pass needs a <body> to walk, so it waits for DOMContentLoaded.
+void initPerfStyles();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => void initPerfObservers(), {
+    once: true,
+  });
+} else {
+  void initPerfObservers();
+}
 void initEasterEggs();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);

@@ -1,7 +1,7 @@
 {
   "name": "better-intra",
   "private": true,
-  "version": "1.9.1",
+  "version": "1.10.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/MaiToxx/BetterIntraRemake.git"
@@ -25,6 +25,8 @@
     "web-ext:brave": "web-ext run -t chromium --chromium-binary \"C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe\" --source-dir dist-chrome --start-url https://profile-v3.intra.42.fr",
     "test": "vitest run",
     "test:watch": "vitest",
+    "measure": "node scripts/measure-bundle.js",
+    "check:size": "node scripts/measure-bundle.js --check",
     "generate:store-images": "node scripts/generate-store-images.js",
     "generate:description": "node scripts/convert-description.js"
   },

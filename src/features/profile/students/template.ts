@@ -1,6 +1,6 @@
 import { html, TemplateResult } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedCSS } from "../../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../../assets/shared-styles.ts";
 import LIST_SVG from "../../../assets/svg/list.svg?raw";
 import GRID_SVG from "../../../assets/svg/grid.svg?raw";
 import SKULL_SVG from "../../../assets/svg/skull.svg?raw";
@@ -451,11 +451,12 @@ export function renderStudentsDialogTemplate(
     </div>
   `;
   return html`
+    ${sharedStylesLink()}
     <style>
       :host {
         display: block;
       }
-      ${sharedCSS} .row {
+      .row {
         border-radius: 0.5rem;
         cursor: pointer;
         min-width: 0;

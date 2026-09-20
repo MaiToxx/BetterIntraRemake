@@ -4,7 +4,7 @@ import { getConfig } from "../../config.ts";
 import { getCloudLogin } from "../account/account.ts";
 import { getEffectiveTheme, THEMES } from "./theme/theme-manager.ts";
 import { loadCampusData, TranscriptEntry } from "../campus/campus.ts";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../assets/shared-styles.ts";
 
 async function openTranscriptDialog(
   login: string,
@@ -92,9 +92,9 @@ async function openTranscriptDialog(
 
     render(
       html`
+        ${sharedStylesLink()}
         <style>
           :host { display: block; }
-          ${unsafeHTML(sharedCSS)}
         </style>
         <div
           data-theme="${currentTheme}"

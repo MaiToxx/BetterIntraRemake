@@ -1,6 +1,5 @@
 import { html, render } from "lit-html";
-import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedCSS } from "../assets/shared-styles.ts";
+import { sharedStylesLink } from "../assets/shared-styles.ts";
 
 const DIALOG_ID = "ft-confirm-dialog";
 
@@ -40,9 +39,10 @@ export async function showConfirmDialog(
 
   render(
     html`
-      <style>
-        ${unsafeHTML(sharedCSS)}
-      </style>
+      <!-- Shared sheet as a <link>: the file is already in the HTTP cache and
+           the engine shares the parsed copy, instead of inlining ~300 KB of
+           CSS text into this root every time the dialog opens. -->
+      ${sharedStylesLink()}
       <div
         data-theme="light"
         class="alert items-center shadow-2xl"

@@ -67,17 +67,35 @@ async function resolveCampusId(
 }
 
 let campusListenerInstalled = false;
+/** Last value we know CLUSTERS_CAMPUS holds, to avoid rewriting the same id. */
+let knownCampusId: string | null = null;
 
 function installCampusDetectedListener(): void {
   if (campusListenerInstalled) return;
   campusListenerInstalled = true;
 
+  // Keeps the in-memory id exact when the campus is changed from the popup or
+  // the settings page, so ensureCampusData() never has to re-read it.
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "local" || !("CLUSTERS_CAMPUS" in changes)) return;
+    knownCampusId = String(changes.CLUSTERS_CAMPUS.newValue ?? "");
+  });
+
   document.addEventListener("42_CAMPUS_DETECTED", async (e) => {
     if (location.pathname.includes("/users/")) return;
     const campusId = (e as CustomEvent).detail as string;
-    await chrome.storage.local.set({
-      CLUSTERS_CAMPUS: campusId,
-    });
+    // The page announces the campus on every load. Writing the same id again
+    // wakes the background service worker and fans out to every
+    // storage.onChanged listener in every frame, for nothing.
+    if (knownCampusId === null) {
+      knownCampusId = await getConfig("CLUSTERS_CAMPUS");
+    }
+    if (knownCampusId !== campusId) {
+      knownCampusId = campusId;
+      await chrome.storage.local.set({
+        CLUSTERS_CAMPUS: campusId,
+      });
+    }
     if (CLUSTERS.length === 0) {
       try {
         const data = await loadCampusData(campusId);
@@ -152,16 +170,42 @@ export async function clearCampusConfigCache(campusId: string): Promise<void> {
   ]);
 }
 
+/** In-flight ensureCampusData(), shared by its three callers on a page load. */
+let ensurePromise: Promise<void> | null = null;
+
+/**
+ * Load the campus cluster list once per page.
+ *
+ * WHY: main.ts, profile.ts and clusters.ts all call this during start-up. Each
+ * call used to read CLUSTERS_CAMPUS from storage and, while the first load was
+ * still in flight, start its own (CLUSTERS is only filled at the end), so the
+ * cached campus file was read from storage three times before the profile page
+ * was interactive.
+ */
 export async function ensureCampusData(): Promise<void> {
   installCampusDetectedListener();
+  // Already loaded: the campus id would only be read to be thrown away.
+  if (CLUSTERS.length > 0) return;
+  if (ensurePromise) return ensurePromise;
 
-  const campus = await getConfig("CLUSTERS_CAMPUS");
-  if (campus && campus !== "") {
-    if (CLUSTERS.length === 0) {
-      try {
-        const data = await loadCampusData(campus);
-        CLUSTERS = data.clusters;
-      } catch {}
+  ensurePromise = (async () => {
+    // Read once per page: the listeners above keep the value up to date.
+    if (knownCampusId === null) {
+      knownCampusId = await getConfig("CLUSTERS_CAMPUS");
     }
-  }
+    const campus = knownCampusId;
+    if (campus && campus !== "") {
+      if (CLUSTERS.length === 0) {
+        try {
+          const data = await loadCampusData(campus);
+          CLUSTERS = data.clusters;
+        } catch {}
+      }
+    }
+  })().finally(() => {
+    // Cleared so that a failed load (offline, empty campus) can be retried by
+    // the next caller, exactly as before.
+    ensurePromise = null;
+  });
+  return ensurePromise;
 }

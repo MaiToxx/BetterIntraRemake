@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../assets/shared-styles.ts";
 import {
   FriendData,
   addFriend,
@@ -496,8 +496,9 @@ function renderWidget(state: WidgetState) {
   const primaryContent = `hsl(${preset.primaryForeground})`;
 
   return html`
+    ${sharedStylesLink()}
     <style>
-      ${sharedCSS} :host {
+      :host {
         display: block;
       }
 

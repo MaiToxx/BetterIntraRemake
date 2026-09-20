@@ -10,7 +10,7 @@ import {
 import { applyImgs, injectCustomStyles, VisualUrls } from "./visuals.ts";
 import { getTitleBadges, applyBadgeLayout } from "./badges.ts";
 import { getEffectiveTheme } from "./theme/theme-manager.ts";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../assets/shared-styles.ts";
 import LINK_SVG from "../../assets/svg/link.svg?raw";
 import GRIP_VERTICAL_SVG from "../../assets/svg/grip-vertical.svg?raw";
 import EYE_SVG from "../../assets/svg/eye.svg?raw";
@@ -592,9 +592,9 @@ function renderPanelContent(
   };
 
   return html`
+    ${sharedStylesLink()}
     <style>
       :host { display: block; }
-      ${unsafeHTML(sharedCSS)}
     </style>
     <div
       data-theme="${currentTheme}"
@@ -716,9 +716,9 @@ export const createSettingsModal = async (
   const shadow = content.attachShadow({ mode: "open" });
 
   const skeleton = html`
+    ${sharedStylesLink()}
     <style>
       :host { display: block; }
-      ${unsafeHTML(sharedCSS)}
     </style>
     <div
       data-theme="${currentTheme}"
@@ -856,9 +856,7 @@ export const createSettingsModal = async (
 
     render(
       html`
-        <style>
-          ${unsafeHTML(sharedCSS)}
-        </style>
+        ${sharedStylesLink()}
         <div
           data-theme="${currentTheme}"
           class="p-6 bg-base-100 rounded-2xl flex flex-col gap-4 text-center"

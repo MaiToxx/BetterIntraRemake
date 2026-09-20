@@ -39,3 +39,9 @@ jobs:
             dist-chrome
             dist-firefox
           retention-days: 14
+
+      # Last on purpose: the budgets are checked once both builds exist, and
+      # after the upload, so a failing budget still leaves you the artifacts to
+      # inspect. Budgets live in scripts/measure-bundle.js (see docs/PERFORMANCE.md).
+      - name: Bundle size budgets
+        run: npm run check:size

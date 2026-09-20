@@ -13,10 +13,13 @@ import {
   extrasAreVisible,
 } from "./extras/extras-apply.ts";
 import { html, render } from "lit-html";
+import { waitForElement } from "../../utils/dom-wait.ts";
 
 /** Logins known to have no cloud visuals, with the time we learned it. */
 const noVisualsCache = new Map<string, number>();
 const NO_VISUALS_TTL_MS = 10 * 60 * 1000;
+/** Budget for the avatar to be rendered by React (~30 frames, as before). */
+const AVATAR_WAIT_MS = 500;
 import {
   AVATAR_SELECTOR,
   BANNER_SELECTOR,
@@ -63,6 +66,34 @@ function addToHistory(url: string, history: string[]): string[] {
   return [url, ...filtered].slice(0, 10);
 }
 
+/**
+ * The signed-in login, read once per page instead of once per mutation pass.
+ *
+ * WHY: updateVisuals() runs on every burst of DOM mutations and used to await
+ * a chrome.storage round-trip for a value that only changes on login/logout -
+ * which reloads every Intra tab anyway (background.ts). The storage listener
+ * installed below drops the cache, so it stays exact even without that reload.
+ */
+let cachedOwnLogin: string | null | undefined;
+let ownLoginPending: Promise<string | null> | null = null;
+
+const readOwnLogin = async (): Promise<string | null> => {
+  if (cachedOwnLogin !== undefined) return cachedOwnLogin;
+  if (!ownLoginPending) {
+    ownLoginPending = getCloudLogin()
+      .then((login) => {
+        cachedOwnLogin = login;
+        ownLoginPending = null;
+        return login;
+      })
+      .catch((err) => {
+        ownLoginPending = null;
+        throw err;
+      });
+  }
+  return ownLoginPending;
+};
+
 function installHistoryListener(): void {
   if (historyListenerInstalled) return;
   historyListenerInstalled = true;
@@ -78,8 +109,16 @@ function installHistoryListener(): void {
     PROFILE_BACKGROUND_URL: "PROFILE_BACKGROUND_HISTORY",
   } as const;
 
+  // Missing in a page that only got a partial chrome API shim: the cache above
+  // then simply lives for the page, as it did before it existed.
+  if (!chrome.storage.onChanged?.addListener) return;
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
+    if ("CLOUD_LOGIN" in changes) {
+      cachedOwnLogin = undefined;
+      ownLoginPending = null;
+    }
     for (const key of URL_KEYS) {
       if (!(key in changes)) continue;
       const newUrl = changes[key].newValue as string | undefined;
@@ -103,7 +142,23 @@ let originalAvatarUrl: string | null = null;
 let lastAppliedUser: string | null = null;
 let lastAppliedKey: string | null = null;
 
-const getVisualKey = (urls: VisualUrls) =>
+/**
+ * Memo for getVisualKey(): the same object is keyed several times per pass
+ * (compare, then store) and the JSON it produces can be a couple of kilobytes
+ * once a published look and its extras are in it. VisualUrls objects are
+ * replaced, never mutated in place, so identity is a safe cache key.
+ */
+const visualKeyCache = new WeakMap<VisualUrls, string>();
+
+const getVisualKey = (urls: VisualUrls): string => {
+  const cached = visualKeyCache.get(urls);
+  if (cached !== undefined) return cached;
+  const key = computeVisualKey(urls);
+  visualKeyCache.set(urls, key);
+  return key;
+};
+
+const computeVisualKey = (urls: VisualUrls) =>
   JSON.stringify({
     avatar: urls.avatar || "",
     banner: urls.banner || "",
@@ -147,7 +202,9 @@ const revalidateVisuals = async (login: string, cached: VisualUrls) => {
     const freshKey = getVisualKey(fresh);
     const cachedKey = getVisualKey(cached);
     if (freshKey === cachedKey) {
-      setCachedVisuals(login, fresh);
+      // Identical to what is stored (the key covers every field of
+      // VisualUrls): re-writing it would only wake every storage.onChanged
+      // listener, including the background service worker.
       return;
     }
     visualCache = fresh;
@@ -166,16 +223,46 @@ const revalidateVisuals = async (login: string, cached: VisualUrls) => {
   }
 };
 
+const URL_RE = /url\((["']?)(.*?)\1\)/;
+
+/**
+ * Is `url` the background image currently showing on `el`?
+ *
+ * The inline style is read first and getComputedStyle() is only reached when
+ * it does not answer: getComputedStyle forces a style recalculation, and this
+ * runs on every mutation pass of the profile page.
+ */
 const hasBackground = (el: HTMLElement | null, url?: string) => {
   if (!url) return true;
   if (!el) return false;
-  const urlRe = /url\((["']?)(.*?)\1\)/;
   const inline = el.style.backgroundImage || "";
+  if (inline.match(URL_RE)?.[2] === url) return true;
   const computed = window.getComputedStyle(el).backgroundImage || "";
-  const inlineMatch = inline.match(urlRe);
-  const computedMatch = computed.match(urlRe);
-  return inlineMatch?.[2] === url || computedMatch?.[2] === url;
+  return computed.match(URL_RE)?.[2] === url;
 };
+
+/** The exact rule applyImgs() writes for a banner image (shared so both stay in sync). */
+const bannerImageCss = (urls: VisualUrls): string =>
+  `background-image: url("${urls.banner}") !important; ${
+    modeCss[urls.bannerMode || "fill"] || modeCss.fill
+  }`;
+
+/** The exact rule applyImgs() writes for a background image. */
+const backgroundImageCss = (urls: VisualUrls): string =>
+  `background-image: url("${urls.background}") !important; ${
+    modeCss[urls.backgroundMode || "fill"] || modeCss.fill
+  }`;
+
+/**
+ * True when our <style> element already holds exactly the rule we would write.
+ *
+ * Banners and backgrounds are applied through a stylesheet, not inline, so
+ * comparing the rule text answers "is it applied?" with a plain DOM read
+ * instead of a forced style recalculation. When the text matches, re-running
+ * applyImgs() would write the very same rule, so there is nothing to redo.
+ */
+const styleRuleIs = (id: string, selector: string, cssText: string): boolean =>
+  document.getElementById(id)?.textContent === `${selector} { ${cssText} }`;
 
 export const badgeColorCss = (badgeBg?: string): string => {
   if (!badgeBg) return "";
@@ -189,6 +276,12 @@ const needsReapply = (urls: VisualUrls) => {
     BACKGROUND_SELECTOR,
   ) as HTMLElement | null;
 
+  // injectCustomStyles() keeps the avatar at opacity 0 until we have applied
+  // the visuals, and applyImgs() is what reveals it. React handing us a freshly
+  // rendered element (no inline opacity) therefore always needs a re-apply -
+  // this check is what makes the cheaper checks below safe to trust.
+  if (avatar && !showingOriginalAvatar && avatar.style.opacity !== "1")
+    return true;
   if (
     urls?.avatar &&
     !showingOriginalAvatar &&
@@ -202,7 +295,12 @@ const needsReapply = (urls: VisualUrls) => {
     const expectedSize = `${urls.avatarScale ?? 100}%`;
     if (pos !== expectedPos || size !== expectedSize) return true;
   }
-  if (urls?.banner && !hasBackground(banner, urls.banner)) return true;
+  if (
+    urls?.banner &&
+    !styleRuleIs("ft-banner-style", BANNER_SELECTOR, bannerImageCss(urls)) &&
+    !hasBackground(banner, urls.banner)
+  )
+    return true;
   if (urls?.bannerColor && banner) {
     const style = document.getElementById("ft-banner-style");
     const expectedColor = `background-color: ${urls.bannerColor} !important; background-image: none !important;`;
@@ -212,7 +310,15 @@ const needsReapply = (urls: VisualUrls) => {
     )
       return true;
   }
-  if (urls?.background && !hasBackground(background, urls.background))
+  if (
+    urls?.background &&
+    !styleRuleIs(
+      "ft-bg-style",
+      BACKGROUND_SELECTOR,
+      backgroundImageCss(urls),
+    ) &&
+    !hasBackground(background, urls.background)
+  )
     return true;
   if (urls?.backgroundColor && background) {
     const style = document.getElementById("ft-bg-style");
@@ -223,15 +329,18 @@ const needsReapply = (urls: VisualUrls) => {
     )
       return true;
   }
-  {
-    const badgeCss = badgeColorCss(urls.badgeBg);
-    const style = document.getElementById("ft-badge-color-style");
-    if (
-      (style?.textContent || "") !==
-      (badgeCss ? `${TITLE_BADGE_SELECTOR} { ${badgeCss} }` : "")
+  // applyImgs() always writes this rule, empty braces included, so that is
+  // what we have to compare against. Expecting an empty <style> when no badge
+  // colour is set (the default!) made needsReapply() return true on every
+  // single pass, and applyImgs re-ran for nothing on every mutation burst.
+  if (
+    !styleRuleIs(
+      "ft-badge-color-style",
+      TITLE_BADGE_SELECTOR,
+      badgeColorCss(urls.badgeBg),
     )
-      return true;
-  }
+  )
+    return true;
   return false;
 };
 
@@ -425,7 +534,10 @@ export const applyImgs = (rawUrls: VisualUrls | null) => {
       const match = inlineStyle.match(/url\((['"]?)(.*?)\1\)/);
       if (match) originalAvatarUrl = match[2];
     }
-    if (!originalAvatarUrl) {
+    // Once our own url is the inline background, the computed value can only
+    // be that same url: probing it would force a style recalculation to learn
+    // nothing. (The inline style always wins over the cascade.)
+    if (!originalAvatarUrl && !inlineStyle.includes(urls.avatar)) {
       const computedBg = window.getComputedStyle(avatar).backgroundImage;
       if (
         computedBg &&
@@ -471,12 +583,7 @@ export const applyImgs = (rawUrls: VisualUrls | null) => {
   }
 
   if (urls.banner) {
-    const bannerMode = urls.bannerMode || "fill";
-    setStyleForSelector(
-      "ft-banner-style",
-      BANNER_SELECTOR,
-      `background-image: url("${urls.banner}") !important; ${modeCss[bannerMode] || modeCss.fill}`,
-    );
+    setStyleForSelector("ft-banner-style", BANNER_SELECTOR, bannerImageCss(urls));
   } else if (urls.bannerColor) {
     setStyleForSelector(
       "ft-banner-style",
@@ -488,11 +595,10 @@ export const applyImgs = (rawUrls: VisualUrls | null) => {
   }
 
   if (urls.background) {
-    const bgMode = urls.backgroundMode || "fill";
     setStyleForSelector(
       "ft-bg-style",
       BACKGROUND_SELECTOR,
-      `background-image: url("${urls.background}") !important; ${modeCss[bgMode] || modeCss.fill}`,
+      backgroundImageCss(urls),
     );
   } else if (urls.backgroundColor) {
     setStyleForSelector(
@@ -597,7 +703,7 @@ export const updateVisuals = async () => {
 
   let avatarEl = document.querySelector(AVATAR_SELECTOR) as HTMLElement;
 
-  let myLogin = await getCloudLogin();
+  let myLogin = await readOwnLogin();
   if (!myLogin) myLogin = "me";
   ownLogin = myLogin;
 
@@ -617,12 +723,13 @@ export const updateVisuals = async () => {
   }
 
   if (!avatarEl) {
-    let att = 0;
-    while (!avatarEl && att < 30) {
-      await new Promise((r) => requestAnimationFrame(r));
-      avatarEl = document.querySelector(AVATAR_SELECTOR) as HTMLElement;
-      att++;
-    }
+    // ~30 frames, but observed instead of polled: the element is picked up on
+    // the microtask that follows its insertion (so the avatar stops flashing
+    // sooner) and a page without one costs a single observer instead of 30
+    // querySelectors spread over half a second of held-up pass.
+    avatarEl = (await waitForElement<HTMLElement>(AVATAR_SELECTOR, {
+      timeoutMs: AVATAR_WAIT_MS,
+    })) as HTMLElement;
     if (!avatarEl) return;
   }
 
@@ -719,6 +826,15 @@ export const updateVisuals = async () => {
         lastAppliedKey = getVisualKey(visualCache);
       }
     } else {
+      // Negative cache: a user without cloud visuals used to be re-fetched on
+      // every mutation pass. Checked before the storage read (it used to sit
+      // after it), those passes now cost nothing at all: visualCache stays
+      // null for such a user, so every pass came back here.
+      const knownEmptyAt = noVisualsCache.get(targetLogin);
+      if (knownEmptyAt && Date.now() - knownEmptyAt < NO_VISUALS_TTL_MS) {
+        avatarEl.style.setProperty("opacity", "1", "important");
+        return;
+      }
       const cached = await getCachedVisuals(targetLogin);
       if (
         cached &&
@@ -740,13 +856,6 @@ export const updateVisuals = async () => {
         if (visualCache.avatar) attachToggleListener(avatarEl);
         revalidateVisuals(targetLogin, cached);
       } else {
-        // Negative cache: a user without cloud visuals used to be re-fetched
-        // on every mutation pass of the profile page.
-        const knownEmptyAt = noVisualsCache.get(targetLogin);
-        if (knownEmptyAt && Date.now() - knownEmptyAt < NO_VISUALS_TTL_MS) {
-          avatarEl.style.setProperty("opacity", "1", "important");
-          return;
-        }
         isFetching = true;
         const fetchForLogin = targetLogin;
         try {
@@ -787,24 +896,24 @@ export const updateVisuals = async () => {
 
 const NAV_AVATAR_SELECTOR =
   'img.aspect-square.h-full.w-full[src*="cdn.intra.42.fr"]';
+/** Same budget as the old 20 x 250 ms poll. */
+const NAV_AVATAR_WAIT_MS = 5000;
 let _navAvatarDone = false;
 
 export async function updateNavAvatar(): Promise<void> {
   if (_navAvatarDone) return;
   const customUrl = await getConfig("PROFILE_IMAGE_URL");
 
-  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  for (let i = 0; i < 20; i++) {
-    const img = document.querySelector<HTMLImageElement>(NAV_AVATAR_SELECTOR);
-    if (img && !img.dataset.ftNavAvatar) {
-      img.style.objectFit = "cover";
-      if (customUrl) {
-        img.src = customUrl;
-      }
-      img.dataset.ftNavAvatar = "1";
-      _navAvatarDone = true;
-      return;
-    }
-    await wait(250);
+  // Observed, not polled: 20 timer wake-ups and 20 document-wide
+  // querySelectors on every Intra page became one observer that fires once.
+  const img = await waitForElement<HTMLImageElement>(NAV_AVATAR_SELECTOR, {
+    timeoutMs: NAV_AVATAR_WAIT_MS,
+  });
+  if (!img || img.dataset.ftNavAvatar) return;
+  img.style.objectFit = "cover";
+  if (customUrl) {
+    img.src = customUrl;
   }
+  img.dataset.ftNavAvatar = "1";
+  _navAvatarDone = true;
 }

@@ -1,4 +1,4 @@
-import { sharedCSS } from "../assets/shared-styles.ts";
+import { adoptSharedStyles } from "../assets/shared-styles.ts";
 
 export interface CountdownOptions {
   digits?: number;
@@ -16,9 +16,10 @@ export function createCountdown(
 ): CountdownInstance {
   const host = document.createElement("span");
   const root = host.attachShadow({ mode: "open" });
-  const style = document.createElement("style");
-  style.textContent = sharedCSS;
-  root.appendChild(style);
+  // This root has no rules of its own, so it can take the shared sheet by
+  // adoption: parsed once for the page instead of ~300 KB of CSS re-parsed
+  // for every countdown (the freeze card and the roulette card each make one).
+  adoptSharedStyles(root);
 
   const countdownEl = document.createElement("span");
   countdownEl.className = "countdown font-mono";

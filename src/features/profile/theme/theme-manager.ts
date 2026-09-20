@@ -1,8 +1,4 @@
 import { getConfig } from "../../../config.ts";
-import themev3 from "./theme-dark-v3.css?inline";
-import themev2 from "./theme-dark-v2.css?inline";
-import themeLightV3 from "./theme-light-default-v3.css?inline";
-import themeLightV3Overrides from "./theme-light-v3.css?inline";
 import themesJson from "./themes.json";
 
 type ThemeModeVars = {
@@ -33,33 +29,125 @@ function toKebab(str: string): string {
   return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
+const STYLESHEET_ID = "better-intra-theme-stylesheet";
+const PRESET_ID = "better-intra-theme-preset";
+
+/**
+ * The theme sheets ship as files in the extension package instead of as JS
+ * strings inlined in content.js (theme-dark-v2.css alone is 55 KB that
+ * profile-v3 never needs). Each <link> is created the first time its sheet is
+ * actually wanted and then kept for good, switched on and off through `media`,
+ * so changing theme costs no refetch and stays instant.
+ *
+ * Keep in sync with THEME_CSS_FILES in vite.config.ts and with
+ * web_accessible_resources in both manifests.
+ */
+const THEME_SHEETS = {
+  darkV2: "theme-dark-v2.css",
+  darkV3: "theme-dark-v3.css",
+  lightV3: "theme-light-default-v3.css",
+  lightPresetOverrides: "theme-light-v3.css",
+} as const;
+
+type ThemeSheet = keyof typeof THEME_SHEETS;
+/** The three that are mutually exclusive; the fourth rides on top of a preset. */
+type PageThemeSheet = Exclude<ThemeSheet, "lightPresetOverrides">;
+
+const themeLinks = new Map<ThemeSheet, HTMLLinkElement>();
+
+function themeSheetURL(name: ThemeSheet): string | null {
+  try {
+    if (typeof chrome === "undefined" || !chrome.runtime?.getURL) return null;
+    return chrome.runtime.getURL(THEME_SHEETS[name]);
+  } catch {
+    // Context invalidated by a reload/update: leave the page as it is.
+    return null;
+  }
+}
+
+function themeLink(name: ThemeSheet): HTMLLinkElement | null {
+  const existing = themeLinks.get(name);
+  if (existing) return existing;
+  const url = themeSheetURL(name);
+  if (!url) return null;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = url;
+  link.dataset.betterIntraTheme = name;
+  (document.head || document.documentElement).appendChild(link);
+  themeLinks.set(name, link);
+  return link;
+}
+
+/** `media="not all"` keeps a sheet loaded but inert, so toggling it is instant. */
+function setSheetEnabled(link: HTMLLinkElement, on: boolean): void {
+  link.media = on ? "all" : "not all";
+}
+
+/**
+ * Enable exactly one page-level theme sheet, or none. A sheet that was never
+ * asked for is never created, which is what keeps the v2 sheet off profile-v3.
+ */
+function usePageThemeSheet(name: PageThemeSheet | null): void {
+  for (const [key, link] of themeLinks) {
+    if (key === "lightPresetOverrides") continue;
+    setSheetEnabled(link, key === name);
+    if (key !== name && link.id === STYLESHEET_ID) link.removeAttribute("id");
+  }
+  if (!name) return;
+  const link = themeLink(name);
+  if (!link) return;
+  setSheetEnabled(link, true);
+  link.id = STYLESHEET_ID;
+}
+
+/**
+ * The light-preset overrides used to be appended after the generated variables
+ * inside the same <style>, so they must stay after it in the document to keep
+ * winning the same ties.
+ */
+function useLightPresetOverrides(on: boolean, after: HTMLElement): void {
+  if (!on) {
+    const existing = themeLinks.get("lightPresetOverrides");
+    if (existing) setSheetEnabled(existing, false);
+    return;
+  }
+  const link = themeLink("lightPresetOverrides");
+  if (!link) return;
+  if (link.previousElementSibling !== after) after.insertAdjacentElement("afterend", link);
+  setSheetEnabled(link, true);
+}
+
 async function applyThemePreset() {
   const presetKey = await getConfig("PROFILE_THEME_PRESET");
   const isDark = document.documentElement.classList.contains("dark");
 
   let styleEl = document.getElementById(
-    "better-intra-theme-preset",
+    PRESET_ID,
   ) as HTMLStyleElement | null;
 
   if (!styleEl) {
     styleEl = document.createElement("style");
-    styleEl.id = "better-intra-theme-preset";
+    styleEl.id = PRESET_ID;
     (document.head || document.documentElement).appendChild(styleEl);
   }
 
   if (!presetKey || presetKey === "dark" || presetKey === "light") {
     styleEl.textContent = "";
+    useLightPresetOverrides(false, styleEl);
     return;
   }
 
   const preset = THEMES[presetKey];
   if (!preset) {
     styleEl.textContent = "";
+    useLightPresetOverrides(false, styleEl);
     return;
   }
 
   const { primary, primaryForeground, ring } = preset;
   let content = "";
+  let wantsLightOverrides = false;
 
   if (isDark && preset.dark) {
     const vars = [
@@ -81,10 +169,12 @@ async function applyThemePreset() {
     for (const [key, val] of Object.entries(preset.light)) {
       vars.push(`--${toKebab(key)}: ${val}`);
     }
-    content = `html:not(.dark) {\n    ${vars.join(";\n    ")};\n  }\n${themeLightV3Overrides}`;
+    content = `html:not(.dark) {\n    ${vars.join(";\n    ")};\n  }`;
+    wantsLightOverrides = true;
   }
 
   styleEl.textContent = content;
+  useLightPresetOverrides(wantsLightOverrides, styleEl);
 }
 
 function applyTheme(theme: "dark" | "light") {
@@ -92,21 +182,10 @@ function applyTheme(theme: "dark" | "light") {
   const isV3 = window.location.hostname === "profile-v3.intra.42.fr";
 
   if (!isV3) {
-    let styleEl = document.getElementById("better-intra-theme-stylesheet");
-    let presetEl = document.getElementById("better-intra-theme-preset");
+    const presetEl = document.getElementById(PRESET_ID);
     if (presetEl) presetEl.remove();
-    if (isDark) {
-      if (!styleEl) {
-        styleEl = document.createElement("style");
-        styleEl.id = "better-intra-theme-stylesheet";
-        (document.head || document.documentElement).appendChild(styleEl);
-      }
-      styleEl.textContent = themev2;
-      document.documentElement.classList.add("dark");
-    } else {
-      if (styleEl) styleEl.remove();
-      document.documentElement.classList.remove("dark");
-    }
+    usePageThemeSheet(isDark ? "darkV2" : null);
+    document.documentElement.classList.toggle("dark", isDark);
     document.documentElement.removeAttribute("data-theme");
     if (document.body) document.body.classList.toggle("dark", isDark);
     sessionStorage.setItem("intra-theme", theme);
@@ -119,31 +198,7 @@ function applyTheme(theme: "dark" | "light") {
     document.body.classList.toggle("dark", isDark);
   }
 
-  let styleEl = document.getElementById("better-intra-theme-stylesheet");
-
-  if (isDark) {
-    const css = isV3 ? themev3 : themev2;
-    if (styleEl) {
-      styleEl.textContent = css;
-    } else {
-      styleEl = document.createElement("style");
-      styleEl.id = "better-intra-theme-stylesheet";
-      styleEl.textContent = css;
-      (document.head || document.documentElement).appendChild(styleEl);
-    }
-  } else if (isV3) {
-    const css = themeLightV3;
-    if (styleEl) {
-      styleEl.textContent = css;
-    } else {
-      styleEl = document.createElement("style");
-      styleEl.id = "better-intra-theme-stylesheet";
-      styleEl.textContent = css;
-      (document.head || document.documentElement).appendChild(styleEl);
-    }
-  } else if (styleEl) {
-    styleEl.remove();
-  }
+  usePageThemeSheet(isDark ? "darkV3" : "lightV3");
 
   void applyThemePreset();
 

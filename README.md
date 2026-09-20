@@ -138,6 +138,17 @@ A panel in the bottom-right corner: add friends by login, see avatar, level, wal
 
 From the extension popup: connect with 42 (Intra session, no password), push/pull settings, auto-push, disconnect, wipe all cloud data.
 
+### ⚡ Lighten the Intra
+
+Four switches in the Advanced tab that make the **Intra page itself** cheaper, all on by default:
+
+* **Skip off-screen blocks** — the browser stops laying out and painting the rows you have scrolled past in the long cards (projects, achievements, evaluations, logtime).
+* **Load images when needed** — images the page mounts after the first paint are fetched lazily and decoded off the main thread.
+* **Pause when the tab is hidden** — the page's animations and transitions stop while you are in another tab.
+* **Connect early to the image server** — saves the connection setup on the first avatar, usually 100 to 300 ms.
+
+The extension is also lighter than it used to be: since 1.10.0 its script went from 969 KB to 607 KB and its popup from 335 KB to 34 KB, the Tailwind stylesheet is parsed once per page instead of once per widget (54 ms down to 3 ms of style work), and about 260 timer wake-ups per page load were replaced by observers. Numbers and method in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+
 ### ⚙️ Settings hub
 
 The gear in the Intra sidebar opens the hub: Profile, Extras, Clusters, Logtime, Shortcuts, Customize, Advanced, About. Feature toggles, per-feature reset, backup and restore (JSON), auto-detected campus, theme toggle, cloud status.

@@ -9,7 +9,7 @@ import {
 } from "./constants";
 import { fmtHours, hexToRgba, safeLabelsColor } from "./utils";
 import { LogtimeConfig, CalendarEvent, EventsByDate } from "./logtime";
-import { sharedCSS } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../assets/shared-styles.ts";
 import { escapeHtml } from "../../utils/tooltip.ts";
 import LOGTIME_CSS from "./logtime.css?inline";
 import VIEW_NORMAL_SVG from "../../assets/svg/view-normal.svg?raw";
@@ -484,8 +484,7 @@ export function renderContainer(
 
   const adjustedLabelsColor = safeLabelsColor(config.labels_color, theme);
 
-  return html`<style>
-      ${sharedCSS}
+  return html`${sharedStylesLink()}<style>
       ${LOGTIME_CSS}
       :host {
         --intra-font: ${INTRA_FONT};
