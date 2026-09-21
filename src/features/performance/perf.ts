@@ -72,31 +72,31 @@ export type PerfTarget = {
  */
 export const PERF_TARGETS: readonly PerfTarget[] = [
   {
-    // src/features/profile/projects-sort.ts extractItems()
+    // src/features/profile/cards/projects-sort.ts extractItems()
     selector: ".flex.flex-row.justify-between.hover\\:bg-gray-300.p-2",
     size: 32,
     why: "Intra's own Marks/Projects rows: one per finished project, 60+ on an old account.",
   },
   {
-    // src/features/profile/marks.ts injectFinishedProjects()
+    // src/features/profile/cards/marks.ts injectFinishedProjects()
     selector: "#ft-marks-injected .flex.flex-row.justify-between.hover\\:bg-gray-300",
     size: 26,
     why: "Our finished-projects list: the longest list on the dashboard.",
   },
   {
-    // src/features/profile/achievements.ts renderList() (h-24 tiles)
+    // src/features/profile/cards/achievements.ts renderList() (h-24 tiles)
     selector: "#ft-achievements-injected .grid > div",
     size: 96,
     why: "Our achievement tiles; they carry an explicit h-24 so the guess cannot be wrong.",
   },
   {
-    // src/features/profile/achievements.ts findCard() + customize/cards.ts tagging
+    // src/features/profile/cards/achievements.ts findCard() + customize/cards.ts tagging
     selector: '[data-ft-card="achievements"] .grid > div',
     size: 96,
     why: "The Intra's own achievement grid, addressed through our data-ft-card tag.",
   },
   {
-    // src/features/profile/evaluations.ts sortRows()
+    // src/features/profile/cards/evaluations.ts sortRows()
     selector: '[data-ft-card="evaluations"] .flex.justify-between.w-full.items-center',
     size: 40,
     why: "Pending-evaluation rows; the exact selector evaluations.ts sorts.",
@@ -126,8 +126,8 @@ const EAGER_MARGIN = 200;
 
 /**
  * Our own widgets, by the ids they already use. Their images are ours to
- * schedule (the friends widget fetches avatars on purpose, the students dialog
- * windows its own rows), so the lazy pass never touches them.
+ * schedule (the friends widget and the cluster map fetch avatars on purpose),
+ * so the lazy pass never touches them.
  */
 const OUR_WIDGET_SELECTOR = [
   '[id^="ft-"]',
@@ -138,7 +138,6 @@ const OUR_WIDGET_SELECTOR = [
   '[id$="-modal-host"]',
   "#cluster-li-container",
   "#cluster-map-dialog",
-  "#students-dialog",
   "#hub-dialog",
   "#update-banner",
   "#permission-banner",

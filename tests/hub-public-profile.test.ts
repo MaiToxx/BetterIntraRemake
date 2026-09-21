@@ -263,7 +263,7 @@ describe("public profile section: dependencies", () => {
 
   it("a parent is a toggle, or a select whose off value the hub knows", () => {
     // The hub treats a select as off for "", "none" and "default" only
-    // (parentIsOn and the hidden-at-open loop of hubSettings.ui.ts): a
+    // (parentIsOn and the hidden-at-open loop of hub/dependents.ts): a
     // parent whose default is anything else would show its dependants on a
     // fresh install, before the student chose anything.
     for (const def of sectionDefs) {

@@ -1,4 +1,8 @@
-const INTRAPY_BASE = "https://intrapy.intra.42.fr";
+/**
+ * The Intra session token the v3 pages send to intrapy.intra.42.fr. hook.js
+ * (running in the page) relays it as a DOM event and caches it; this module
+ * is how content-script features obtain it without ever asking for a password.
+ */
 const TOKEN_STORAGE_KEY = "ft_intrapy_token";
 const TOKEN_EVENT = "42_INTRAPY_TOKEN";
 
@@ -91,28 +95,4 @@ export function waitForIntrapyToken(
       resolve(null);
     }, timeout);
   });
-}
-
-export async function isPisciner(login: string): Promise<boolean> {
-  try {
-    const token = await waitForIntrapyToken();
-    if (!token) return false;
-
-    const res = await fetch(`${INTRAPY_BASE}/api/v1/users/${login}/cursus`, {
-      headers: { Authorization: token },
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as Array<{
-      grade?: string;
-      slug?: string;
-    }>;
-    if (!Array.isArray(data)) return false;
-
-    const hasPiscine = data.some((c) => c.grade === "Pisciner");
-    if (!hasPiscine) return false;
-    const hasCommonCore = data.some((c) => c.slug === "42cursus");
-    return !hasCommonCore;
-  } catch {
-    return false;
-  }
 }

@@ -21,7 +21,14 @@
  * puts on an element: collapse, fieldset, kbd, radio, stat, status, steps and
  * tooltip (the widgets use their own data-tip tooltips, not daisyUI's).
  *
- * `root` is left at its default on purpose, see the aqua block below.
+ * `root` is left at its default on purpose. Up to v1.10.0 it listed the ids of
+ * our widget roots, and daisyUI pastes `root` in front of EVERY theme block:
+ * each element carrying one of those ids got the variables of the last block
+ * (aqua) whatever its data-theme said, because an id outranks [data-theme].
+ * That is why the popup (#popup-root) and the events filter
+ * (#events-shadow-wrapper) ignored the selected theme. Without it every widget
+ * root follows its own data-theme, and each theme is one rule;
+ * tests/shared-styles.test.ts keeps it that way.
  */
 @plugin "daisyui" {
   themes:
@@ -29,39 +36,12 @@
     "corporate", "retro", "garden", "lofi", "pastel", "fantasy", "wireframe",
     "cmyk", "autumn", "acid", "lemonade", "winter", "nord", "caramellatte",
     "silk", "synthwave", "forest", "halloween", "dracula", "night", "sunset",
-    "luxury", "cyberpunk", "dim", "black", "coffee";
+    "luxury", "cyberpunk", "dim", "black", "coffee", "aqua";
   include:
     "alert", "avatar", "badge", "button", "card", "countdown", "divider",
     "dropdown", "indicator", "input", "join", "label", "list", "loading",
     "menu", "modal", "progress", "select", "skeleton", "swap", "tab",
     "textarea", "toggle";
-}
-
-/*
- * Up to v1.10.0 the root ids below were daisyUI's `root` option. daisyUI pastes
- * `root` in front of `:has(input.theme-controller...)` for EVERY theme, so each
- * of the 33 built-in theme blocks came out as "#id1, ..., #id17, #id18:has(...),
- * [data-theme=x]" and was emitted twice (the :has part cannot share a rule).
- * Net effect in the browser: every element carrying one of these ids gets the
- * variables of the LAST such block, aqua, whatever its data-theme says (an id
- * beats [data-theme]). That is what #popup-root and #events-shadow-wrapper
- * render with today.
- *
- * This block reproduces exactly that cascade in one rule instead of 33 (all
- * built-in themes set the same properties, so only the last one ever showed),
- * which is ~46 KB lighter. Deleting it would make those two elements follow
- * their own data-theme: a visible change, to be decided on its own.
- */
-@plugin "daisyui/theme" {
-  name: "aqua";
-  root:
-    "#hub-shadow-wrapper", "#events-shadow-wrapper", "#profile-shadow-wrapper",
-    "#profile-badges-shadow", "#cluster-shadow-host",
-    "#shortcuts-shadow-wrapper", "#friends-shadow-wrapper",
-    "#ft-friend-btn-shadow", "#logtime-shadow-wrapper", "#popup-root",
-    "#project-badges-shadow", "#cluster-map-dialog", "#profile-modal-host",
-    "#better-intra-sort-host", "#ft-tracker-card", "#ft-transcript-dialog",
-    "#ft-star-total-host", "#ft-subject-update-host";
 }
 
 #hub-shadow-wrapper {

@@ -169,7 +169,6 @@ describe("lazifyImages", () => {
       "friends-widget-host",
       "logtime-shadow-wrapper",
       "cluster-shadow-host",
-      "students-dialog",
       "better-intra-sort-host",
     ];
     const ours: HTMLImageElement[] = [];

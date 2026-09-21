@@ -9,11 +9,19 @@ import {
 import { sanitizeAndParseSeats, getSvgTitle, applyMarkers } from "./seats";
 import { applyExitSigns } from "./exit-markers";
 import { renderActiveList } from "./render";
-import { loadOccupancy, reapplyOccupancy } from "./occupancy";
+import {
+  loadOccupancy,
+  reapplyOccupancy,
+  registerClusterLoader,
+} from "./occupancy";
 import { updateActiveSortControls } from "./active-sort";
 import { clearSeatGlow } from "./glow";
 import { rebuildHeader, updateCampusTime, updateDefaultSelect } from "./header";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
+
+// occupancy.ts switches to another tab when the Active one disappears: it
+// gets loadCluster() from here instead of importing it (no import cycle).
+registerClusterLoader(loadCluster);
 
 export async function buildClusters(campusId: string): Promise<ClusterInfo[]> {
   let repoClusters: { id: string; name: string }[] = [];

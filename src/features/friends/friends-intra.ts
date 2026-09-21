@@ -10,7 +10,7 @@
  *   GET /api/v1/users/{login}/cursus   level and grade (main cursus first)
  * Custom avatars still come from the worker's public visuals endpoint.
  */
-import type { FriendData } from "./friends.ts";
+import type { FriendData } from "./friends-types.ts";
 import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import { hashLogin } from "../../core/crypto.ts";

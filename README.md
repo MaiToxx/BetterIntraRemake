@@ -128,7 +128,7 @@ The **Calendar** tab of the hub generates a private `.ics` link (with a QR code 
 ### 🖥️ Clusters
 
 * **Chair direction markers** on the cluster map, a **cluster picker**, a **default cluster**, open profiles in a new tab.
-* **Live cluster map** (from the profile quick links): seat occupancy with avatars, taken/total badges, Wi-Fi tab, zoom, room tabs, campus selector and clock. Mulhouse cluster data is in [campuses/mulhouse.json](campuses/mulhouse.json); other campuses are available too.
+* **Live cluster map** (from the **Clusters** button in the Intra sidebar or the profile quick links): seat occupancy with avatars, taken/total badges, Wi-Fi tab, zoom, room tabs, campus selector and clock. The sidebar button shows up on every campus as soon as the extension has detected yours (it used to appear on the Belgium campus only). Mulhouse cluster data is in [campuses/mulhouse.json](campuses/mulhouse.json); other campuses are available too.
 
 ### 🔗 Shortcuts
 

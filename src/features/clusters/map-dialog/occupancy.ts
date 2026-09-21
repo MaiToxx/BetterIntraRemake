@@ -3,6 +3,7 @@ import {
   POLL_INTERVAL,
   keyOf,
   clusterLabel,
+  type ClusterInfo,
   type DialogState,
 } from "./context";
 import {
@@ -16,7 +17,20 @@ import { applyActivePresence } from "./helpers";
 import { applySeatGlow } from "./glow";
 import { rebuildHeader } from "./header";
 import { updateTabsOverflow } from "./tabs";
-import { loadCluster } from "./map-load";
+
+type ClusterLoader = (state: DialogState, cluster: ClusterInfo) => void;
+
+/**
+ * Opens another cluster tab, for when the Active tab disappears under the
+ * user. map-load.ts hands its loadCluster() over at start-up: it owns loading
+ * a cluster and already imports this module to paint the occupancy, so
+ * importing it back from here made the two modules a value import cycle.
+ */
+let switchToCluster: ClusterLoader | null = null;
+
+export function registerClusterLoader(loader: ClusterLoader): void {
+  switchToCluster = loader;
+}
 
 async function fetchOccupancy(
   campusId: string,
@@ -84,7 +98,7 @@ export function applyOccupancy(
       const next = state.clusters[0];
       if (next) {
         state.activeCluster = next;
-        loadCluster(state, next);
+        switchToCluster?.(state, next);
       }
     }
   }

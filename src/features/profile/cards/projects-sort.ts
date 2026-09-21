@@ -236,13 +236,7 @@ export async function initProjectsSort() {
 
   wrap.appendChild(join);
   root.appendChild(wrap);
-  const starBadge = titleRow.querySelector<HTMLElement>("#ft-star-total-host");
-  if (starBadge) {
-    starBadge.style.marginLeft = "auto";
-    titleRow.insertBefore(host, starBadge.nextSibling);
-  } else {
-    titleRow.appendChild(host);
-  }
+  titleRow.appendChild(host);
 
   renderButtons();
   applySort();

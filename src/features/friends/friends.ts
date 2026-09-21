@@ -3,24 +3,10 @@ import { hashLogin } from "../account/account.ts";
 
 import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
 import { fetchFriendsDataViaIntra } from "./friends-intra.ts";
-export interface FriendData {
-  login: string;
-  displayName: string;
-  avatar: string | null;
-  customAvatar: string | null;
-  avatarBg?: string;
-  avatarPosX?: number;
-  avatarPosY?: number;
-  avatarScale?: number;
-  level: number;
-  grade: string | null;
-  isOnline: boolean;
-  lastSeen: string | null;
-  poolLabel: string | null;
-  wallet: number;
-  correctionPoints: number;
-  lastOnlineTimestamp: number | null;
-}
+import type { FriendData } from "./friends-types.ts";
+
+// Re-exported so importers of friends.ts keep finding the type here.
+export type { FriendData };
 
 export async function getFriendsList(): Promise<string[]> {
   const raw = await getConfig("FRIENDS_LIST");

@@ -37,14 +37,14 @@ describe("sanitizeBackup", () => {
     const out = sanitizeBackup({
       CLOUD_TOKEN: "attacker-token",
       CLOUD_LOGIN: "attacker",
-      DISCORD_ID: "123",
+      LOGTIME_EMOJI: "🍕",
       PENDING_SETTINGS_RESTORE: true,
     });
     expect(out).not.toHaveProperty("CLOUD_TOKEN");
     expect(out).not.toHaveProperty("CLOUD_LOGIN");
     expect(out).not.toHaveProperty("PENDING_SETTINGS_RESTORE");
-    // DISCORD_ID is a regular string setting and may be restored
-    expect(out.DISCORD_ID).toBe("123");
+    // an ordinary string setting next to them is still restored
+    expect(out.LOGTIME_EMOJI).toBe("🍕");
   });
 
   it("drops values whose type does not match the default", () => {

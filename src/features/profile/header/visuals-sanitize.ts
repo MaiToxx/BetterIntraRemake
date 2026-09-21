@@ -1,4 +1,4 @@
-import type { VisualUrls } from "./visuals.ts";
+import type { VisualUrls } from "./visuals-types.ts";
 import { sanitizeCssColor, sanitizeCssUrl, sanitizeHexColor } from "../../../core/security/css-sanitize.ts";
 import { sanitizePublicLook } from "../../customize/public-look.ts";
 import { pickRawExtras } from "../extras/extras-apply.ts";

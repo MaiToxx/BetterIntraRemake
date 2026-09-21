@@ -8,7 +8,7 @@ import {
   INTRA_FONT,
 } from "./constants";
 import { fmtHours, hexToRgba, safeLabelsColor } from "./utils";
-import { LogtimeConfig, CalendarEvent, EventsByDate } from "./logtime";
+import type { LogtimeConfig, CalendarEvent, EventsByDate } from "./types.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { escapeHtml } from "../../core/dom/tooltip.ts";
 import LOGTIME_CSS from "./logtime.css?inline";

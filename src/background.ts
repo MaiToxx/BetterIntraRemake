@@ -1,4 +1,9 @@
-import { hashLogin } from "./core/crypto";
+/**
+ * The extension's background service worker. It owns the three jobs a content
+ * script cannot do itself: the periodic GitHub release check (badge + stored
+ * UpdateInfo), fetching Intra pages cross-origin with the user's cookies, and
+ * reloading the open Intra tabs once a new cloud session is stored.
+ */
 import {
   UPDATE_KEY,
   isNewerVersion,
@@ -6,7 +11,6 @@ import {
   type UpdateInfo,
 } from "./core/update-check";
 
-import { WORKER_URL } from "./core/worker";
 // ---------------------------------------------------------------------------
 // Update check (GitHub Releases of __REPO_URL__)
 // ---------------------------------------------------------------------------
@@ -60,8 +64,6 @@ async function runUpdateCheck(): Promise<void> {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
-  syncDiscord();
-  syncDiscordQuiet();
   // a fresh install/update is by definition up to date: clear any stale flag
   void chrome.storage.local.remove(UPDATE_KEY);
   void chrome.action.setBadgeText({ text: "" });
@@ -80,131 +82,12 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.storage.onChanged.addListener((changes) => {
-  if ("DISCORD_ENABLED" in changes || "DISCORD_ID" in changes) {
-    syncDiscord();
-  }
-  if ("DISCORD_ID" in changes && !changes.DISCORD_ID.newValue) {
-    syncRegistration();
-  }
-  if ("DISCORD_ENABLED" in changes && !changes.DISCORD_ENABLED.newValue) {
-    syncRegistration();
-  }
-  if (
-    "DISCORD_QUIET_ENABLED" in changes ||
-    "DISCORD_QUIET_START" in changes ||
-    "DISCORD_QUIET_END" in changes
-  ) {
-    syncDiscordQuiet();
-  }
   if ("CLOUD_TOKEN" in changes && changes.CLOUD_TOKEN.newValue) {
     // Give the content script that just stored the session time to answer
     // the popup (FT_INTRA_LOGIN) before its tab is torn down by the reload.
     setTimeout(() => void reloadIntraTabs(), RELOAD_AFTER_LOGIN_DELAY_MS);
   }
 });
-
-async function syncRegistration() {
-  const store = await chrome.storage.local.get([
-    "CLOUD_TOKEN",
-    "CLOUD_LOGIN",
-    "DISCORD_ENABLED",
-    "DISCORD_ID",
-  ]);
-  const token = String(store.CLOUD_TOKEN || "");
-  const cloudLogin = String(store.CLOUD_LOGIN || "");
-  if (!token || !cloudLogin) return;
-
-  const discordEnabled = store.DISCORD_ENABLED === true;
-  const discordId = String(store.DISCORD_ID || "").trim();
-  if (discordEnabled && discordId) return;
-
-  const hashedLogin = await hashLogin(cloudLogin);
-  const url = `${WORKER_URL}/api/v1/private/evaluations?login=${encodeURIComponent(hashedLogin)}&action=unregister`;
-
-  try {
-    await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch {
-    console.warn("syncRegistration: fetch failed");
-  }
-}
-
-async function syncDiscord() {
-  const store = await chrome.storage.local.get([
-    "CLOUD_TOKEN",
-    "CLOUD_LOGIN",
-    "DISCORD_ENABLED",
-    "DISCORD_ID",
-  ]);
-  const token = String(store.CLOUD_TOKEN || "");
-  const cloudLogin = String(store.CLOUD_LOGIN || "");
-  if (!token || !cloudLogin) return;
-
-  const hashedLogin = await hashLogin(cloudLogin);
-  const enabled = store.DISCORD_ENABLED === true;
-  const discordId = String(store.DISCORD_ID || "").trim();
-
-  if (enabled && discordId) {
-    const url = `${WORKER_URL}/api/v1/private/discord/link?login=${encodeURIComponent(hashedLogin)}`;
-    try {
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ discordId }),
-      });
-    } catch {
-      console.warn("syncDiscord: link fetch failed");
-    }
-  } else if (!discordId) {
-    const url = `${WORKER_URL}/api/v1/private/discord/unlink?login=${encodeURIComponent(hashedLogin)}`;
-    try {
-      await fetch(url, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    } catch {
-      console.warn("syncDiscord: unlink fetch failed");
-    }
-  }
-}
-
-async function syncDiscordQuiet() {
-  const store = await chrome.storage.local.get([
-    "CLOUD_TOKEN",
-    "CLOUD_LOGIN",
-    "DISCORD_QUIET_ENABLED",
-    "DISCORD_QUIET_START",
-    "DISCORD_QUIET_END",
-  ]);
-  const token = String(store.CLOUD_TOKEN || "");
-  const cloudLogin = String(store.CLOUD_LOGIN || "");
-  if (!token || !cloudLogin) return;
-
-  const hashedLogin = await hashLogin(cloudLogin);
-  const url = `${WORKER_URL}/api/v1/private/discord/quiet?login=${encodeURIComponent(hashedLogin)}`;
-
-  try {
-    await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        quietEnabled: store.DISCORD_QUIET_ENABLED === true,
-        quietStart: String(store.DISCORD_QUIET_START || "22:00"),
-        quietEnd: String(store.DISCORD_QUIET_END || "08:00"),
-        timezoneOffset: new Date().getTimezoneOffset(),
-      }),
-    });
-  } catch {
-    console.warn("syncDiscordQuiet: fetch failed");
-  }
-}
 
 /**
  * Fetch an Intra page on behalf of a content script (cross-origin, with the

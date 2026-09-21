@@ -274,10 +274,11 @@ describe("sharedStylesLink", () => {
 /*
  * What goes INTO shared-styles.css. style.css trims the sheet three ways (see
  * the comments there): Tailwind scans src/ only, daisyUI builds only the
- * components src/ uses, and the 33 duplicated theme blocks became one rule per
- * theme. A lost rule is a silently unstyled widget, so these cases compile the
- * real style.css exactly like @tailwindcss/vite does (same compiler, same
- * scanner, same lightningcss pass) and check the result against src/.
+ * components src/ uses, and each theme is one [data-theme] rule instead of two
+ * copies prefixed with the widget root ids. A lost rule is a silently unstyled
+ * widget, so these cases compile the real style.css exactly like
+ * @tailwindcss/vite does (same compiler, same scanner, same lightningcss pass)
+ * and check the result against src/.
  */
 
 const REPO = path.resolve(__dirname, "..");
@@ -472,7 +473,11 @@ function neverStyled(cls: string): boolean {
   return Object.keys(NEVER_STYLED).some((c) => cls === c || cls.startsWith(`${c}-`));
 }
 
-/** Every id the v1.10.0 style.css passed to daisyUI's `root` option. */
+/**
+ * Every id the v1.10.0 style.css passed to daisyUI's `root` option. Some of
+ * them no longer exist in src/; the list is the regression guard, not a map of
+ * live widgets.
+ */
 const ROOT_IDS = [
   "hub-shadow-wrapper", "events-shadow-wrapper", "profile-shadow-wrapper",
   "profile-badges-shadow", "cluster-shadow-host", "shortcuts-shadow-wrapper",
@@ -553,36 +558,55 @@ describe("shared-styles.css contents", () => {
     for (const theme of themes) expect(selectorText).toContain(`[data-theme=${theme}]`);
   });
 
-  it("gives the widget root ids aqua's variables only, as v1.10.0 rendered them", () => {
-    // v1.10.0 listed the ids in daisyUI's `root`, which put them on all 33
-    // built-in theme blocks; the last one, aqua, is what the browser applied
-    // (an id outranks [data-theme]). style.css now emits just that rule, on
-    // purpose: see the comment there before touching it.
+  it("keeps the widget root ids out of every theme block", () => {
+    // v1.10.0 listed the ids in daisyUI's `root`, which put them in front of
+    // all 33 built-in theme blocks: an id outranks [data-theme], so every
+    // element carrying one got the last block (aqua) whatever its data-theme
+    // said. See the comment above `@plugin "daisyui"` in style.css.
     const mentionsId = (sel: string) => ROOT_IDS.some((id) => sel.includes(`#${id}`));
     // Theme blocks only: style.css also has its own #hub-shadow-wrapper rules.
-    const idRules = realRules.filter(
-      (r) => r.selectors.some(mentionsId) && /--color-base-100\s*:/.test(r.body),
-    );
-    expect(idRules.length).toBeGreaterThan(0);
-    for (const rule of idRules) {
-      const themesNamed = new Set(
-        rule.selectors.flatMap((s) => [...s.matchAll(/(?:data-theme|value)=([a-z]+)/g)].map((m) => m[1])),
-      );
-      expect([...themesNamed]).toEqual(["aqua"]);
+    const themeRules = realRules.filter((r) => /--color-base-100\s*:/.test(r.body));
+    expect(themeRules.length).toBeGreaterThan(0);
+    expect(themeRules.flatMap((r) => r.selectors).filter(mentionsId)).toEqual([]);
+  });
+
+  it("lets #popup-root and #events-shadow-wrapper follow their own data-theme", () => {
+    // The cascade for --color-base-100, resolved the way the browser does it:
+    // every theme rule whose selector matches the element competes, so exactly
+    // one may match, and it must be the rule of the element's data-theme.
+    const themeRules = realRules.filter((r) => /--color-base-100\s*:/.test(r.body));
+    const base100 = (rule: Rule) => /--color-base-100\s*:\s*([^;}]+)/.exec(rule.body)?.[1].trim();
+    const ruleOf = (theme: string) =>
+      themeRules.find((r) => r.selectors.includes(`[data-theme=${theme}]`));
+    const matches = (el: Element, sel: string) => {
+      try {
+        return el.matches(sel);
+      } catch {
+        return false; // a selector jsdom cannot parse (:root:has(...)) never names a <div>
+      }
+    };
+    // The popup sets light or dark; the events filter sets the hub preset
+    // (synthwave stands for those); aqua is the one the old cascade forced, so
+    // it must still apply when it is really the selected theme.
+    for (const id of ["popup-root", "events-shadow-wrapper"]) {
+      for (const theme of ["light", "dark", "aqua", "synthwave"]) {
+        const el = document.createElement("div");
+        el.id = id;
+        el.setAttribute("data-theme", theme);
+        document.body.appendChild(el);
+        const winners = themeRules.filter((r) => r.selectors.some((s) => matches(el, s)));
+        expect(winners, `#${id}[data-theme=${theme}]`).toEqual([ruleOf(theme)]);
+        el.remove();
+      }
     }
-    const idSelectors = idRules.flatMap((r) => r.selectors).filter(mentionsId).sort();
-    expect(idSelectors).toEqual(
-      [
-        ...ROOT_IDS.slice(0, -1).map((id) => `#${id}`),
-        "#ft-subject-update-host:has(input.theme-controller[value=aqua]:checked)",
-      ].sort(),
-    );
+    // The two values the popup switches between really differ.
+    expect(base100(ruleOf("light")!)).not.toBe(base100(ruleOf("dark")!));
   });
 
   it("never renders a daisyUI theme-controller, so its :has() selectors stay dead", () => {
-    // The trimmed theme blocks dropped 32 "#ft-subject-update-host:has(input.
-    // theme-controller...)" copies; that is only a no-op while nothing in
-    // src/ renders such an input.
+    // Every theme block still carries daisyUI's ":root:has(input.theme-
+    // controller[value=x]:checked)" selector. It is harmless only while
+    // nothing in src/ renders such an input.
     const users = [...sourceFiles(SRC), POPUP_CONFIG].filter((f) =>
       fs.readFileSync(f, "utf8").includes("theme-controller"),
     );

@@ -1,5 +1,5 @@
 import { BetterIntraConfig, getConfig, CLOUD_SYNC_KEYS } from "../../core/config.ts";
-import type { VisualUrls } from "../profile/header/visuals.ts";
+import type { VisualUrls } from "../profile/header/visuals-types.ts";
 import { hashLogin } from "../../core/crypto.ts";
 import { showConfirmDialog } from "../../core/dom/confirm-dialog.ts";
 import { markAuthFlowPending } from "./auth-callback.ts";
@@ -346,13 +346,6 @@ export async function fetchMySettings(): Promise<Partial<BetterIntraConfig> | nu
     if (!(await handleAuthResponse(response))) return null;
     const data = (await response.json()) as any;
     const settings = data.settings || {};
-    if (data.discordId) {
-      (settings as Record<string, unknown>).DISCORD_ID = data.discordId;
-    }
-    if (data.discordUsername) {
-      (settings as Record<string, unknown>).DISCORD_USERNAME =
-        data.discordUsername;
-    }
     return settings as Partial<BetterIntraConfig>;
   } catch (error) {
     console.error("[fetchMySettings] error:", error);

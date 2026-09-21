@@ -1,7 +1,7 @@
 import { html } from "lit-html";
 import { AVG_ONLY_ACTIVE_DAYS, PAST_MONTHS_OPACITY } from "./constants";
 import { fmtHours } from "./utils";
-import { LogtimeConfig } from "./logtime";
+import type { LogtimeConfig } from "./types.ts";
 
 export type MonthEntry = { ym: string; data: Record<string, number> };
 

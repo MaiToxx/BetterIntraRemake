@@ -15,7 +15,7 @@ import {
   renderYearLabel,
   renderCarouselView,
 } from "./render.ts";
-import { renderCompactMonthGroup, MonthEntry, chunkMonths } from "./compact.ts";
+import { renderCompactMonthGroup, type MonthEntry, chunkMonths } from "./compact.ts";
 import { renderHeatmapCard } from "./heatmap.ts";
 import { getLastSeenFormatted, limit } from "./utils.ts";
 import {
@@ -25,18 +25,10 @@ import {
 } from "../../core/theme/theme-manager.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { syncCalendarIcs } from "../calendar/calendar-sync.ts";
+import type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
-export interface CalendarEvent {
-  id: number;
-  name: string;
-  kind: string;
-  begin_at: string;
-  end_at: string;
-  location: string;
-  is_subscribed: boolean;
-}
-
-export type EventsByDate = Record<string, CalendarEvent[]>;
+// Declared in types.ts so the renderers need not import this module back.
+export type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
 const INTRAPY_BASE = "https://intrapy.intra.42.fr";
 import { WORKER_URL } from "../../core/worker.ts";
@@ -126,7 +118,7 @@ function mergeHistoryWithHook(
 }
 
 // One storage read for all logtime settings instead of fifteen serial ones.
-const getConfigs = async () => {
+const getConfigs = async (): Promise<LogtimeConfig> => {
   const c = await getConfigMany([
     "LOGTIME_GOAL_HOURS",
     "LOGTIME_SHOW_AVERAGE",
@@ -160,8 +152,6 @@ const getConfigs = async () => {
     calendar_view: c.LOGTIME_CALENDAR_VIEW,
   };
 };
-
-export type LogtimeConfig = Awaited<ReturnType<typeof getConfigs>>;
 
 let isLoaded = false;
 let CONFIG: LogtimeConfig;

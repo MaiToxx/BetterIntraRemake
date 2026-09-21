@@ -65,14 +65,13 @@ describe("waitForAuthFlow", () => {
   });
 
   it("resolves false after the timeout without a marker", async () => {
-    expect(await waitForAuthFlow("discord", 200, 50)).toBe(false);
+    expect(await waitForAuthFlow("cloud", 200, 50)).toBe(false);
   });
 });
 
 describe("consumeAuthFlow", () => {
   it("returns false when no flow was started (crafted callback link)", async () => {
     expect(await consumeAuthFlow("cloud")).toBe(false);
-    expect(await consumeAuthFlow("discord")).toBe(false);
   });
 
   it("returns true once after markAuthFlowPending, then false", async () => {
@@ -82,14 +81,9 @@ describe("consumeAuthFlow", () => {
     expect(await consumeAuthFlow("cloud")).toBe(false);
   });
 
-  it("does not let a cloud login authorise a discord callback", async () => {
-    await markAuthFlowPending("cloud");
-    expect(await consumeAuthFlow("discord")).toBe(false);
-  });
-
   it("rejects a marker older than the TTL", async () => {
-    await markAuthFlowPending("discord");
+    await markAuthFlowPending("cloud");
     const later = Date.now() + AUTH_FLOW_TTL_MS + 1;
-    expect(await consumeAuthFlow("discord", later)).toBe(false);
+    expect(await consumeAuthFlow("cloud", later)).toBe(false);
   });
 });
