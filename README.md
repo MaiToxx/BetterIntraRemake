@@ -151,7 +151,7 @@ Four switches in the Advanced tab that make the **Intra page itself** cheaper, a
 * **Pause when the tab is hidden** — the page's animations and transitions stop while you are in another tab.
 * **Connect early to the image server** — saves the connection setup on the first avatar, usually 100 to 300 ms.
 
-The extension is also lighter than it used to be: since 1.10.0 its script went from 969 KB to 607 KB and its popup from 335 KB to 34 KB, the Tailwind stylesheet is parsed once per page instead of once per widget (54 ms down to 3 ms of style work), and about 260 timer wake-ups per page load were replaced by observers. Numbers and method in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+The extension is also much lighter than it used to be. Its script went from 969 KB (1.9) to 557 KB, its popup from 335 KB to 38 KB, and a default-theme page parses 127 KB of CSS instead of 301 KB, once rather than once per widget. Settings are read from memory instead of one storage round trip each (about 50 reads down to 1 when a profile opens), and nothing polls in the background any more. Numbers and method in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ### ⚙️ Settings hub
 

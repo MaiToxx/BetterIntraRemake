@@ -376,7 +376,29 @@ export function initSnapshot(): void {
     if (!installWriteObserver(area)) return;
     cacheEnabled = true;
     onChanged.addListener(onStorageChanged);
+    watchPageRestores();
   } catch {
     cacheEnabled = false;
   }
+}
+
+/**
+ * A page kept in the back/forward cache (or frozen by the browser to save
+ * resources) receives no extension events: Firefox ignores listeners of an
+ * inactive content-script context and does not replay them, and Chrome does
+ * not deliver them to cached pages either. So every change made meanwhile by
+ * another tab, the popup or a later page of the same tab is missed, and a
+ * write from the restored page (adding a friend reads FRIENDS_LIST, a cloud
+ * upload reads every synced key) would put stale values back.
+ *
+ * The page cannot know what it missed, so it forgets everything and reloads
+ * on the next read: one storage round trip per restore.
+ */
+function watchPageRestores(): void {
+  if (typeof window === "undefined" || typeof window.addEventListener !== "function") return;
+  window.addEventListener("pageshow", (event) => {
+    if ((event as PageTransitionEvent).persisted) resetConfigCache();
+  });
+  // Page Lifecycle API (Chromium): a frozen page is resumed without pageshow.
+  document.addEventListener("resume", () => resetConfigCache());
 }

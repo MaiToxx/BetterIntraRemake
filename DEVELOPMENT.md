@@ -21,6 +21,10 @@ npm run dev:chrome      # watch + web-ext auto-reload in Chrome
 npm run dev:brave       # watch + web-ext auto-reload in Brave
 npm run build:firefox   # single production build for Firefox
 npm run build:chrome    # single production build for Chrome
+npm test                # vitest (jsdom)
+npm run measure         # size of every built file, and what fills the bundles
+npm run check:size      # fails when a built file is over its budget (CI)
+npm run check:cycles    # fails on a runtime import cycle in src/ (CI)
 ```
 
 Output goes to `dist-firefox/` or `dist-chrome/`.
@@ -40,10 +44,17 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
 ## Project structure
 
 - `src/main.ts` — content script entrypoint. Feature init via `featureInitializers` map.
-- `src/background.ts` — background service worker for Discord sync and tab reloading.
+- `src/background.ts` — background service worker: update check, Intra page fetches for content scripts, tab reload after login.
 - `src/popup/popup.ts` — popup entrypoint (account/cloud sync UI).
-- `src/features/` — self-contained features: `logtime/`, `clusters/`, `profile/` (visuals, marks, freeze, milestones, layout, events, theme), `shortcuts/`, `account/`, `friends/`, `hub/`, `campus/`.
-- `src/core/config.ts` — single source of truth for all `chrome.storage` keys; typed `BetterIntraConfig` interface + defaults.
+- `src/core/` — what every feature uses and no feature owns. It never imports from `src/features/`.
+  - `config.ts` — the public entry point for settings (`getConfig`, `getConfigMany`, `setConfig`, `CONFIG_DEFAULT`...), over `config/`: `schema.ts` (the `BetterIntraConfig` interface), `defaults.ts`, `keys.ts` (cloud-synced keys), `snapshot.ts` (the in-memory settings snapshot, one storage read per context; read its comment before touching it), `access.ts`.
+  - `styles/` — `style.css` (Tailwind + daisyUI, built to `shared-styles.css` and `shared-themes.css`) and `shared-styles.ts`, which hands the sheets to shadow roots. docs/PERFORMANCE.md explains the two ways to use it and why the choice matters.
+  - `theme/` — the theme manager and the Intra theme sheets.
+  - `dom/` — `dom-wait.ts` (observer-based waits and visibility-aware tickers: use them instead of `setInterval` polling), tooltips, skeletons, dialogs, countdown, `svg.ts` (bundled icons without HTML strings).
+  - `security/` — CSS value sanitisers for anything that ends up in a stylesheet.
+  - `intra/` — Intra knowledge: `intrapy.ts`, the page selectors, profile login detection.
+- `src/features/` — self-contained features: `account/`, `announcement/`, `calendar/`, `campus/`, `clusters/`, `customize/`, `eggs/`, `friends/`, `hub/` (`settings/` one data module per tab, `controls/` one renderer per setting family), `logtime/`, `performance/`, `profile/` (`header/`, `cards/`, `layout/`, `extras/`), `shortcuts/`, `subjects/`.
+- `scripts/move-modules.mjs` — move files and rewrite every relative import that points at them (`git mv` keeps history); dry run by default. `scripts/reorganise-plan.json` is the plan used for the 1.11.0 layout.
 - `manifests/` — per-browser manifest templates.
 - `better-intra-worker/` — separate Cloudflare Worker (wrangler) for cloud sync. Has its own `package.json`.
 

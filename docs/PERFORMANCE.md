@@ -5,24 +5,39 @@ the numbers from creeping up.
 
 ## What it costs today
 
-Measured on the minified v1.10.0 build (`npm run measure`, `dist-firefox`;
+Measured on the minified v1.11.0 build (`npm run measure`, `dist-firefox`;
 `dist-chrome` is the same output with a different manifest):
 
-| file                     |      raw |    gzip | loaded                              |
-| ------------------------ | -------: | ------: | ----------------------------------- |
-| `content.js`             | 606.7 KB | 179.0 KB | on every `*.intra.42.fr` page       |
-| `shared-styles.css`      | 300.7 KB |  37.4 KB | once, then served from cache        |
-| `theme-dark-v2.css`      |  62.4 KB |  10.4 KB | only on the old v2 Intra            |
-| `popup.js`               |  34.4 KB |  11.2 KB | when the popup opens                |
-| `theme-dark-v3.css`      |  12.3 KB |   2.7 KB | with the dark theme on v3           |
-| `theme-light-v3.css`     |  10.0 KB |   2.2 KB | with a light theme preset           |
-| `auth-callback.js`       |   9.8 KB |   4.3 KB | on the worker callback page         |
-| `background.js`          |   5.1 KB |   1.9 KB | once per browser session            |
-| `hook.js`                |   3.9 KB |   1.3 KB | injected into the page context      |
+| file                 |      raw |     gzip | loaded                                   |
+| -------------------- | -------: | -------: | ---------------------------------------- |
+| `content.js`         | 556.5 KB | 167.5 KB | on every `*.intra.42.fr` page            |
+| `shared-styles.css`  | 127.4 KB |  19.9 KB | once, then served from cache             |
+| `theme-dark-v2.css`  |  62.4 KB |  10.4 KB | only on the old v2 Intra                 |
+| `popup.js`           |  38.2 KB |  12.5 KB | when the popup opens                     |
+| `shared-themes.css`  |  37.5 KB |   6.1 KB | only with a preset other than light/dark |
+| `theme-dark-v3.css`  |  12.3 KB |   2.1 KB | with the dark theme on v3                |
+| `theme-light-v3.css` |  10.0 KB |   1.6 KB | with a light theme preset                |
+| `auth-callback.js`   |   9.8 KB |   4.3 KB | on the worker callback page              |
+| `hook.js`            |   3.9 KB |   1.3 KB | injected into the page context           |
+| `background.js`      |   2.7 KB |   1.3 KB | once per browser session                 |
 
 Raw is the number that matters. An extension file is read from disk, never
 downloaded, so nothing un-gzips it: what the browser pays on an Intra page load
 is parsing `content.js`.
+
+### What changed in 1.11.0
+
+| | v1.10.0 | v1.11.0 |
+| --- | ---: | ---: |
+| `content.js` | 606.7 KB | 556.5 KB |
+| Tailwind CSS parsed on a default-theme page | 300.7 KB | 127.4 KB |
+| storage reads before the profile page is usable | about 50 | 1 |
+| timer wake-ups per minute, tab visible / in background | 726 / 395 | 465 / 66 |
+
+- **Settings snapshot.** Every `getConfig` used to be one round trip to the extension process. Each context (page, popup, service worker) now loads the settings once and keeps them exact through `storage.onChanged` and a write-through on its own writes. `src/core/config/snapshot.ts` explains the design and its fallback.
+- **A leaner stylesheet.** Tailwind was scanning the whole repository (tests, docs, an agent skill file) and generating rules nothing uses; it scans `src/` only now. Eight daisyUI components nothing uses are out, and 33 duplicated theme blocks were collapsed. The 34 theme presets other than light and dark live in `shared-themes.css`, fetched only when one is picked. Checked in Chromium against the previous sheet on every theme: no computed value changed.
+- **Dead code out.** Discord reminders, the students directory, worker image upload and the Outstanding star need a 42 API application this fork does not have; they were removed after checking the worker side.
+- **No polling left.** Waits are observers with a deadline; clocks and countdowns pause while the tab is hidden.
 
 ### What changed in 1.10.0
 

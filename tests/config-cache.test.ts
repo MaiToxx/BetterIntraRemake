@@ -638,3 +638,43 @@ describe("settings snapshot: measurement", () => {
     expect(after.gets() - warm).toBe(0);
   });
 });
+
+describe("settings snapshot: pages restored from the back/forward cache", () => {
+  // A cached page gets no storage.onChanged events (Firefox ignores listeners
+  // of an inactive content-script context and does not replay them), so a
+  // change made meanwhile by another tab is simply never heard about.
+  const pageshow = (persisted: boolean) => {
+    const event = new Event("pageshow");
+    Object.defineProperty(event, "persisted", { value: persisted });
+    window.dispatchEvent(event);
+  };
+
+  it("reloads the settings after a restore instead of serving what it had", async () => {
+    const h = await boot({ initial: { FRIENDS_LIST: [] } });
+    const { getConfig } = h.cfg;
+    expect(await getConfig("FRIENDS_LIST")).toEqual([]);
+
+    // Another tab adds a friend while this page sits in the cache: storage
+    // changes, and no event reaches us.
+    h.store.set("FRIENDS_LIST", ["alice"]);
+    expect(await getConfig("FRIENDS_LIST")).toEqual([]); // the danger
+
+    pageshow(true);
+    expect(await getConfig("FRIENDS_LIST")).toEqual(["alice"]);
+    expect(h.gets()).toBe(2); // exactly one extra read for the restore
+  });
+
+  it("keeps the snapshot on a normal page show, and reloads on a Chromium resume", async () => {
+    const h = await boot({ initial: { LOGTIME_EMOJI: "🌮" } });
+    const { getConfig } = h.cfg;
+    await getConfig("LOGTIME_EMOJI");
+    pageshow(false);
+    await getConfig("LOGTIME_EMOJI");
+    expect(h.gets()).toBe(1);
+
+    h.store.set("LOGTIME_EMOJI", "🍕");
+    document.dispatchEvent(new Event("resume"));
+    expect(await getConfig("LOGTIME_EMOJI")).toBe("🍕");
+    expect(h.gets()).toBe(2);
+  });
+});
