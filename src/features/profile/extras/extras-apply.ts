@@ -14,6 +14,7 @@
  * the header).
  */
 import { getConfigMany } from "../../../core/config.ts";
+import { watchDom } from "../../../core/dom/dom-wait.ts";
 import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
 import {
   EXTRAS_KEYS,
@@ -67,7 +68,11 @@ let lastCall: LastCall | null = null;
 let ownVersion = 0;
 /** Bumped on every render request: a slower, older request must not win. */
 let requestId = 0;
-let watchTimer: ReturnType<typeof setInterval> | null = null;
+/** Stops the navigation watcher (see watchNavigation). */
+let stopNavWatch: (() => void) | null = null;
+/** The watcher should run: started by a render, ended by clearProfileExtras. */
+let navWatchWanted = false;
+let pageShowInstalled = false;
 let listenersInstalled = false;
 
 function setStyle(css: string): void {
@@ -97,21 +102,50 @@ export function clearProfileExtras(): void {
   memoKey = "";
   lastCall = null;
   removeEverything();
-  if (watchTimer) {
-    clearInterval(watchTimer);
-    watchTimer = null;
+  navWatchWanted = false;
+  if (stopNavWatch) {
+    const stop = stopNavWatch;
+    stopNavWatch = null;
+    stop();
   }
+}
+
+function checkNavigation(): void {
+  if (location.pathname !== appliedPath) clearProfileExtras();
 }
 
 /**
  * The Intra is a single-page app: leaving the profile without a reload must
  * take the particles and styles away with it.
+ *
+ * Event-driven instead of the old 1.5 s interval (40 wake-ups a minute for as
+ * long as a profile stayed open, visible or not): a route change always
+ * re-renders the React page, so the path is compared on each DOM burst, and
+ * on popstate for back/forward. Idle page, no work at all.
  */
 function watchNavigation(): void {
-  if (watchTimer) return;
-  watchTimer = setInterval(() => {
-    if (location.pathname !== appliedPath) clearProfileExtras();
-  }, 1500);
+  navWatchWanted = true;
+  if (!pageShowInstalled) {
+    pageShowInstalled = true;
+    // watchDom stops on pagehide; the interval it replaces survived the
+    // bfcache, so pick the watch up again when the page comes back.
+    addEventListener("pageshow", (e) => {
+      if (!(e as PageTransitionEvent).persisted || !navWatchWanted) return;
+      checkNavigation();
+      if (navWatchWanted) watchNavigation();
+    });
+  }
+  if (stopNavWatch) return;
+  const stopDom = watchDom(checkNavigation, {
+    timeoutMs: 0,
+    immediate: false,
+    onStop: () => {
+      removeEventListener("popstate", checkNavigation);
+      if (stopNavWatch === stopDom) stopNavWatch = null;
+    },
+  });
+  addEventListener("popstate", checkNavigation);
+  stopNavWatch = stopDom;
 }
 
 function installListeners(): void {

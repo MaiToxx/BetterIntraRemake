@@ -3,6 +3,7 @@ import { openClusterDialog } from "../../clusters/map-dialog.ts";
 import { addFriend, removeFriend, isFriend } from "../../friends/friends.ts";
 import { getCloudLogin, syncToCloud } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { appendSvg } from "../../../core/dom/svg.ts";
 import HOLY_GRAPH_SVG from "../../../assets/svg/holy-graph.svg?raw";
 import CLUSTERS_SVG from "../../../assets/svg/clusters.svg?raw";
 import USER_COG_SVG from "../../../assets/svg/user-cog.svg?raw";
@@ -45,7 +46,7 @@ export async function initFriendBadge() {
     const label = friendState ? "Remove friend" : "Add friend";
     const svg = friendState ? CHECK_SVG : PLUS_SVG;
     row.replaceChildren();
-    row.insertAdjacentHTML("beforeend", svg);
+    appendSvg(row, svg);
     const svgEl = row.querySelector("svg");
     if (svgEl) {
       svgEl.setAttribute("width", "15");
@@ -137,7 +138,7 @@ export async function initShortcutButtons() {
       a.target = "_blank";
       a.rel = "noopener noreferrer";
     }
-    a.insertAdjacentHTML("beforeend", svg);
+    appendSvg(a, svg);
     const span = document.createElement("span");
     span.textContent = label;
     a.appendChild(span);
@@ -162,7 +163,7 @@ export async function initShortcutButtons() {
         openClusterDialog();
       } catch (err) {}
     });
-    a.insertAdjacentHTML("beforeend", CLUSTERS_SVG);
+    appendSvg(a, CLUSTERS_SVG);
     const span = document.createElement("span");
     span.textContent = "Clusters";
     a.appendChild(span);

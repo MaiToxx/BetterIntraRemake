@@ -2,6 +2,7 @@ import { render, html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import FREEZE_SVG from "../../../assets/svg/freeze.svg?raw";
 import { createCountdown } from "../../../core/dom/countdown.ts";
+import { tickWhileVisible, waitForElement } from "../../../core/dom/dom-wait.ts";
 
 const INJECTED_ID = "ft-freeze-card";
 
@@ -88,30 +89,40 @@ function startCountdown(
     `font-size: 1.5rem; font-weight: 700; color: ${color};`;
   container.appendChild(countdown.el);
 
-  if (_intervalId !== null) clearInterval(_intervalId);
-  _intervalId = setInterval(() => {
-    if (new Date(endIso).getTime() - Date.now() <= 0) {
-      if (_intervalId !== null) {
-        clearInterval(_intervalId);
-        _intervalId = null;
+  stopCountdown();
+  // Computed from Date.now() on every tick, so pausing it in a background tab
+  // loses nothing: the first tick after the tab comes back is right again.
+  // It also stops by itself once the card has left the page.
+  const stop = tickWhileVisible(
+    () => {
+      if (new Date(endIso).getTime() - Date.now() <= 0) {
+        countdown.update([0, 0, 0, 0]);
+        if (_stopCountdown === stop) _stopCountdown = null;
+        return true;
       }
-      countdown.update([0, 0, 0, 0]);
-      return;
-    }
-    countdown.update(getCountdownParts(endIso));
-  }, 1000);
+      countdown.update(getCountdownParts(endIso));
+    },
+    1000,
+    { element: countdown.el },
+  );
+  _stopCountdown = stop;
 }
 
 let _running = false;
-let _intervalId: ReturnType<typeof setInterval> | null = null;
+let _stopCountdown: (() => void) | null = null;
 
+function stopCountdown(): void {
+  if (_stopCountdown !== null) {
+    _stopCountdown();
+    _stopCountdown = null;
+  }
+}
+
+// The countdown clears its own timer on pagehide (tickWhileVisible), and
+// picks it up again if the page comes back from the bfcache.
 window.addEventListener(
   "pagehide",
   () => {
-    if (_intervalId !== null) {
-      clearInterval(_intervalId);
-      _intervalId = null;
-    }
     _running = false;
   },
   { once: true },
@@ -153,31 +164,24 @@ async function writeFreezeCache(login: string, until: string | null) {
 
 function removeFreezeCard() {
   document.getElementById(INJECTED_ID)?.remove();
-  if (_intervalId !== null) {
-    clearInterval(_intervalId);
-    _intervalId = null;
-  }
+  stopCountdown();
 }
 
+/**
+ * The first child of the profile row. `row > :first-child` resolves to the
+ * same node as the old `querySelector(row).firstElementChild` (the first row
+ * in document order is the first to have a first child), found on the
+ * mutation instead of by polling every animation frame - a loop that, in a
+ * background tab, did not run at all.
+ */
+const PROFILE_CARD_SELECTOR =
+  ".flex.flex-col.lg\\:flex-row.gap-6.md\\:gap-8 > :first-child";
+/** The old loop gave up after 60 animation frames, about one second. */
+const PROFILE_CARD_TIMEOUT_MS = 1000;
+
 function waitForProfileCard(): Promise<HTMLElement | null> {
-  return new Promise((resolve) => {
-    let attempts = 0;
-    const poll = () => {
-      const flexRow = document.querySelector<HTMLElement>(
-        ".flex.flex-col.lg\\:flex-row.gap-6.md\\:gap-8",
-      );
-      const profileCard = flexRow?.firstElementChild as HTMLElement | null;
-      if (profileCard) {
-        resolve(profileCard);
-        return;
-      }
-      if (++attempts > 60) {
-        resolve(null);
-        return;
-      }
-      requestAnimationFrame(poll);
-    };
-    requestAnimationFrame(poll);
+  return waitForElement<HTMLElement>(PROFILE_CARD_SELECTOR, {
+    timeoutMs: PROFILE_CARD_TIMEOUT_MS,
   });
 }
 

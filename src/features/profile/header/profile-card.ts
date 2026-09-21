@@ -3,6 +3,7 @@ import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
 import { openClusterDialog } from "../../clusters/map-dialog.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../../core/dom/tooltip.ts";
+import { appendSvg } from "../../../core/dom/svg.ts";
 import { getIsLight } from "../../../core/theme/theme-manager.ts";
 import ARROW_SHARE_SVG from "../../../assets/svg/arrow_share.svg?raw";
 import { initShortcutButtons, initFriendBadge } from "./personal-info.ts";
@@ -174,7 +175,7 @@ async function injectSeatBadge(profileCard: HTMLElement) {
 
   const linkIcon = document.createElement("span");
   linkIcon.className = "size-3.5 flex items-center justify-center fill-current";
-  linkIcon.insertAdjacentHTML("beforeend", ARROW_SHARE_SVG);
+  appendSvg(linkIcon, ARROW_SHARE_SVG);
   badge.appendChild(linkIcon);
 
   wrapper.prepend(badge);

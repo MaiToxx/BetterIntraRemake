@@ -5,6 +5,7 @@ import fs from "fs";
 import pkg from "./package.json" with { type: "json" };
 import { cp } from "fs/promises";
 import { readRepoInfo, readWorkerUrl, readAuthMode } from "./scripts/repo-info.js";
+import { splitDaisyThemesPlugin } from "./vite.config.ts";
 
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
@@ -18,6 +19,9 @@ const authMode = readAuthMode();
 export default defineConfig({
   plugins: [
     tailwindcss(),
+    // This build writes shared-styles.css into the same folder as the content
+    // build: it has to cut the same themes out, or it would put them back.
+    splitDaisyThemesPlugin(),
     {
       name: "write-popup-html",
       closeBundle() {

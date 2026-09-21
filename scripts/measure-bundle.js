@@ -40,7 +40,9 @@ const BUDGETS_KB = {
   "hook.js": 8, // v1.10.0: 4 KB
   // Stylesheets are served as files: the browser parses each one once and
   // caches it, so they are budgeted separately from the code.
-  "shared-styles.css": 180, // v1.11.0: 164 KB (Tailwind scans src/ only, 23 daisyUI components)
+  // Lowered with the theme split: at 180 the 34 presets could move back in unnoticed.
+  "shared-styles.css": 140, // v1.11.0: 127 KB (Tailwind scans src/ only, 23 daisyUI components, light/dark only)
+  "shared-themes.css": 42, // v1.11.0: 38 KB (the 34 other hub presets, fetched only when one is selected)
   "theme-dark-v2.css": 72, // v1.10.0: 62 KB (fetched on the v2 Intra only)
 };
 

@@ -18,14 +18,23 @@ import {
   loadCampus,
   updateZoom,
 } from "./map-dialog/map-load.ts";
-import { loadOccupancy, reapplyOccupancy } from "./map-dialog/occupancy.ts";
+import {
+  loadOccupancy,
+  reapplyOccupancy,
+  startOccupancyPoll,
+  stopCountdown,
+} from "./map-dialog/occupancy.ts";
 import {
   toggleActiveSort,
   toggleActiveWifi,
 } from "./map-dialog/active-sort.ts";
 import { flashSeat } from "./map-dialog/glow.ts";
 import { rerender } from "./map-dialog/tabs.ts";
-import { updateCampusTime, updateDefaultSelect } from "./map-dialog/header.ts";
+import {
+  startCampusClock,
+  updateCampusTime,
+  updateDefaultSelect,
+} from "./map-dialog/header.ts";
 import { findClusterForSeat } from "./map-dialog/helpers.ts";
 
 export {
@@ -220,10 +229,16 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
 
   const abortController = new AbortController();
 
+  // The occupancy poll, the campus clock and the countdown badge only run
+  // while the dialog is open and the tab visible (tickWhileVisible); they
+  // also clear themselves on pagehide.
+  let stopPoll: (() => void) | null = null;
+  let stopClock: (() => void) | null = null;
+
   const cleanup = () => {
-    if (state.timers.poll) clearInterval(state.timers.poll);
-    if (state.timers.countdown) clearInterval(state.timers.countdown);
-    if (state.timers.clock) clearInterval(state.timers.clock);
+    stopPoll?.();
+    stopClock?.();
+    stopCountdown(state);
     if (state.tabsState.resizeObserver) {
       state.tabsState.resizeObserver.disconnect();
       state.tabsState.resizeObserver = null;
@@ -465,11 +480,8 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
   } else {
     loadCluster(state, activeCluster, abortController.signal);
   }
-  state.timers.poll = setInterval(
-    () => loadOccupancy(state, abortController.signal),
-    60_000,
-  );
-  state.timers.clock = setInterval(() => updateCampusTime(state), 30_000);
+  stopPoll = startOccupancyPoll(state, abortController.signal);
+  stopClock = startCampusClock(state);
   (async () => {
     const rest = state.clusters.filter(
       (c) => c.id !== state.activeCluster.id && c.svg,

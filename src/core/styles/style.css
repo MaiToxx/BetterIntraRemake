@@ -29,6 +29,14 @@
  * (#events-shadow-wrapper) ignored the selected theme. Without it every widget
  * root follows its own data-theme, and each theme is one rule;
  * tests/shared-styles.test.ts keeps it that way.
+ *
+ * `themes` lists every hub preset (src/core/theme/themes.json, one for one),
+ * but only "light" and "dark" stay in shared-styles.css. The build cuts the
+ * other 34 blocks (~38 KB) out of the compiled sheet into shared-themes.css,
+ * which shared-styles.ts loads only on a page whose preset needs it: see
+ * splitDaisyThemes() in vite.config.ts for why the cut happens after
+ * compiling rather than from a second source file, and why the cascade is
+ * unchanged. A theme added here must be added to themes.json too.
  */
 @plugin "daisyui" {
   themes:

@@ -12,6 +12,7 @@
       "resources": [
         "hook.js",
         "shared-styles.css",
+        "shared-themes.css",
         "theme-dark-v2.css",
         "theme-dark-v3.css",
         "theme-light-default-v3.css",

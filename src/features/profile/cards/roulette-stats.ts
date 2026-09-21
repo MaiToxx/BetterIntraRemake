@@ -9,6 +9,7 @@ import {
 } from "../../../core/dom/tooltip.ts";
 import { getIsLight } from "../../../core/theme/theme-manager.ts";
 import { createSkeleton, createSkeletonLines } from "../../../core/dom/skeleton.ts";
+import { tickWhileVisible } from "../../../core/dom/dom-wait.ts";
 
 import { WORKER_URL, AUTH_MODE } from "../../../core/worker.ts";
 import {
@@ -20,7 +21,8 @@ const CARD_ID = "ft-roulette-card";
 
 let rouletteStatsInitialized = false;
 let rouletteStatsPolling = false;
-let countdownInterval: number | null = null;
+/** Stops the "Next" countdown ticker (see renderCard). */
+let stopCountdown: (() => void) | null = null;
 
 interface RouletteEntry {
   historic_id: number;
@@ -508,9 +510,9 @@ function renderCard(
   showRouletteHistory: boolean,
   loading: boolean,
 ) {
-  if (countdownInterval !== null) {
-    clearInterval(countdownInterval);
-    countdownInterval = null;
+  if (stopCountdown !== null) {
+    stopCountdown();
+    stopCountdown = null;
   }
   card.textContent = "";
 
@@ -549,20 +551,19 @@ function renderCard(
     card.appendChild(bottomSection);
   }
 
-  countdownInterval = window.setInterval(() => {
+  // The countdown is recomputed from Date.now() on every tick, so it can
+  // sleep while the tab is in the background (it used to wake the browser
+  // once a second there) and be right again on the first tick after.
+  const stop = tickWhileVisible(() => {
+    const done = () => {
+      if (stopCountdown === stop) stopCountdown = null;
+      return true;
+    };
     const host = document.getElementById("ft-roulette-countdown");
-    if (!host?.shadowRoot) {
-      if (countdownInterval !== null) clearInterval(countdownInterval);
-      countdownInterval = null;
-      return;
-    }
+    if (!host?.shadowRoot) return done();
     const segs =
       host.shadowRoot.querySelectorAll<HTMLSpanElement>(".countdown > span");
-    if (segs.length === 0) {
-      if (countdownInterval !== null) clearInterval(countdownInterval);
-      countdownInterval = null;
-      return;
-    }
+    if (segs.length === 0) return done();
     const parts = getCountdownParts();
     const values = [parts.days, parts.hours, parts.minutes, parts.seconds];
     segs.forEach((seg, i) => {
@@ -572,6 +573,7 @@ function renderCard(
       seg.textContent = value.padStart(2, "0");
     });
   }, 1000);
+  stopCountdown = stop;
 }
 
 export async function initRouletteStats() {

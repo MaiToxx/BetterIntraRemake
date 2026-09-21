@@ -2,7 +2,7 @@ import { BetterIntraConfig, getConfig, CLOUD_SYNC_KEYS } from "../../core/config
 import type { VisualUrls } from "../profile/header/visuals-types.ts";
 import { hashLogin } from "../../core/crypto.ts";
 import { showConfirmDialog } from "../../core/dom/confirm-dialog.ts";
-import { markAuthFlowPending } from "./auth-callback.ts";
+import { AUTH_FLOW_TTL_MS, markAuthFlowPending } from "./auth-callback.ts";
 import { sanitizeVisualUrls } from "../profile/header/visuals-sanitize.ts";
 
 export { hashLogin };
@@ -97,6 +97,22 @@ export async function loginWith42(
     return;
   }
 
+  // Everything below exists for this one login attempt: `stopWaiting` takes
+  // it all down (message listener, close poll, deadline, pagehide hook) the
+  // moment the attempt succeeds, the window closes, the flow expires or the
+  // page goes away - whichever comes first, and only once.
+  let pollInterval: ReturnType<typeof setInterval> | undefined;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
+  let waiting = true;
+  const stopWaiting = () => {
+    if (!waiting) return;
+    waiting = false;
+    window.removeEventListener("message", messageListener);
+    window.removeEventListener("pagehide", stopWaiting);
+    if (pollInterval !== undefined) clearInterval(pollInterval);
+    if (deadline !== undefined) clearTimeout(deadline);
+  };
+
   const messageListener = async (event: MessageEvent) => {
     if (
       event.origin !== WORKER_ORIGIN &&
@@ -109,14 +125,15 @@ export async function loginWith42(
       const { token, login } = event.data;
 
       if (token && login) {
+        // Claimed before the storage write: the close poll must not see the
+        // window go away meanwhile and finish the same login a second time.
+        stopWaiting();
         await chrome.storage.local.set({
           CLOUD_TOKEN: token,
           CLOUD_LOGIN: login,
           PENDING_SETTINGS_RESTORE: true,
         });
 
-        window.removeEventListener("message", messageListener);
-        if (pollInterval) clearInterval(pollInterval);
         popup.close();
         if (onSuccess) {
           await onSuccess();
@@ -128,15 +145,15 @@ export async function loginWith42(
   };
 
   window.addEventListener("message", messageListener);
+  window.addEventListener("pagehide", stopWaiting);
 
   // Fallback when the postMessage never arrives (e.g. the auth window was
   // closed by the callback content script): once the window is gone, check
-  // whether the login was stored and finish the same way.
-  let pollInterval: ReturnType<typeof setInterval> | undefined;
+  // whether the login was stored and finish the same way. A closing window
+  // fires no event its opener can hear, hence the poll.
   pollInterval = setInterval(async () => {
     if (!popup.closed) return;
-    clearInterval(pollInterval);
-    window.removeEventListener("message", messageListener);
+    stopWaiting();
     await new Promise((r) => setTimeout(r, 300));
     const savedLogin = await getCloudLogin();
     const savedToken = await getConfig("CLOUD_TOKEN");
@@ -145,6 +162,12 @@ export async function loginWith42(
       else window.location.reload();
     }
   }, 500);
+
+  // A window left open forever used to keep the poll running for the life of
+  // the page. The callback page stops honouring this flow after
+  // AUTH_FLOW_TTL_MS (auth-callback.ts), so there is nothing to wait for
+  // past that point either.
+  deadline = setTimeout(stopWaiting, AUTH_FLOW_TTL_MS);
 }
 
 /**

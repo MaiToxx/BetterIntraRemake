@@ -2,6 +2,7 @@ import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
 import { openClusterDialog } from "../../clusters/map-dialog.ts";
 import { normalizeSeatId } from "../../clusters/map-dialog/seats.ts";
 import { getConfig } from "../../../core/config.ts";
+import { watchDom } from "../../../core/dom/dom-wait.ts";
 
 /** The unique ID for the injected stylesheet. */
 const GLOW_STYLE_ID = "ft-glow-styles";
@@ -15,6 +16,14 @@ const SEAT_PARAM = "seat";
 const CLUSTERS_PATH = "/clusters";
 /** The scale factor to apply to a highlighted seat. */
 const HIGHLIGHT_SCALE = 1.4;
+/**
+ * How long a freshly loaded map gets to render the requested seat: the old
+ * loop checked 31 times, 500 ms apart.
+ */
+const SEAT_WAIT_MS = 15_500;
+
+/** Stops the watcher started by the last checkRouteAndHighlight(). */
+let stopSeatWatch: (() => void) | null = null;
 
 /**
  * Injects the CSS styles for the seat highlight animation into the document head.
@@ -126,12 +135,17 @@ function cleanUrlParam() {
   if (url.searchParams.has(SEAT_PARAM)) {
     url.searchParams.delete(SEAT_PARAM);
     window.history.replaceState({}, document.title, url.toString());
+    // Without the parameter the seat watcher has nothing left to look for:
+    // its next check would stop it anyway.
+    stopSeatWatch?.();
   }
 }
 
 /**
  * Checks if the current page is a cluster map and triggers the highlight logic.
- * It also polls for a short duration to handle dynamically loaded map elements.
+ * The map's seats are rendered later: the check runs again on every DOM burst
+ * until the seat is there, the parameter is gone, or SEAT_WAIT_MS has passed
+ * (it used to poll every 500 ms, whether anything had changed or not).
  */
 function checkRouteAndHighlight() {
   if (!window.location.pathname.includes(CLUSTERS_PATH)) {
@@ -141,28 +155,28 @@ function checkRouteAndHighlight() {
 
   highlightSeatFromURL();
 
-  // Poll for dynamically loaded seats
-  let attempts = 0;
-  const interval = setInterval(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const targetSeat = urlParams.get(SEAT_PARAM)?.toLowerCase();
+  // One watcher at a time: a second one would only repeat the same checks.
+  stopSeatWatch?.();
+  stopSeatWatch = watchDom(
+    () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const targetSeat = urlParams.get(SEAT_PARAM)?.toLowerCase();
+      if (!targetSeat) return true;
 
-    if (!targetSeat || attempts++ > 30) {
-      clearInterval(interval);
-      return;
-    }
-
-    try {
-      if (getSeatElements(targetSeat).length > 0) {
-        highlightSeatFromURL();
-        clearInterval(interval);
+      try {
+        if (getSeatElements(targetSeat).length > 0) {
+          highlightSeatFromURL();
+          return true;
+        }
+      } catch (err) {
+        // never let a bad seat id keep this watcher alive
+        console.warn("Better Intra: could not highlight seat", err);
+        return true;
       }
-    } catch (err) {
-      // never let a bad seat id keep this interval alive forever
-      clearInterval(interval);
-      console.warn("Better Intra: could not highlight seat", err);
-    }
-  }, 500);
+      return false;
+    },
+    { timeoutMs: SEAT_WAIT_MS },
+  );
 }
 
 /** A WeakSet to keep track of labels that have already been processed. */

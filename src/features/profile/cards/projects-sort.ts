@@ -1,5 +1,6 @@
 import { getConfig } from "../../../core/config.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
+import { appendSvg } from "../../../core/dom/svg.ts";
 import { THEMES, getEffectiveTheme } from "../../../core/theme/theme-manager.ts";
 import SORT_AZ_SVG from "../../../assets/svg/sort-az.svg?raw";
 import SORT_ZA_SVG from "../../../assets/svg/sort-za.svg?raw";
@@ -200,10 +201,7 @@ export async function initProjectsSort() {
               ? CAL_UP_SVG
               : CAL_DOWN_SVG
             : CAL_DOWN_SVG;
-      btn.insertAdjacentHTML(
-        "beforeend",
-        icon.replace("<svg", '<svg width="16" height="16"'),
-      );
+      appendSvg(btn, icon, { width: "16", height: "16" });
       btn.addEventListener("click", () => {
         if (field === f) {
           asc = !asc;

@@ -17,6 +17,7 @@ import { applyActivePresence } from "./helpers";
 import { applySeatGlow } from "./glow";
 import { rebuildHeader } from "./header";
 import { updateTabsOverflow } from "./tabs";
+import { tickWhileVisible } from "../../../core/dom/dom-wait.ts";
 
 type ClusterLoader = (state: DialogState, cluster: ClusterInfo) => void;
 
@@ -232,12 +233,48 @@ function updateBadge(state: DialogState) {
   }
 }
 
+/** Stop functions of the running "next refresh in Ns" countdowns. */
+const countdowns = new WeakMap<DialogState, () => void>();
+
 function startCountdown(state: DialogState) {
-  if (state.timers.countdown) clearInterval(state.timers.countdown);
+  countdowns.get(state)?.();
   const badge = state.shadow.getElementById("updated-badge");
   if (badge) badge.style.display = "";
   updateBadge(state);
-  state.timers.countdown = setInterval(() => updateBadge(state), 1000);
+  // Derived from Date.now() and lastUpdated, so it can sleep in a background
+  // tab and be right on the first tick back. It also dies with the dialog,
+  // even when a late reapplyOccupancy() restarts it after the close.
+  countdowns.set(
+    state,
+    tickWhileVisible(() => updateBadge(state), 1000, { element: state.dialog }),
+  );
+}
+
+/** Stop the countdown badge (the dialog is closing). */
+export function stopCountdown(state: DialogState): void {
+  countdowns.get(state)?.();
+  countdowns.delete(state);
+}
+
+/**
+ * Refresh the occupancy every POLL_INTERVAL while the dialog is open and the
+ * tab visible. Hidden, nothing is fetched; back in view, the cadence resumes
+ * where it was, with one request right away if one fell due in between.
+ * Stops when the dialog leaves the page or `signal` aborts. Returns a stop
+ * function.
+ */
+export function startOccupancyPoll(
+  state: DialogState,
+  signal: AbortSignal,
+): () => void {
+  return tickWhileVisible(
+    () => {
+      if (signal.aborted) return true;
+      void loadOccupancy(state, signal);
+    },
+    POLL_INTERVAL,
+    { element: state.dialog, resyncOnVisible: false },
+  );
 }
 
 export function reapplyOccupancy(state: DialogState) {

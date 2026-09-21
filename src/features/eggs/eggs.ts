@@ -17,6 +17,7 @@
  */
 import { html, render } from "lit-html";
 import { getConfigMany } from "../../core/config.ts";
+import { tickWhileVisible, waitForElement, watchDom } from "../../core/dom/dom-wait.ts";
 import { savePreset } from "../customize/presets.ts";
 import { defaultCustomization } from "../customize/customize.ts";
 
@@ -198,21 +199,23 @@ export function matrixRain(seconds = 7): void {
   const cols = Math.floor(canvas.width / size);
   const drops = Array.from({ length: cols }, () => Math.random() * -50);
   const glyphs = "アイウエオカキクケコサシスセソ0123456789ABCDEF42";
-  const timer = setInterval(() => {
-    if (!canvas.isConnected) {
-      clearInterval(timer);
-      return;
-    }
-    ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "#00ff41";
-    ctx.font = `${size}px monospace`;
-    drops.forEach((y, i) => {
-      const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
-      ctx.fillText(ch, i * size, y * size);
-      drops[i] = y * size > canvas.height && Math.random() > 0.975 ? 0 : y + 1;
-    });
-  }, 45);
+  // The same 45 ms frame while the tab is visible; nothing is drawn behind a
+  // hidden tab, and the loop ends with the canvas (removed by canvasOverlay).
+  tickWhileVisible(
+    () => {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#00ff41";
+      ctx.font = `${size}px monospace`;
+      drops.forEach((y, i) => {
+        const ch = glyphs[Math.floor(Math.random() * glyphs.length)];
+        ctx.fillText(ch, i * size, y * size);
+        drops[i] = y * size > canvas.height && Math.random() > 0.975 ? 0 : y + 1;
+      });
+    },
+    45,
+    { element: canvas },
+  );
 }
 
 /**
@@ -374,42 +377,80 @@ function checkTimeAndDay(): void {
     void found("night", `${h}h. The cluster never closes, but you could 😴`);
   }
   if (now.getDay() === 4 && location.pathname === "/") {
-    let tries = 0;
-    const timer = setInterval(() => {
-      const title = document.querySelector<HTMLElement>('[data-ft-card="roulette"] [class*="uppercase"]');
-      if (title && !title.dataset.ftEgg) {
-        title.dataset.ftEgg = "1";
-        title.textContent = `🎰 ${title.textContent ?? ""}`;
-        clearInterval(timer);
-        if (localStorage.getItem("ft-egg-thursday") !== dayKey) {
-          localStorage.setItem("ft-egg-thursday", dayKey);
-          void found("thursday", "It's roulette day. May the odds be ever in your favour 🎰");
-        }
+    // Found on the mutation that adds the card instead of by a 500 ms poll.
+    void waitForElement<HTMLElement>(ROULETTE_TITLE, {
+      timeoutMs: THURSDAY_WAIT_MS,
+    }).then((title) => {
+      if (!title || title.dataset.ftEgg) return;
+      title.dataset.ftEgg = "1";
+      title.textContent = `🎰 ${title.textContent ?? ""}`;
+      if (localStorage.getItem("ft-egg-thursday") !== dayKey) {
+        localStorage.setItem("ft-egg-thursday", dayKey);
+        void found("thursday", "It's roulette day. May the odds be ever in your favour 🎰");
       }
-      if (++tries > 30) clearInterval(timer);
-    }, 500);
+    });
   }
 }
+
+const ROULETTE_TITLE = '[data-ft-card="roulette"] [class*="uppercase"]';
+/** The old loops looked 31 and 41 times, 500 ms apart: same deadlines. */
+const THURSDAY_WAIT_MS = 15_500;
+const FORTY_TWO_WAIT_MS = 20_500;
 
 /** Month badge of the logtime widget reading exactly "42h00". */
 function checkFortyTwoHours(): void {
   if (location.pathname !== "/") return;
-  let tries = 0;
-  const timer = setInterval(() => {
-    const root = document.getElementById("logtime-shadow-wrapper")?.shadowRoot;
+
+  let celebrated = false;
+  const badgeHit = (root: ShadowRoot | null): boolean => {
+    if (celebrated) return true;
     const badges = root ? Array.from(root.querySelectorAll(".badge")) : [];
     const hit = badges.some((b) => /^\s*42h00\b/.test(b.textContent ?? ""));
-    if (hit) {
-      clearInterval(timer);
-      const monthKey = new Date().toISOString().slice(0, 7);
-      if (localStorage.getItem("ft-egg-42") !== monthKey) {
-        localStorage.setItem("ft-egg-42", monthKey);
-        confetti();
-        void found("fortytwo", "42h00 this month. The answer to everything ✨");
-      }
+    if (!hit) return false;
+    celebrated = true;
+    const monthKey = new Date().toISOString().slice(0, 7);
+    if (localStorage.getItem("ft-egg-42") !== monthKey) {
+      localStorage.setItem("ft-egg-42", monthKey);
+      confetti();
+      void found("fortytwo", "42h00 this month. The answer to everything ✨");
     }
-    if (++tries > 40) clearInterval(timer);
-  }, 500);
+    return true;
+  };
+
+  // The widget renders into its own shadow root, which an observer on the
+  // document does not see. So: watch the document for the widget (it can be
+  // replaced), and the widget's root for the badge - text included, since lit
+  // updates a text binding in place. One deadline for both, as before.
+  let watched: ShadowRoot | null = null;
+  let stopShadow: (() => void) | null = null;
+  const unwatchShadow = () => {
+    stopShadow?.();
+    stopShadow = null;
+    watched = null;
+  };
+  let stop: () => void = () => {};
+  stop = watchDom(
+    () => {
+      const root =
+        document.getElementById("logtime-shadow-wrapper")?.shadowRoot ?? null;
+      // Same widget: its badges can only change inside its root, which the
+      // inner watcher covers. Nothing to look at for this document burst.
+      if (root === watched) return false;
+      unwatchShadow();
+      if (!root) return false;
+      watched = root;
+      stopShadow = watchDom(
+        () => {
+          if (!badgeHit(root)) return false;
+          stop();
+          return true;
+        },
+        { root, timeoutMs: 0, immediate: false, characterData: true },
+      );
+      return badgeHit(root);
+    },
+    { timeoutMs: FORTY_TWO_WAIT_MS, onStop: unwatchShadow },
+  );
 }
 
 let initialised = false;

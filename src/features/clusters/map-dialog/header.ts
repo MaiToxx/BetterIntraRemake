@@ -2,6 +2,7 @@ import type { DialogState } from "./context";
 import { clusterLabel } from "./context";
 import { formatCampusClock } from "./helpers";
 import { renderTabsRegion, updateTabsOverflow, wireTabs } from "./tabs";
+import { tickWhileVisible } from "../../../core/dom/dom-wait.ts";
 
 export function rebuildHeader(state: DialogState) {
   const { shadow } = state;
@@ -50,4 +51,18 @@ export function updateCampusTime(state: DialogState) {
   const text = state.shadow.getElementById("campus-time-text");
   if (text) text.textContent = formatCampusClock(tz);
   el.style.display = "flex";
+}
+
+/** The campus clock shows minutes: a refresh every 30 s is enough. */
+const CAMPUS_CLOCK_MS = 30_000;
+
+/**
+ * Keep the campus clock current while the dialog is open. Paused in a
+ * background tab and redrawn the moment it is visible again; stops when the
+ * dialog leaves the page. Returns a stop function.
+ */
+export function startCampusClock(state: DialogState): () => void {
+  return tickWhileVisible(() => updateCampusTime(state), CAMPUS_CLOCK_MS, {
+    element: state.dialog,
+  });
 }

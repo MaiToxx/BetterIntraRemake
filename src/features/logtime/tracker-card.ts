@@ -5,6 +5,7 @@ import {
   sharedStylesLink,
 } from "../../core/styles/shared-styles.ts";
 import { getEffectiveTheme } from "../../core/theme/theme-manager.ts";
+import { appendSvg } from "../../core/dom/svg.ts";
 import {
   getTrackerState,
   computeWeekProgress,
@@ -227,7 +228,7 @@ function updateBadgeIndicator() {
   icon.className = "ft-tracker-icon";
   icon.style.cssText =
     "margin-left:0.25rem;display:inline-flex;align-items:center;";
-  icon.insertAdjacentHTML("beforeend", met ? VALIDATED_SVG : INVALIDE_SVG);
+  appendSvg(icon, met ? VALIDATED_SVG : INVALIDE_SVG);
   _badgeEl.appendChild(icon);
 }
 

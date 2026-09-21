@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import { splitDaisyThemes } from "../vite.config.ts";
 
 /**
  * shared-styles.ts is a page-wide singleton: one fetch, one parsed sheet, one
@@ -12,6 +13,11 @@ import path from "node:path";
 const CSS_FILE = "shared-styles.css";
 const CSS_URL = `chrome-extension://better-intra/${CSS_FILE}`;
 const CSS_TEXT = ":host{display:block}";
+const THEMES_FILE = "shared-themes.css";
+const THEMES_URL = `chrome-extension://better-intra/${THEMES_FILE}`;
+const THEMES_TEXT = "@layer base{[data-theme=cupcake]{--color-base-100:#eee}}";
+/** Where shared-styles.ts remembers the preset of the tab's previous page. */
+const PRESET_KEY = "better-intra-theme-preset";
 
 /** Stand-in for a constructable stylesheet; jsdom has none. */
 class FakeSheet {
@@ -32,7 +38,7 @@ function installChrome() {
   };
 }
 
-function installFetch(impl: () => Promise<unknown>) {
+function installFetch(impl: (url: string) => Promise<unknown>) {
   const mock = vi.fn(impl);
   (globalThis as Record<string, unknown>).fetch = mock;
   return mock;
@@ -40,6 +46,54 @@ function installFetch(impl: () => Promise<unknown>) {
 
 function okResponse() {
   return Promise.resolve({ ok: true, text: () => Promise.resolve(CSS_TEXT) });
+}
+
+/** Serves both sheets; `themes` replaces the themes answer (e.g. one that never comes). */
+function installFetchByUrl(themes?: Promise<unknown>) {
+  return installFetch((url) =>
+    url === THEMES_URL
+      ? (themes ?? Promise.resolve({ ok: true, text: () => Promise.resolve(THEMES_TEXT) }))
+      : okResponse(),
+  );
+}
+
+/**
+ * chrome with a storage area holding PROFILE_THEME_PRESET (a value, or a
+ * function for an answer that comes later) and an onChanged that `change()`
+ * fires, the way another tab or the hub would.
+ */
+function installChromeWithPreset(preset: string | (() => Promise<string>)) {
+  const listeners: ((changes: Record<string, unknown>, area: string) => void)[] = [];
+  let value = preset;
+  (globalThis as Record<string, unknown>).chrome = {
+    runtime: { getURL: vi.fn((file: string) => `chrome-extension://better-intra/${file}`) },
+    storage: {
+      local: {
+        get: vi.fn(async () => ({
+          PROFILE_THEME_PRESET: typeof value === "function" ? await value() : value,
+        })),
+        set: vi.fn(async () => {}),
+        remove: vi.fn(async () => {}),
+        clear: vi.fn(async () => {}),
+      },
+      onChanged: { addListener: vi.fn((fn: (typeof listeners)[number]) => listeners.push(fn)) },
+    },
+  };
+  return {
+    change(next: string) {
+      value = next;
+      for (const fn of listeners) fn({ PROFILE_THEME_PRESET: { newValue: next } }, "local");
+    },
+  };
+}
+
+/** Let every pending promise (storage read, fetch, parse) settle. */
+function flush() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function textsOf(root: ShadowRoot): string[] {
+  return adoptedOf(root).map((s) => s.cssText);
 }
 
 function useConstructableSheets(on: boolean) {
@@ -74,6 +128,7 @@ async function loadModule() {
 
 beforeEach(() => {
   document.body.replaceChildren();
+  sessionStorage.clear();
   installChrome();
 });
 
@@ -268,6 +323,180 @@ describe("sharedStylesLink", () => {
     render(mod.sharedStylesLink(), root);
 
     expect(root.querySelector("link")).toBeNull();
+  });
+});
+
+/*
+ * shared-themes.css: the 34 hub presets besides light and dark, which only a
+ * page whose preset needs them loads. Same fetch-once / adopt / <link> rules as
+ * the shared sheet, always right after it.
+ */
+describe("shared-themes.css", () => {
+  it("is never fetched on a light/dark page", async () => {
+    useConstructableSheets(true);
+    installChromeWithPreset("dark");
+    const fetchMock = installFetchByUrl();
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+    await flush();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(CSS_URL);
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}"]);
+    expect(sessionStorage.getItem(PRESET_KEY)).toBe("dark");
+  });
+
+  it("starts at document_start when the tab's last page had a preset, then sits between the shared sheet and the widget's rules", async () => {
+    useConstructableSheets(true);
+    sessionStorage.setItem(PRESET_KEY, "cupcake");
+    installChromeWithPreset("cupcake");
+    const fetchMock = installFetchByUrl();
+    const mod = await loadModule();
+
+    // Before the storage read has even answered.
+    expect(fetchMock).toHaveBeenCalledWith(THEMES_URL);
+    await flush();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+    expect(textsOf(root)).toEqual([CSS_TEXT, THEMES_TEXT, ".pill{color:red}"]);
+    expect(root.querySelector("link")).toBeNull();
+    // One parsed sheet for the whole page.
+    const other = makeRoot();
+    mod.adoptSharedStyles(other);
+    expect(adoptedOf(other)[1]).toBe(adoptedOf(root)[1]);
+    expect(fetchMock.mock.calls.filter(([url]) => url === THEMES_URL)).toHaveLength(1);
+  });
+
+  it("follows the stored preset, and themes the roots served before it was known", async () => {
+    useConstructableSheets(true);
+    let answer!: (preset: string) => void;
+    const stored = new Promise<string>((resolve) => (answer = resolve));
+    installChromeWithPreset(() => stored);
+    const fetchMock = installFetchByUrl();
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}"]);
+    expect(fetchMock).not.toHaveBeenCalledWith(THEMES_URL);
+
+    answer("synthwave");
+    await flush();
+
+    expect(textsOf(root)).toEqual([CSS_TEXT, THEMES_TEXT, ".pill{color:red}"]);
+    expect(sessionStorage.getItem(PRESET_KEY)).toBe("synthwave");
+  });
+
+  it("reaches roots already on screen when a preset is picked, adopted and linked ones alike", async () => {
+    useConstructableSheets(true);
+    const storage = installChromeWithPreset("dark");
+    const fetchMock = installFetchByUrl();
+    const mod = await loadModule();
+    const { html, render } = await import("lit-html");
+    await mod.preloadSharedStyles();
+    await flush();
+
+    const adopted = makeRoot();
+    mod.adoptSharedStyles(adopted, ".pill{color:red}");
+    const linked = makeRoot();
+    render(
+      html`${mod.sharedStylesLink()}<style>
+          .n {
+            z-index: 1;
+          }
+        </style>`,
+      linked,
+    );
+    // jsdom loads no stylesheet; a browser fires this once the file is in.
+    linked.querySelector("link")!.dispatchEvent(new Event("load"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    storage.change("cupcake");
+    await flush();
+
+    expect(textsOf(adopted)).toEqual([CSS_TEXT, THEMES_TEXT, ".pill{color:red}"]);
+    // Its shared sheet is the <link>, which tree order already puts first.
+    expect(textsOf(linked)).toEqual([THEMES_TEXT]);
+    expect(linked.querySelectorAll("link")).toHaveLength(1);
+
+    // A widget rendered from now on carries the themes <link> itself.
+    const later = makeRoot();
+    render(mod.sharedStylesLink(), later);
+    expect([...later.querySelectorAll("link")].map((l) => l.getAttribute("href"))).toEqual([
+      CSS_URL,
+      THEMES_URL,
+    ]);
+  });
+
+  it("falls back to links, themes included, rather than render first and theme later", async () => {
+    useConstructableSheets(true);
+    sessionStorage.setItem(PRESET_KEY, "cupcake");
+    installChromeWithPreset("cupcake");
+    installFetchByUrl(new Promise(() => {})); // the themes never arrive
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+
+    const nodes = [...root.children];
+    expect(nodes.map((n) => n.tagName)).toEqual(["LINK", "LINK", "STYLE"]);
+    expect(nodes[0].getAttribute("href")).toBe(CSS_URL);
+    expect(nodes[1].getAttribute("href")).toBe(THEMES_URL);
+    expect(nodes[2].textContent).toBe(".pill{color:red}");
+    expect(adoptedOf(root)).toHaveLength(0);
+  });
+
+  it("puts the themes <link> between the shared <link> and the widget's <style>, stable across re-renders", async () => {
+    useConstructableSheets(true);
+    sessionStorage.setItem(PRESET_KEY, "cupcake");
+    installChromeWithPreset("cupcake");
+    installFetchByUrl();
+    const mod = await loadModule();
+    const { html, render } = await import("lit-html");
+
+    const root = makeRoot();
+    const widget = (n: number) =>
+      html`${mod.sharedStylesLink()}<style>
+          .n {
+            z-index: ${n};
+          }
+        </style>`;
+    render(widget(1), root);
+    const [shared, themes] = root.querySelectorAll("link");
+    render(widget(2), root);
+
+    expect(shared.getAttribute("href")).toBe(CSS_URL);
+    expect(themes.getAttribute("href")).toBe(THEMES_URL);
+    expect([...root.querySelectorAll("link")]).toEqual([shared, themes]);
+    expect(shared.compareDocumentPosition(themes)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(themes.compareDocumentPosition(root.querySelector("style")!)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("still works when the page blocks sessionStorage", async () => {
+    useConstructableSheets(true);
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("SecurityError");
+    });
+    installChromeWithPreset("cupcake");
+    const fetchMock = installFetchByUrl();
+    const mod = await loadModule();
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledWith(THEMES_URL);
+    const root = makeRoot();
+    mod.adoptSharedStyles(root);
+    expect(textsOf(root)).toEqual([CSS_TEXT, THEMES_TEXT]);
   });
 });
 
@@ -487,8 +716,37 @@ const ROOT_IDS = [
   "ft-transcript-dialog", "ft-star-total-host", "ft-subject-update-host",
 ];
 
+/** Every theme name, as the hub offers them. */
+function hubThemes(): string[] {
+  return Object.keys(
+    JSON.parse(fs.readFileSync(path.join(SRC, "core/theme/themes.json"), "utf8")) as Record<
+      string,
+      unknown
+    >,
+  );
+}
+
+/** The declarations of the one rule whose selector list names [data-theme=theme]. */
+function themeDeclarations(rules: Rule[], theme: string): Record<string, string> | null {
+  const found = rules.filter((r) => r.selectors.some((s) => s.includes(`[data-theme=${theme}]`)));
+  if (found.length !== 1) return null;
+  const out: Record<string, string> = {};
+  for (const decl of found[0].body.split(";")) {
+    const colon = decl.indexOf(":");
+    if (colon > 0) out[decl.slice(0, colon).trim()] = decl.slice(colon + 1).trim();
+  }
+  return out;
+}
+
 describe("shared-styles.css contents", () => {
   let styleCss = "";
+  /** The sheet as Tailwind compiles style.css, before the build splits it. */
+  let fullCss = "";
+  /** shared-styles.css and shared-themes.css, as splitDaisyThemes() writes them. */
+  let coreCss = "";
+  let themesCss = "";
+  let coreRules: Rule[];
+  /** Both files: everything that ships. */
   let realRules: Rule[];
   let real: Set<string>;
   let reference: Set<string>;
@@ -506,7 +764,10 @@ describe("shared-styles.css contents", () => {
       compileSheet(styleCss),
       compileSheet(untrimmed),
     ]);
-    realRules = rulesOf(realCss);
+    fullCss = realCss;
+    ({ core: coreCss, themes: themesCss } = splitDaisyThemes(realCss));
+    coreRules = rulesOf(coreCss);
+    realRules = rulesOf(coreCss + themesCss);
     real = selectorsOf(realRules);
     reference = selectorsOf(rulesOf(referenceCss));
     srcClasses = classesWrittenBySrc();
@@ -548,14 +809,90 @@ describe("shared-styles.css contents", () => {
   });
 
   it("applies every hub preset through its own [data-theme] rule", async () => {
-    const themes = Object.keys(
-      JSON.parse(
-        fs.readFileSync(path.join(SRC, "core/theme/themes.json"), "utf8"),
-      ) as Record<string, unknown>,
-    );
+    const themes = hubThemes();
     expect(themes).toHaveLength(36);
     const selectorText = [...real].join("\n");
     for (const theme of themes) expect(selectorText).toContain(`[data-theme=${theme}]`);
+  });
+
+  it("keeps light and dark in shared-styles.css and moves the other 34 presets out", () => {
+    const named = (css: string) =>
+      [...new Set([...css.matchAll(/\[data-theme=([a-z0-9-]+)\]/g)].map((m) => m[1]))].sort();
+    expect(named(coreCss)).toEqual(["dark", "light"]);
+    expect(named(themesCss)).toEqual(hubThemes().filter((t) => t !== "light" && t !== "dark").sort());
+    // Nothing but theme blocks, in the layer they came from.
+    expect(themesCss.startsWith("@layer base{")).toBe(true);
+    expect(themesCss.endsWith("}}")).toBe(true);
+    const themeRules = rulesOf(themesCss);
+    expect(themeRules).toHaveLength(34);
+    for (const rule of themeRules) expect(rule.body).toMatch(/--color-base-100\s*:/);
+    // Nothing lost, nothing added: the two files are the one sheet, cut in two.
+    expect(coreCss.length + themesCss.length - "@layer base{}".length).toBe(fullCss.length);
+    expect(themesCss.length).toBeGreaterThan(30_000);
+  });
+
+  it("cuts the themes from the tail of @layer base, so core + themes is the old cascade", () => {
+    // Put the moved blocks back where they came from: the result must be the
+    // compiled sheet itself, byte for byte. And they must have been the last
+    // rules of the one @layer base block: a later sheet that re-opens the layer
+    // then keeps every rule in its old place in the cascade.
+    const inner = themesCss.slice("@layer base{".length, -1);
+    const at = fullCss.indexOf(inner);
+    expect(at).toBeGreaterThan(0);
+    expect(coreCss).toBe(fullCss.slice(0, at) + fullCss.slice(at + inner.length));
+    const baseStart = fullCss.indexOf("@layer base{");
+    expect(baseStart).toBeGreaterThan(-1);
+    expect(baseStart).toBeLessThan(at);
+    expect(fullCss.indexOf("@layer base{", baseStart + 1)).toBe(-1);
+    // Right after the moved blocks comes the "}" that closes @layer base.
+    let depth = 0;
+    let baseEnd = -1;
+    for (let i = baseStart; i < fullCss.length; i++) {
+      if (fullCss[i] === "{") depth++;
+      else if (fullCss[i] === "}" && --depth === 0) {
+        baseEnd = i;
+        break;
+      }
+    }
+    expect(baseEnd).toBe(at + inner.length);
+  });
+
+  it("resolves every one of the 36 themes to the same variables as the single sheet did", () => {
+    const fullRules = rulesOf(fullCss);
+    const themesRules = rulesOf(themesCss);
+    for (const theme of hubThemes()) {
+      const before = themeDeclarations(fullRules, theme);
+      expect(before, theme).not.toBeNull();
+      expect(Object.keys(before!).filter((k) => k.startsWith("--color-")), theme).toHaveLength(20);
+      if (theme === "light" || theme === "dark") {
+        // From shared-styles.css alone: a light/dark page never loads the rest.
+        expect(themeDeclarations(coreRules, theme), theme).toEqual(before);
+        expect(themeDeclarations(themesRules, theme), theme).toBeNull();
+      } else {
+        expect(themeDeclarations(coreRules, theme), theme).toBeNull();
+        expect(themeDeclarations(realRules, theme), theme).toEqual(before);
+      }
+    }
+  });
+
+  it("refuses to split a sheet whose themes are not the tail of @layer base", () => {
+    const light = "[data-theme=light]{--color-base-100:#fff}";
+    const dark = "[data-theme=dark]{--color-base-100:#000}";
+    const cupcake = "[data-theme=cupcake]{--color-base-100:#eee}";
+    const ok = splitDaisyThemes(
+      `@layer theme{:host{--x:1}}@layer base{a{color:red}${light}${dark}${cupcake}}.u{color:blue}`,
+    );
+    expect(ok.moved).toEqual(["cupcake"]);
+    expect(ok.core).toBe(`@layer theme{:host{--x:1}}@layer base{a{color:red}${light}${dark}}.u{color:blue}`);
+    expect(ok.themes).toBe(`@layer base{${cupcake}}`);
+    // A rule after a moved theme would end up before it.
+    expect(() => splitDaisyThemes(`@layer base{${light}${dark}${cupcake}a{color:red}}`)).toThrow();
+    // A second base block would hold rules that came after the moved ones.
+    expect(() =>
+      splitDaisyThemes(`@layer base{${light}${dark}${cupcake}}@layer base{a{color:red}}`),
+    ).toThrow();
+    // light and dark must stay behind.
+    expect(() => splitDaisyThemes(`@layer base{${light}${cupcake}}`)).toThrow();
   });
 
   it("keeps the widget root ids out of every theme block", () => {
@@ -575,6 +912,8 @@ describe("shared-styles.css contents", () => {
     // every theme rule whose selector matches the element competes, so exactly
     // one may match, and it must be the rule of the element's data-theme.
     const themeRules = realRules.filter((r) => /--color-base-100\s*:/.test(r.body));
+    // The popup links shared-styles.css only, and only ever sets light or dark.
+    const coreThemeRules = coreRules.filter((r) => /--color-base-100\s*:/.test(r.body));
     const base100 = (rule: Rule) => /--color-base-100\s*:\s*([^;}]+)/.exec(rule.body)?.[1].trim();
     const ruleOf = (theme: string) =>
       themeRules.find((r) => r.selectors.includes(`[data-theme=${theme}]`));
@@ -589,12 +928,15 @@ describe("shared-styles.css contents", () => {
     // (synthwave stands for those); aqua is the one the old cascade forced, so
     // it must still apply when it is really the selected theme.
     for (const id of ["popup-root", "events-shadow-wrapper"]) {
-      for (const theme of ["light", "dark", "aqua", "synthwave"]) {
+      const popup = id === "popup-root";
+      for (const theme of popup ? ["light", "dark"] : ["light", "dark", "aqua", "synthwave"]) {
         const el = document.createElement("div");
         el.id = id;
         el.setAttribute("data-theme", theme);
         document.body.appendChild(el);
-        const winners = themeRules.filter((r) => r.selectors.some((s) => matches(el, s)));
+        const winners = (popup ? coreThemeRules : themeRules).filter((r) =>
+          r.selectors.some((s) => matches(el, s)),
+        );
         expect(winners, `#${id}[data-theme=${theme}]`).toEqual([ruleOf(theme)]);
         el.remove();
       }

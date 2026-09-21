@@ -45,3 +45,5 @@ jobs:
       # inspect. Budgets live in scripts/measure-bundle.js (see docs/PERFORMANCE.md).
       - name: Bundle size budgets
         run: npm run check:size
+      - name: No runtime import cycles
+        run: npm run check:cycles

@@ -92,7 +92,7 @@ export function injectCampusFlag() {
       const row = el.parentElement;
       const svg = row?.querySelector("svg");
       if (svg) {
-        svg.insertAdjacentHTML("beforebegin", flag);
+        svg.before(document.createTextNode(flag));
         svg.remove();
       }
     }

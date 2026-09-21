@@ -28,7 +28,8 @@
     "measure": "node scripts/measure-bundle.js",
     "check:size": "node scripts/measure-bundle.js --check",
     "generate:store-images": "node scripts/generate-store-images.js",
-    "generate:description": "node scripts/convert-description.js"
+    "generate:description": "node scripts/convert-description.js",
+    "check:cycles": "node scripts/check-cycles.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.9",

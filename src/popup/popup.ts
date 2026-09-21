@@ -138,6 +138,9 @@ async function main() {
 
   // The popup follows the extension theme (dark / light / system) instead of
   // being hard-wired to light; daisyUI picks the theme up from #popup-root.
+  // Only light or dark, never the hub preset: those two are the themes
+  // shared-styles.css keeps, so popup.html has no use for shared-themes.css.
+  // Following the preset here would mean linking that file too.
   const popupRoot = document.getElementById("popup-root");
   if (popupRoot) {
     const theme = await getEffectiveTheme();

@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import fs from "fs";
@@ -14,6 +14,181 @@ const authMode = readAuthMode();
 
 /** Name of the compiled Tailwind/daisyUI asset; see src/core/styles/shared-styles.ts. */
 const SHARED_CSS_FILE = "shared-styles.css";
+
+/**
+ * The daisyUI themes that stay in shared-styles.css: the two a widget shows
+ * when the hub preset is left alone (BETTER_INTRA_THEME). Must match
+ * CORE_THEMES in src/core/styles/shared-styles.ts.
+ */
+export const CORE_THEMES: readonly string[] = ["light", "dark"];
+
+/**
+ * Where the other 34 hub presets go: a second asset, emitted next to
+ * shared-styles.css, that shared-styles.ts loads only on a page whose preset
+ * needs it. Must match THEMES_CSS_FILE in src/core/styles/shared-styles.ts and
+ * web_accessible_resources in both manifests.
+ */
+export const SHARED_THEMES_CSS_FILE = "shared-themes.css";
+
+type CssBlock = {
+  /** Offset of the block's first character (its prelude). */
+  start: number;
+  /** Offset of its "{". */
+  open: number;
+  /** One past its closing "}". */
+  end: number;
+  /** The prelude: a selector list or an at-rule, trimmed. */
+  head: string;
+};
+
+/**
+ * The blocks (`head{...}`) directly inside css[from, to). Statements such as
+ * `@layer a,b;` are skipped, and so are strings and comments, so a brace
+ * inside them does not count.
+ */
+function cssBlocks(css: string, from: number, to: number): CssBlock[] {
+  const out: CssBlock[] = [];
+  let depth = 0;
+  let start = from;
+  let open = -1;
+  for (let i = from; i < to; i++) {
+    const c = css[i];
+    if (c === "\\") {
+      i++;
+    } else if (c === '"' || c === "'") {
+      for (i++; i < to && css[i] !== c; i++) if (css[i] === "\\") i++;
+    } else if (c === "/" && css[i + 1] === "*") {
+      const close = css.indexOf("*/", i + 2);
+      i = close === -1 ? to : close + 1;
+      if (depth === 0) start = i + 1;
+    } else if (c === "{") {
+      if (depth === 0) open = i;
+      depth++;
+    } else if (c === "}") {
+      if (--depth < 0) throw new Error(`splitDaisyThemes: stray "}" at ${i}`);
+      if (depth === 0) {
+        out.push({ start, open, end: i + 1, head: css.slice(start, open).trim() });
+        start = i + 1;
+      }
+    } else if (c === ";" && depth === 0) {
+      start = i + 1;
+    }
+  }
+  if (depth !== 0) throw new Error("splitDaisyThemes: unbalanced braces");
+  return out;
+}
+
+const DATA_THEME = /\[data-theme=(["']?)([^"'\]\s]+)\1\]/g;
+
+/**
+ * The theme a daisyUI theme rule applies, or null for any other block. daisyUI
+ * writes each theme as ONE rule (see `root` in style.css): its selector names a
+ * single [data-theme=x] (plus a dead `:root:has(.theme-controller)` twin) and
+ * its body sets the theme's variables, --color-base-100 among them.
+ */
+function daisyThemeOf(css: string, block: CssBlock): string | null {
+  if (block.head.startsWith("@")) return null;
+  const names = new Set([...block.head.matchAll(DATA_THEME)].map((m) => m[2]));
+  if (names.size !== 1) return null;
+  if (!/--color-base-100\s*:/.test(css.slice(block.open + 1, block.end - 1))) return null;
+  return [...names][0];
+}
+
+/**
+ * Split the compiled Tailwind/daisyUI sheet in two: `core` is the sheet minus
+ * every daisyUI theme block other than `keep`, `themes` is those blocks in
+ * `@layer base`, where they came from.
+ *
+ * WHY AFTER COMPILING. The blocks are cut out of the final CSS, after Vite's
+ * own minification pass, instead of being compiled from a second source file:
+ * that pass is not Tailwind's (it rewrites `color-scheme` into
+ * --lightningcss-light/dark and wraps the selectors in :is()), a second CSS
+ * import would be merged back into this one asset by `cssCodeSplit: false`,
+ * and a sheet compiled on the side would not go through it. Cut out, the
+ * blocks are byte for byte the ones the single sheet had.
+ *
+ * WHY THE CASCADE IS UNCHANGED. The moved blocks must be the tail of the one
+ * `@layer base` block (this throws otherwise, e.g. if a daisyUI update
+ * reorders its output). Then `core` followed by `themes` is the original sheet
+ * with its last rules of layer base moved to a later sheet that re-opens the
+ * same layer: same layer order, same rule order inside every layer, so the
+ * same winner for every property. Loading `themes` anywhere after `core` is
+ * enough, whatever unlayered widget rules sit in between: those beat any
+ * layered rule regardless of order, and the theme blocks carry no !important.
+ * Without `themes`, the only rules missing are [data-theme=<moved theme>]
+ * ones (and their :root:has(.theme-controller) twins, dead since src/ never
+ * renders a theme-controller), so light and dark resolve exactly as before.
+ */
+export function splitDaisyThemes(
+  css: string,
+  keep: readonly string[] = CORE_THEMES,
+): { core: string; themes: string; moved: string[] } {
+  const bases = cssBlocks(css, 0, css.length).filter((b) => /^@layer\s+base$/.test(b.head));
+  // A second `@layer base` block (nested or not) would hold rules that came
+  // after the moved ones and would end up before them.
+  if (bases.length !== 1 || (css.match(/@layer\s+base\s*\{/g) ?? []).length !== 1) {
+    throw new Error("splitDaisyThemes: expected exactly one top-level @layer base block");
+  }
+  const base = bases[0];
+  const moved: CssBlock[] = [];
+  const movedNames: string[] = [];
+  const kept = new Set<string>();
+  for (const block of cssBlocks(css, base.open + 1, base.end - 1)) {
+    const name = daisyThemeOf(css, block);
+    if (name !== null && !keep.includes(name)) {
+      moved.push(block);
+      movedNames.push(name);
+      continue;
+    }
+    if (name !== null) kept.add(name);
+    if (moved.length) {
+      throw new Error(
+        `splitDaisyThemes: "${block.head.slice(0, 80)}" follows a theme block in @layer base; moving the themes out would reorder the cascade`,
+      );
+    }
+  }
+  for (const name of keep) {
+    if (!kept.has(name)) throw new Error(`splitDaisyThemes: no [data-theme=${name}] block left in the sheet`);
+  }
+  if (!moved.length) return { core: css, themes: "", moved: [] };
+  const from = moved[0].start;
+  const to = moved[moved.length - 1].end;
+  if (css.slice(to, base.end - 1).trim() !== "") {
+    throw new Error("splitDaisyThemes: something follows the theme blocks in @layer base");
+  }
+  return {
+    core: css.slice(0, from) + css.slice(to),
+    themes: `@layer base{${css.slice(from, to)}}`,
+    moved: movedNames,
+  };
+}
+
+/**
+ * Applies splitDaisyThemes() to the emitted shared-styles.css and emits
+ * shared-themes.css next to it. Both this build and vite.popup.config.ts
+ * write shared-styles.css into the same folder, so both use this plugin and
+ * write the same two files.
+ */
+export function splitDaisyThemesPlugin(): Plugin {
+  return {
+    name: "split-daisyui-themes",
+    // After vite:css-post, which emits the sheet in its own generateBundle.
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      const asset = bundle[SHARED_CSS_FILE];
+      if (!asset || asset.type !== "asset") {
+        this.error(`${SHARED_CSS_FILE} is not in the bundle, so there are no themes to split out`);
+      }
+      const css =
+        typeof asset.source === "string"
+          ? asset.source
+          : new TextDecoder().decode(asset.source);
+      const { core, themes } = splitDaisyThemes(css);
+      asset.source = core;
+      this.emitFile({ type: "asset", fileName: SHARED_THEMES_CSS_FILE, source: themes });
+    },
+  };
+}
 
 /**
  * Theme sheets served as files rather than JS strings: theme-dark-v2.css alone
@@ -33,6 +208,7 @@ const THEME_CSS_FILES = [
 export default defineConfig({
   plugins: [
     tailwindcss(),
+    splitDaisyThemesPlugin(),
     {
       name: "write-manifest",
       closeBundle() {
@@ -108,8 +284,9 @@ export default defineConfig({
     emptyOutDir: false,
     minify: true,
     // Without this Vite injects the compiled Tailwind sheet back into the IIFE
-    // (there is no HTML entry to link it from). We want it on disk: ~165 KB out
-    // of content.js, parsed once by the browser instead of once per shadow root.
+    // (there is no HTML entry to link it from). We want it on disk: out of
+    // content.js, parsed once by the browser instead of once per shadow root,
+    // and split in two by splitDaisyThemesPlugin() above.
     cssCodeSplit: false,
     rollupOptions: {
       input: { content: resolve(import.meta.dirname, "src/main.ts") },

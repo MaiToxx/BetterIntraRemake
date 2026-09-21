@@ -27,6 +27,11 @@ export interface DialogTabsState {
   resizeObserver: ResizeObserver | null;
 }
 
+/**
+ * Kept for the shape of DialogState. The poll, the clock and the countdown
+ * now run through tickWhileVisible() (core/dom/dom-wait.ts), whose stop
+ * functions live in map-dialog.ts and occupancy.ts: these handles stay null.
+ */
 export interface DialogTimers {
   poll: ReturnType<typeof setInterval> | null;
   clock: ReturnType<typeof setInterval> | null;
