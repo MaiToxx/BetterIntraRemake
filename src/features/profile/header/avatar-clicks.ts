@@ -13,6 +13,26 @@ import { pageState } from "./visuals-apply.ts";
 import type { VisualUrls } from "./visuals-types.ts";
 
 /**
+ * The editor being built. createSettingsModal() reads several settings
+ * before it appends its dialog, so a second click in that window used to
+ * open a second editor on top of the first: it now joins the one opening.
+ */
+let opening: Promise<void> | null = null;
+
+export function openEditor(onSave: (updatedVisuals: VisualUrls) => void): Promise<void> {
+  if (opening) return opening;
+  opening = Promise.resolve()
+    .then(() => createSettingsModal(onSave))
+    .catch((err: unknown) => {
+      console.warn("Better Intra: the profile editor could not be opened.", err);
+    })
+    .finally(() => {
+      opening = null;
+    });
+  return opening;
+}
+
+/**
  * My own page: clicking the avatar opens the editor, and `onSave` receives
  * the visuals it saved. Attached once per avatar element.
  */
@@ -26,7 +46,7 @@ export function attachEditorListener(
   avatarEl.addEventListener("click", (e) => {
     e.stopPropagation();
     pageState.showingOriginalAvatar = false;
-    createSettingsModal(onSave);
+    void openEditor(onSave);
   });
 }
 

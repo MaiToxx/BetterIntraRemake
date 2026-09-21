@@ -58,7 +58,7 @@ Tests use Vitest with `jsdom` environment and global API. Run `npm test` (single
 ## Extension mechanics
 
 - Runs as a content script injected at `document_start` on `https://*.intra.42.fr/*`.
-- Hooks `window.fetch` in `public/hook.js` (web accessible resource) to intercept `/locations_stats` for logtime data.
+- Hooks `window.fetch` in `public/hook.js` to intercept `/locations_stats` for logtime data and the Intra token. It is declared in the manifests as a content script with `"world": "MAIN"` at `document_start` (Firefox 128+, Chrome 111+), so it runs before any page script; it is no longer injected with a `<script>` tag.
 - Settings stored in `chrome.storage.local` via typed `getConfig()` helper.
 - Cloud sync (optional) talks to `better-intra-worker` Cloudflare Worker via OAuth2 with 42 API.
 - Evaluations feature has a background service worker (`src/background.ts`) that polls the worker for pending notifications and shows Chrome notifications. Built separately via `vite.background.config.ts`.

@@ -1,4 +1,38 @@
-# Code splitting (study, not shipped)
+# Code splitting (implemented, measured in Firefox, not shipped)
+
+## Verdict
+
+The split described below was implemented (branch `code-splitting`, commit
+`bc61a42`) and passes every check of the Firefox harness
+(`scripts/firefox-smoke.mjs`, docs/FIREFOX-TESTING.md). Measured in Firefox
+156 against the v1.11.0 single-IIFE build, 30 interleaved warm loads per build:
+
+| median, warm | IIFE | split |
+| --- | ---: | ---: |
+| perf `<style>` inserted | 46 ms | 55 ms |
+| `#hub-gear-btn` inserted | 47 ms | 56 ms |
+| first hub open | 5 ms | 8.5 ms |
+
+Risk 1 below was real: Firefox reuses the compiled `content_scripts` file,
+and the module loader path costs more than the 32 % of bytes it saves. By the
+test plan's rule ("ship only if not slower warm"), **main keeps the single
+IIFE**. The lazy boundaries alone, kept inside the IIFE (where `import()` is
+inlined and only defers module evaluation), measured no faster either and
+added 4.8 KB, so they were not kept.
+
+Two things did come out of it and shipped in 1.11.1:
+- the loader's one clear win, hook.js running before the page's scripts, is
+  now achieved without any split: hook.js is a manifest content script with
+  `"world": "MAIN"` (Firefox 128+, Chrome 111+). In place before the Intra's
+  cached bundle on 10 of 10 warm loads, against 2 to 5 of 10 before;
+- the Firefox harness itself, which is how the verdict was reached.
+
+Worth re-measuring if Firefox changes how it loads moz-extension modules, or
+for a Chrome-only build. The original study follows.
+
+---
+
+# The study
 
 `content.js` is one IIFE (`vite.config.ts`, `format: "iife"`), so every
 `import()` in `src/` is inlined: the hub, the cluster map, the profile editor,

@@ -18,7 +18,7 @@ Measured on the minified v1.11.0 build (`npm run measure`, `dist-firefox`;
 | `theme-dark-v3.css`  |  12.3 KB |   2.1 KB | with the dark theme on v3                |
 | `theme-light-v3.css` |  10.0 KB |   1.6 KB | with a light theme preset                |
 | `auth-callback.js`   |   9.8 KB |   4.3 KB | on the worker callback page              |
-| `hook.js`            |   3.9 KB |   1.3 KB | injected into the page context           |
+| `hook.js`            |   4.1 KB |   1.4 KB | in the page's own world, at document_start |
 | `background.js`      |   2.7 KB |   1.3 KB | once per browser session                 |
 
 Raw is the number that matters. An extension file is read from disk, never

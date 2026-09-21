@@ -1,4 +1,10 @@
 (function () {
+  // Runs in the page's world at document_start (manifest "world": "MAIN").
+  // Installed at most once per page, whatever injects it.
+  var INSTALLED = Symbol.for("better-intra.hook");
+  if (window[INSTALLED]) return;
+  Object.defineProperty(window, INSTALLED, { value: true });
+
   const originalFetch = window.fetch;
   let intrapyToken = null;
 

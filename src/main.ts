@@ -56,12 +56,11 @@ void initEasterEggs();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);
 
-{
-  const s = document.createElement("script");
-  s.src = chrome.runtime.getURL("hook.js");
-  (document.head || document.documentElement).appendChild(s);
-  s.remove();
-}
+// hook.js is declared in the manifests as a content script running in the
+// page's own world ("world": "MAIN", document_start): the browser runs it
+// before any page script. It used to be a <script src> appended from here,
+// which loads asynchronously and, measured in Firefox 156, was in place
+// before the Intra's cached bundle on only 5 of 30 warm reloads.
 
 {
   const obs = new MutationObserver((mutations) => {

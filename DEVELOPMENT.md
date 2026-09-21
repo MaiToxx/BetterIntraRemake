@@ -25,7 +25,11 @@ npm test                # vitest (jsdom)
 npm run measure         # size of every built file, and what fills the bundles
 npm run check:size      # fails when a built file is over its budget (CI)
 npm run check:cycles    # fails on a runtime import cycle in src/ (CI)
+npm run smoke:firefox -- dist-firefox                    # automated Firefox smoke + timings
+npm run smoke:firefox -- --compare <build-A> <build-B>   # side-by-side timing table
 ```
+
+The Firefox harness needs a Firefox binary: `npx @puppeteer/browsers install firefox@stable --path .browsers` puts a portable copy in `.browsers/` (gitignored), or pass `--firefox <path>`. It serves a synthetic Intra page under the real `https://profile-v3.intra.42.fr` origin; see docs/FIREFOX-TESTING.md.
 
 Output goes to `dist-firefox/` or `dist-chrome/`.
 
