@@ -8,10 +8,8 @@ import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import type { FriendData } from "./friends-types.ts";
 import { formatTimeAgo, svgIcon } from "./friends-format.ts";
-import {
-  sanitizeCssColor,
-  sanitizeCssUrl,
-} from "../profile/header/visuals-sanitize.ts";
+import { sanitizeCssColor } from "../profile/header/visuals-sanitize.ts";
+import { cssUrl } from "../../core/security/css-sanitize.ts";
 import { CLUSTERS } from "../clusters/clusters.data.ts";
 import WALLET_SVG from "../../assets/svg/wallet.svg?raw";
 import EVAL_SVG from "../../assets/svg/eval.svg?raw";
@@ -34,6 +32,17 @@ export interface FriendRowOptions {
   onToggleSelect?: (login: string) => void;
   /** Called after a click swapped the avatar, so the widget re-renders. */
   onAvatarToggle: () => void;
+}
+
+/**
+ * A number for the avatar's inline style. The worker's friends endpoint
+ * passes another student's stored position and scale through as-is, so a
+ * string there could carry declarations of its own ("100%;position:fixed").
+ */
+function cssNumber(value: unknown, fallback: number): number {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 function levelFraction(level: number): number {
@@ -85,10 +94,13 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
     hasCustom && !showingOriginal ? friend.customAvatar : friend.avatar;
   // Custom avatars are interpolated into an inline style: whatever the data
   // source (worker friends endpoint or intrapy + visuals), only a plain
-  // http(s) URL and a plain colour may reach the CSS.
-  const customBgUrl =
-    hasCustom && !showingOriginal ? sanitizeCssUrl(currentSrc) : "";
-  const showCustom = customBgUrl !== "";
+  // http(s) URL and a plain colour may reach the CSS. The URL comes from
+  // another student, so it must stay inside a quoted url("..."): unquoted, a
+  // ')' in it ends the url() and the rest becomes declarations of their
+  // choosing (and a '(' or "'" makes Firefox drop the image altogether).
+  const customBg =
+    hasCustom && !showingOriginal ? cssUrl(currentSrc) : "";
+  const showCustom = customBg !== "";
   const avatarBg =
     sanitizeCssColor(friend.avatarBg, AVATAR_BG_KEYWORDS) || "transparent";
   const toggleTitle = hasCustom
@@ -122,10 +134,16 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
               ${showCustom
                 ? html`<div
                     class="w-14 h-14 rounded-full cursor-pointer ${medalClass}"
-                    style="background-image:url(${customBgUrl});background-size:${friend.avatarScale ??
-                    100}%;background-position:${friend.avatarPosX ??
-                    50}% ${friend.avatarPosY ??
-                    50}%;background-color:${avatarBg};background-repeat:no-repeat;"
+                    style="background-image:${customBg};background-size:${cssNumber(
+                      friend.avatarScale,
+                      100,
+                    )}%;background-position:${cssNumber(
+                      friend.avatarPosX,
+                      50,
+                    )}% ${cssNumber(
+                      friend.avatarPosY,
+                      50,
+                    )}%;background-color:${avatarBg};background-repeat:no-repeat;"
                     data-tip="${toggleTitle}"
                     @click="${toggleCustom}"
                   ></div>`

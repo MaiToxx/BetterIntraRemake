@@ -9,6 +9,7 @@
  */
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+import { sanitizeCssUrl } from "../../../core/security/css-sanitize.ts";
 import LINK_SVG from "../../../assets/svg/link.svg?raw";
 
 export interface FormState {
@@ -53,17 +54,25 @@ function renderUrlHistory(
   if (history.length === 0) return html``;
   return html`
     <div class="flex flex-wrap gap-1 mt-2">
-      ${history.map(
-        (url) => html`
+      ${history.map((url) => {
+        // History entries are raw strings: typed here, but also restored from a
+        // backup or copied back from the cloud. Unsanitised and unquoted, a
+        // ")" or ";" in one ended the url() and added declarations to the
+        // thumbnail (position:fixed over the page, say), and a "(" made it a
+        // bad url. sanitizeCssUrl() keeps only an http(s) URL with no quote,
+        // backslash or space, so inside url("...") it cannot leave the string.
+        const safe = sanitizeCssUrl(url);
+        const image = safe ? `background-image: url("${safe}"); ` : "";
+        return html`
           <button
             type="button"
             class="rounded-lg border border-base-300 hover:border-accent"
             data-tip="${url}"
             @click="${() => onSelect(url)}"
-            style="background-image: url(${url}); background-size: cover; background-position: center; width: 2rem; height: 2rem; flex-shrink: 0; border-radius: 0.5rem; cursor: pointer;"
+            style="${image}background-size: cover; background-position: center; width: 2rem; height: 2rem; flex-shrink: 0; border-radius: 0.5rem; cursor: pointer;"
           ></button>
-        `,
-      )}
+        `;
+      })}
       ${onClear
         ? html`<button
             type="button"

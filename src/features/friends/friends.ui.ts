@@ -7,10 +7,11 @@
 import { render } from "lit-html";
 import {
   addFriend,
-  clearFriendsCache,
-  fetchFriendsData,
+  cacheFriendData,
+  checkFriendLogin,
   getFriendsList,
   isFriend,
+  loadFriendsData,
   removeFriend,
 } from "./friends.ts";
 import {
@@ -37,16 +38,105 @@ function renderWidgetUI() {
   debugRowAlignment(_shadow);
 }
 
+/** Close the panel and leave every mode it was in. */
+function closePanel(state: WidgetState) {
+  state.open = false;
+  state.deleteMode = false;
+  state.selected = [];
+  state.addOpen = false;
+}
+
+/** The add error goes with the pending login it may offer to retry. */
+function clearAddError(state: WidgetState) {
+  state.addError = "";
+  state.addPending = null;
+}
+
+/**
+ * Load the friends list into the state. `force` skips the fresh cache (the
+ * refresh button). lastFetch only moves on a real success, so the refresh
+ * tooltip no longer says "Updated just now" after a failure.
+ */
+async function loadList(force: boolean) {
+  const state = _state;
+  if (!state) return;
+  state.loading = true;
+  state.loadError = false;
+  renderWidgetUI();
+  const list = await getFriendsList();
+  const result = await loadFriendsData(list, { force });
+  state.friends = result.friends;
+  state.loadError = !result.ok;
+  // Everyone answered, yet a saved login has no row: the Intra does not
+  // know it. A failed load says nothing about the logins it missed.
+  state.missingLogins = result.ok
+    ? list.filter((l) => !result.friends.some((f) => f.login === l))
+    : [];
+  if (result.ok && result.fetchedAt !== null) state.lastFetch = result.fetchedAt;
+  state.loading = false;
+  // A login saved while its check failed: it is checked now that it loaded.
+  if (
+    state.addPending &&
+    state.friends.some((f) => f.login === state.addPending)
+  ) {
+    clearAddError(state);
+  }
+}
+
+/**
+ * Check a login that is already saved in the list, and show the outcome.
+ * Only a real "no such user" answer removes it again: an expired session, a
+ * rate limit or a network error keeps it (and offers Retry), where it used to
+ * be deleted with "User not found.".
+ */
+async function verifyAddedLogin(login: string) {
+  const state = _state;
+  if (!state) return;
+  const wasPending = state.addPending === login;
+  const check = await checkFriendLogin(login);
+  if (state.needsReconnect) {
+    state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
+  }
+  state.addLoading = false;
+
+  if (check.status === "not-found") {
+    await removeFriend(login);
+    state.addPending = null;
+    state.addError = "User not found.";
+    renderWidgetUI();
+    // A pending login was saved and synced: the cloud copy must lose it too.
+    if (wasPending) syncToCloud();
+    return;
+  }
+
+  if (check.status === "error") {
+    state.addPending = login;
+    state.addError = `Could not check ${login} (Intra session expired or network error). It is saved: retry, or reload the page.`;
+    state.addInput = "";
+    renderWidgetUI();
+    _shadow?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+    syncToCloud();
+    return;
+  }
+
+  if (!state.friends.some((f) => f.login === login)) {
+    state.friends = [...state.friends, check.friend];
+  }
+  state.lastFetch = Date.now();
+  state.addInput = "";
+  state.missingLogins = state.missingLogins.filter((l) => l !== login);
+  clearAddError(state);
+  await cacheFriendData(check.friend);
+  renderWidgetUI();
+  _shadow?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+  syncToCloud();
+}
+
 export async function injectFriendsWidget() {
   if (_host) return;
 
   const show = await getConfig("SHOW_FRIENDS_WIDGET");
   if (!show) return;
-
-  if (CLUSTERS.length === 0) {
-    const campus = await getConfig("CLUSTERS_CAMPUS");
-    await getClusterData(campus);
-  }
 
   _host = document.createElement("div");
   _host.id = HOST_ID;
@@ -54,29 +144,28 @@ export async function injectFriendsWidget() {
   _shadow = _host.attachShadow({ mode: "open" });
   bindTooltips(_shadow, getIsLight);
 
+  // Escape closes the panel and gives focus back to the button that opens
+  // it (the closed panel is inert, so focus inside it would be lost). The
+  // add-login input handles its own Escape first and stops it.
+  _shadow.addEventListener("keydown", (e) => {
+    const ev = e as KeyboardEvent;
+    if (ev.key !== "Escape" || ev.defaultPrevented || !_state?.open) return;
+    closePanel(_state);
+    renderWidgetUI();
+    _shadow?.querySelector<HTMLButtonElement>(".friends-fab button")?.focus();
+  });
+
   _state = {
     ...(await loadInitialData()),
     onToggle: () => {
       if (!_state) return;
-      _state.open = !_state.open;
-      if (!_state.open) {
-        _state.deleteMode = false;
-        _state.selected = [];
-        _state.addOpen = false;
-      }
+      if (_state.open) closePanel(_state);
+      else _state.open = true;
       renderWidgetUI();
     },
     onRefresh: async () => {
       if (!_state || _state.notConnected) return;
-      _state.loading = true;
-      _state.loadError = false;
-      renderWidgetUI();
-      clearFriendsCache();
-      const list = await getFriendsList();
-      _state.friends = await fetchFriendsData(list);
-      _state.loadError = list.length > 0 && _state.friends.length === 0;
-      _state.lastFetch = Date.now();
-      _state.loading = false;
+      await loadList(true);
       if (_state.needsReconnect) {
         _state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
       }
@@ -141,7 +230,7 @@ export async function injectFriendsWidget() {
     onInputChange: (val: string) => {
       if (!_state) return;
       _state.addInput = val;
-      _state.addError = "";
+      clearAddError(_state);
       renderWidgetUI();
     },
     onAdd: async () => {
@@ -150,7 +239,7 @@ export async function injectFriendsWidget() {
       if (!login) return;
 
       _state.addLoading = true;
-      _state.addError = "";
+      clearAddError(_state);
       renderWidgetUI();
 
       if (await isFriend(login)) {
@@ -160,27 +249,37 @@ export async function injectFriendsWidget() {
         return;
       }
 
+      // Saved before the check, so that a check that fails loses nothing.
       await addFriend(login);
-
-      const fresh = await fetchFriendsData([login]);
-      if (_state.needsReconnect) {
-        _state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
-      }
-      if (fresh.length === 0) {
-        await removeFriend(login);
-        _state.addError = "User not found.";
-        _state.addLoading = false;
+      await verifyAddedLogin(login);
+    },
+    onRetryAdd: async () => {
+      if (!_state || !_state.addPending || _state.addLoading) return;
+      const login = _state.addPending;
+      // Removed meanwhile (e.g. from their profile): nothing left to check.
+      if (!(await isFriend(login))) {
+        clearAddError(_state);
         renderWidgetUI();
         return;
       }
-
-      _state.friends = [..._state.friends, ...fresh];
-      _state.lastFetch = Date.now();
-      _state.addInput = "";
-      _state.addLoading = false;
-      clearFriendsCache();
+      _state.addLoading = true;
       renderWidgetUI();
-      _shadow?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+      await verifyAddedLogin(login);
+    },
+    onCancelAdd: async () => {
+      if (!_state || !_state.addPending || _state.addLoading) return;
+      const login = _state.addPending;
+      await removeFriend(login);
+      _state.friends = _state.friends.filter((f) => f.login !== login);
+      clearAddError(_state);
+      renderWidgetUI();
+      syncToCloud();
+    },
+    onRemoveMissing: async (login: string) => {
+      if (!_state) return;
+      await removeFriend(login);
+      _state.missingLogins = _state.missingLogins.filter((l) => l !== login);
+      renderWidgetUI();
       syncToCloud();
     },
     onToggleAdd: () => {
@@ -188,15 +287,19 @@ export async function injectFriendsWidget() {
       _state.addOpen = !_state.addOpen;
       if (_state.addOpen) {
         _state.deleteMode = false;
-        _state.addError = "";
+        clearAddError(_state);
       } else {
         _state.addInput = "";
-        _state.addError = "";
+        clearAddError(_state);
       }
       renderWidgetUI();
-      if (_state.addOpen) {
-        _shadow?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
-      }
+      // Focus follows the form: into the input when it opens, back to the
+      // "+" button when it closes (the control that had it is gone).
+      _shadow
+        ?.querySelector<HTMLElement>(
+          _state.addOpen ? 'input[type="text"]' : 'button[aria-label="Add friend"]',
+        )
+        ?.focus();
     },
     onConnect: () => {
       loginWith42(async () => {
@@ -212,15 +315,22 @@ export async function injectFriendsWidget() {
 
   renderWidgetUI();
 
+  if (CLUSTERS.length === 0) {
+    const campus = await getConfig("CLUSTERS_CAMPUS");
+    // CLUSTERS only adds the #cluster-<id> hash to seat links, so it must not
+    // hold the widget back: it used to be awaited before the host existed,
+    // and a worker that was down (or a campus without a data file) kept the
+    // widget off the page. An unknown campus is skipped: getClusterData("")
+    // probes every campus file and loads the first one that exists.
+    if (campus) {
+      getClusterData(campus)
+        .then(() => renderWidgetUI())
+        .catch(() => {});
+    }
+  }
+
   if (!_state.notConnected && !_state.needsReconnect) {
-    _state.loading = true;
-    _state.loadError = false;
-    renderWidgetUI();
-    const list = await getFriendsList();
-    _state.friends = await fetchFriendsData(list);
-    _state.loadError = list.length > 0 && _state.friends.length === 0;
-    _state.lastFetch = Date.now();
-    _state.loading = false;
+    await loadList(false);
   }
 
   renderWidgetUI();
@@ -228,10 +338,7 @@ export async function injectFriendsWidget() {
   const closeOnOutsideClick = (e: Event) => {
     if (!_state || !_state.open) return;
     if (e.composedPath().includes(_host!)) return;
-    _state.open = false;
-    _state.deleteMode = false;
-    _state.selected = [];
-    _state.addOpen = false;
+    closePanel(_state);
     renderWidgetUI();
   };
   document.addEventListener("click", closeOnOutsideClick);

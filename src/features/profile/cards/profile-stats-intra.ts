@@ -260,20 +260,39 @@ async function fetchIntraPage(url: string): Promise<string | null> {
   }
 }
 
+/**
+ * What fetchProfileStatsViaIntra read. `roulette` and `evalStats` keep the
+ * worker's shape; the two flags say how much of it can be trusted.
+ */
+export interface ProfileStatsFetchResult extends ProfileStatsData {
+  /**
+   * Every page it needed was read. Only a complete result may be cached: a
+   * partial one would be shown as the real numbers for PROFILE_STATS_TTL_MS.
+   */
+  complete: boolean;
+  /**
+   * The correction-point history was read. When false, `roulette` is empty
+   * because it is unknown, not because the student never won.
+   */
+  rouletteLoaded: boolean;
+}
+
 export async function fetchProfileStatsViaIntra(
   login: string,
-): Promise<{ roulette: RouletteEntryLike[]; evalStats: EvalStatsLike | null }> {
+): Promise<ProfileStatsFetchResult> {
   const safeLogin = encodeURIComponent(login);
 
   const feedbacks: CorrectorFeedback[] = [];
   let page: number | null = 1;
-  let sawPage = false;
+  let feedbacksComplete = true;
   while (page !== null && page <= MAX_FEEDBACK_PAGES) {
     const html = await fetchIntraPage(
       `https://projects.intra.42.fr/users/${safeLogin}/feedbacks?as=corrector&page=${page}`,
     );
-    if (!html) break;
-    sawPage = true;
+    if (!html) {
+      feedbacksComplete = false;
+      break;
+    }
     feedbacks.push(...parseCorrectorFeedbacks(html));
     page = nextFeedbackPage(html, page);
   }
@@ -281,7 +300,15 @@ export async function fetchProfileStatsViaIntra(
   const historicsHtml = await fetchIntraPage(
     `https://profile.intra.42.fr/users/${safeLogin}/correction_point_historics`,
   );
+  const rouletteLoaded = historicsHtml !== null;
   const roulette = historicsHtml ? parseRouletteHistorics(historicsHtml) : [];
 
-  return { roulette, evalStats: sawPage ? computeEvalStats(feedbacks) : null };
+  return {
+    roulette,
+    // With a page missing (the first or a later one) the totals would be too
+    // low and still look real: report no stats rather than wrong ones.
+    evalStats: feedbacksComplete ? computeEvalStats(feedbacks) : null,
+    complete: feedbacksComplete && rouletteLoaded,
+    rouletteLoaded,
+  };
 }

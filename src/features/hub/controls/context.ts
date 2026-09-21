@@ -32,6 +32,43 @@ export async function removeSettings(keys: ConfigKey[]): Promise<void> {
   for (const key of keys) publishLookIfShared(key);
 }
 
+/**
+ * The ids setting.ts gives the label and the description of a setting's card,
+ * for its controls to point at with aria-labelledby / aria-describedby: the
+ * label is a <span> beside the control, not a <label> around it, so nothing
+ * else ties the two together for a screen reader. The whole hub is one shadow
+ * root, where the references resolve. Keyed by the def (one object per
+ * setting, rendered once per hub), so every renderer gets the same ids
+ * without passing them down; a def without a key gets a counter.
+ */
+export type SettingIds = {
+  label: string;
+  /** Only when the def has a description, so nothing points at nothing. */
+  desc?: string;
+  /** The "Not recognised" hint of a public profile link field. */
+  hint: string;
+};
+
+const settingIdCache = new WeakMap<object, SettingIds>();
+let settingIdSeq = 0;
+
+export function settingIds(def: {
+  key?: string;
+  desc?: string;
+}): SettingIds {
+  let ids = settingIdCache.get(def);
+  if (!ids) {
+    const base = `hub-${def.key ?? `s${++settingIdSeq}`}`;
+    ids = {
+      label: `${base}-label`,
+      desc: def.desc ? `${base}-desc` : undefined,
+      hint: `${base}-hint`,
+    };
+    settingIdCache.set(def, ids);
+  }
+  return ids;
+}
+
 /** One entry of a list built at run time. */
 export type Choice = { label: string; value: string };
 

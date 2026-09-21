@@ -28,6 +28,14 @@ import { getConfig } from "../config.ts";
  *  - chrome.storage.onChanged, for a preset picked while the page is open:
  *    the file is then added to every root already served.
  * Once a page has needed it, it keeps it (see `themesInUse`).
+ *
+ * MOTION. style.css stops every looping animation and transition of a root
+ * under prefers-reduced-motion. The Advanced "Disable animations" switch
+ * (DISABLE_ANIMATIONS) asks for the same without the OS preference: while it
+ * is on, every root this module serves also gets NO_MOTION_CSS, those rules
+ * without the media query, as one more adopted sheet (read through the
+ * settings snapshot, then chrome.storage.onChanged, so switching it in the
+ * hub reaches the widgets already on screen, both ways).
  */
 
 // Side-effect import: this is the only reason the asset exists in the output.
@@ -81,6 +89,38 @@ const unthemed = new Set<WeakRef<ShadowRoot>>();
 const unthemedRoots = new WeakSet<ShadowRoot>();
 /** Size at which `unthemed` drops its dead entries (a tab can live for hours). */
 let sweepAt = 64;
+
+/**
+ * The reduced-motion rules of style.css without their media query: what a
+ * root gets while DISABLE_ANIMATIONS is on. Same layer, so the same reasons
+ * hold (see the comment above `@layer bi-motion` in style.css), and
+ * tests/shared-styles.test.ts checks that the two stay identical.
+ */
+export const NO_MOTION_CSS =
+  "@layer bi-motion{" +
+  "*,::before,::after{" +
+  "animation-duration:1ms!important;animation-delay:0s!important;" +
+  "animation-iteration-count:1!important;animation-fill-mode:both!important;" +
+  "transition-duration:0s!important;transition-delay:0s!important;" +
+  "scroll-behavior:auto!important}" +
+  ".spinning{animation-duration:2.4s!important;" +
+  "animation-iteration-count:infinite!important;animation-fill-mode:none!important}" +
+  "}";
+
+/** DISABLE_ANIMATIONS, as last read. */
+let motionOff = false;
+/** Built on first use and shared by every root, like the shared sheet. */
+let noMotionSheet: CSSStyleSheet | null = null;
+/** Marks the <style> fallback of NO_MOTION_CSS, to find it again. */
+const NO_MOTION_ATTR = "data-bi-no-motion";
+
+/**
+ * Every root served, adopted or linked, so that switching animations off
+ * (or on) while the page is open reaches them. Weak, like `unthemed`.
+ */
+const motionRoots = new Set<WeakRef<ShadowRoot>>();
+const motionTracked = new WeakSet<ShadowRoot>();
+let motionSweepAt = 64;
 
 /** Extension URL of a packaged file, or null without an extension context. */
 function extensionURL(file: string): string | null {
@@ -170,6 +210,7 @@ export function adoptSharedStyles(root: ShadowRoot, extraCSS?: string): void {
   }
   if (withThemes) themed.add(root);
   else waitForThemes(root);
+  trackMotion(root);
 }
 
 function adopt(
@@ -256,7 +297,9 @@ function findLink(root: ShadowRoot, url: string | null): HTMLLinkElement | null 
 /** A root rendered by sharedStylesLink(): the shared <link> just loaded. */
 function onSharedLinkLoad(event: Event): void {
   const root = (event.currentTarget as Node | null)?.getRootNode?.();
-  if (!(root instanceof ShadowRoot) || themed.has(root)) return;
+  if (!(root instanceof ShadowRoot)) return;
+  trackMotion(root);
+  if (themed.has(root)) return;
   if (findLink(root, extensionURL(THEMES_CSS_FILE))) {
     themed.add(root);
   } else if (themesInUse) {
@@ -318,6 +361,102 @@ function useThemes(): void {
   });
 }
 
+function trackMotion(root: ShadowRoot): void {
+  if (motionTracked.has(root)) return;
+  motionTracked.add(root);
+  motionRoots.add(new WeakRef(root));
+  if (motionRoots.size >= motionSweepAt) {
+    for (const ref of motionRoots) if (!ref.deref()) motionRoots.delete(ref);
+    motionSweepAt = Math.max(64, motionRoots.size * 2);
+  }
+  if (motionOff) stopMotion(root);
+}
+
+function getNoMotionSheet(): CSSStyleSheet | null {
+  if (noMotionSheet || !supportsConstructableSheets()) return noMotionSheet;
+  try {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(NO_MOTION_CSS);
+    noMotionSheet = sheet;
+  } catch {
+    /* the <style> fallback below takes over */
+  }
+  return noMotionSheet;
+}
+
+/**
+ * Adopted last, which is fine: in a layer, its !important rules beat the
+ * widget's own whatever the order. Without constructable sheets, a <style>
+ * goes first in the root, before lit's markers, where no re-render of the
+ * widget will remove it (the layer makes its place irrelevant here too).
+ */
+function stopMotion(root: ShadowRoot): void {
+  const sheet = getNoMotionSheet();
+  if (sheet) {
+    try {
+      if (!root.adoptedStyleSheets.includes(sheet)) {
+        root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
+      }
+      return;
+    } catch {
+      /* fall back to a <style> */
+    }
+  }
+  if (root.querySelector(`style[${NO_MOTION_ATTR}]`)) return;
+  const style = document.createElement("style");
+  style.setAttribute(NO_MOTION_ATTR, "");
+  style.textContent = NO_MOTION_CSS;
+  root.prepend(style);
+}
+
+function allowMotion(root: ShadowRoot): void {
+  try {
+    const sheets = root.adoptedStyleSheets;
+    if (noMotionSheet && sheets.includes(noMotionSheet)) {
+      root.adoptedStyleSheets = sheets.filter((s) => s !== noMotionSheet);
+    }
+  } catch {
+    /* nothing was adopted */
+  }
+  root.querySelector(`style[${NO_MOTION_ATTR}]`)?.remove();
+}
+
+function setMotionOff(off: boolean): void {
+  if (off === motionOff) return;
+  motionOff = off;
+  for (const ref of motionRoots) {
+    const root = ref.deref();
+    if (!root) motionRoots.delete(ref);
+    else if (off) stopMotion(root);
+    else allowMotion(root);
+  }
+}
+
+async function readMotionSetting(): Promise<void> {
+  let off: unknown;
+  try {
+    off = await getConfig("DISABLE_ANIMATIONS");
+  } catch {
+    return; // no storage (tests, dead context): animations stay as they are
+  }
+  setMotionOff(off === true);
+}
+
+/**
+ * Everywhere this module runs: a root is a root, and the switch promises
+ * "across all Better Intra features".
+ */
+function watchMotionSetting(): void {
+  void readMotionSetting();
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === "local" && changes.DISABLE_ANIMATIONS) void readMotionSetting();
+    });
+  } catch {
+    /* no storage events here */
+  }
+}
+
 function needsThemesFile(preset: unknown): boolean {
   return typeof preset === "string" && preset !== "" && !CORE_THEMES.has(preset);
 }
@@ -376,3 +515,4 @@ function watchThemePreset(): void {
 // sheet follows as soon as the preset is known to need it.
 void preloadSharedStyles();
 watchThemePreset();
+watchMotionSetting();

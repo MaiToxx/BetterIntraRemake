@@ -21,26 +21,8 @@ import { initPace } from "./cards/pace.ts";
 import { ensureCampusData } from "../clusters/clusters.data.ts";
 import { tagDashboardCards } from "../customize/cards.ts";
 import { waitForElement } from "../../core/dom/dom-wait.ts";
-
-/**
- * Ids (or id prefixes) of the nodes Better Intra injects itself.
- * Used to tell our own DOM writes apart from the ones the React app makes.
- */
-const OWN_ID_PREFIXES = [
-  "ft-",
-  "better-intra",
-  "logtime-",
-  "events-shadow",
-  "project-badges",
-  "profile-badges",
-  "friends-widget",
-  "shortcuts-shadow",
-  "hub-",
-  "profile-modal-host",
-  "fire-milestone",
-  "update-banner",
-  "permission-banner",
-];
+import { isOwnId } from "../../core/lifecycle/own-ids.ts";
+import { holdAvatar, releaseAvatar } from "./header/visuals-apply.ts";
 
 /**
  * Overlays that come and go on their own (tooltip, dialogs, toasts). Their
@@ -59,11 +41,8 @@ const MAX_ANCESTOR_DEPTH = 24;
 /** Above this many records a burst is certainly a real React render. */
 const MAX_RECORDS_INSPECTED = 64;
 
-const isOwnElement = (el: Element): boolean => {
-  const id = el.id;
-  if (!id) return false;
-  return OWN_ID_PREFIXES.some((prefix) => id.startsWith(prefix));
-};
+/** Our own node, by id (the list is shared with the stale-instance cleanup). */
+const isOwnElement = (el: Element): boolean => isOwnId(el.id);
 
 const isOwnNode = (node: Node): boolean => {
   let el: Element | null =
@@ -140,13 +119,23 @@ const waitForBody = async (): Promise<void> => {
 
 export async function initProfile() {
   injectCustomStyles();
+  // Only this watcher paints the custom avatar, so the avatar is hidden only
+  // while it runs (see holdAvatar): a page-wide rule that outlived it left
+  // every avatar React mounted later invisible for the rest of the visit.
+  // Held from here, as early as the old rule, so that the Intra picture never
+  // flashes before the custom one on load.
+  const watchesProfile = location.origin === "https://profile-v3.intra.42.fr";
+  if (watchesProfile) holdAvatar();
   await waitForBody();
-  if (!document.body) return;
+  if (!document.body) {
+    releaseAvatar();
+    return;
+  }
   if (location.origin === "https://projects.intra.42.fr") {
     await redirectDefenseLinks();
     replaceMoulinetteImage();
   }
-  if (location.origin !== "https://profile-v3.intra.42.fr") return;
+  if (!watchesProfile) return;
 
   void ensureCampusData();
 
@@ -214,6 +203,8 @@ export async function initProfile() {
         scheduleUpdate();
       } else if (initialised && location.pathname.startsWith("/users")) {
         observer.disconnect();
+        // No pass will run again to reveal a re-mounted avatar.
+        releaseAvatar();
       }
     }
   };
@@ -237,6 +228,7 @@ export async function initProfile() {
 
   const stop = () => {
     observer.disconnect();
+    releaseAvatar();
     if (pending !== null) {
       clearTimeout(pending);
       pending = null;

@@ -127,10 +127,11 @@ export const needsReapply = (urls: VisualUrls) => {
     BACKGROUND_SELECTOR,
   ) as HTMLElement | null;
 
-  // injectCustomStyles() keeps the avatar at opacity 0 until we have applied
-  // the visuals, and applyImgs() is what reveals it. React handing us a freshly
-  // rendered element (no inline opacity) therefore always needs a re-apply -
-  // this check is what makes the cheaper checks below safe to trust.
+  // While the profile watcher holds the avatar (holdAvatar), the page sheet
+  // keeps it at opacity 0 until we have applied the visuals, and applyImgs()
+  // is what reveals it. React handing us a freshly rendered element (no inline
+  // opacity) therefore always needs a re-apply - this check is what makes the
+  // cheaper checks below safe to trust.
   if (avatar && !pageState.showingOriginalAvatar && avatar.style.opacity !== "1")
     return true;
   if (
@@ -199,6 +200,27 @@ export const needsReapply = (urls: VisualUrls) => {
 // Page stylesheet
 // ---------------------------------------------------------------------------
 
+/**
+ * Class on <html> while the profile watcher runs (profile.ts). The page sheet
+ * hides the avatar only under it: an inline `opacity: 1` from applyImgs() is
+ * the only thing that shows it again, and nothing sets one once the watcher
+ * has stopped, so an unconditional rule left every avatar React mounted after
+ * that (a later header render, a route change to another profile) invisible
+ * for the rest of the visit. Released, a re-mounted avatar shows the Intra
+ * picture instead of nothing.
+ */
+export const AVATAR_PENDING_CLASS = "ft-avatar-pending";
+
+/** Hide the avatar until the visuals are applied: the watcher is about to paint it. */
+export const holdAvatar = (): void => {
+  document.documentElement.classList.add(AVATAR_PENDING_CLASS);
+};
+
+/** The watcher stopped: nothing will reveal a new avatar element any more. */
+export const releaseAvatar = (): void => {
+  document.documentElement.classList.remove(AVATAR_PENDING_CLASS);
+};
+
 export const injectCustomStyles = () => {
   if (document.getElementById("ft-profile-host-styles")) return;
   const style = document.createElement("style");
@@ -216,6 +238,8 @@ export const injectCustomStyles = () => {
       will-change: background-image, transform;
       transform: translate3d(0, 0, 0);
       backface-visibility: hidden;
+    }
+    html.${AVATAR_PENDING_CLASS} ${AVATAR_SELECTOR} {
       opacity: 0 !important;
     }
     ${AVATAR_SELECTOR}[data-modal-listener] {

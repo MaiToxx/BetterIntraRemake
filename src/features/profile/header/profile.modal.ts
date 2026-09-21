@@ -208,9 +208,21 @@ export const createSettingsModal = async (
   // Escape triggers the native close without going through close(): the host
   // stayed in the DOM and the editor could not be reopened until a reload.
   dialog.addEventListener("close", () => dialog.remove());
-  // `close` is declared further down; referencing it lazily avoids a
-  // ReferenceError when the backdrop is clicked while settings are loading.
-  dialog.addEventListener("click", () => dialog.close());
+  // A backdrop click closes, but only when the press started on the backdrop
+  // too. Dragging the avatar preview and letting go past the dialog's edge
+  // sends the click to the dialog (the common ancestor), which used to close
+  // the editor and lose every unsaved edit. A press inside is seen here as
+  // coming from the `content` host (the shadow root retargets it), so it never
+  // counts. dialog.close() rather than `close`, which is declared further
+  // down: the backdrop can be clicked while the settings are still loading.
+  let downOnBackdrop = false;
+  dialog.addEventListener("pointerdown", (e) => {
+    downOnBackdrop = e.target === dialog;
+  });
+  dialog.addEventListener("click", (e) => {
+    if (downOnBackdrop && e.target === dialog) dialog.close();
+    downOnBackdrop = false;
+  });
 
   if (isConnected) {
     const cloudSettings = await fetchMySettings();
@@ -246,6 +258,20 @@ export const createSettingsModal = async (
   };
 
   const state: FormState = { ...saved };
+
+  // Every edit is previewed on the real page (liveApplyBannerBg), and nothing
+  // else repaints it: the profile observer ignores our own dialog and stops
+  // after a few seconds. So a close without Save (the X, Escape, a backdrop
+  // click: all three fire `close`) paints the saved look back, otherwise the
+  // unsaved banner, background, decoration and badges stayed until a reload
+  // and looked saved. `committed` skips it once the new look is stored (Save)
+  // or the page is about to reload (Reset): Save's own close() fires `close`
+  // too, and repainting then would put the old look over the new one.
+  let dirty = false;
+  let committed = false;
+  dialog.addEventListener("close", () => {
+    if (dirty && !committed) liveApplyBannerBg(saved);
+  });
 
   const imgHistory = {
     avatar: await getConfig("PROFILE_IMAGE_HISTORY"),
@@ -287,6 +313,17 @@ export const createSettingsModal = async (
       "PROFILE_BADGE_ORDER",
       "PROFILE_BADGE_WRAP",
     ]);
+    // `saved` is gone and the page reloads below: nothing to paint back.
+    committed = true;
+    // The cloud copy has to go too: visitors read it (/public/visuals), and the
+    // next open of this editor copies it back into local storage, which undid
+    // the reset. Empty fields are the defaults syncMyVisuals() fills in; it
+    // does nothing when not signed in. Awaited so reload() cannot cut it off.
+    try {
+      await syncMyVisuals({ avatar: "", banner: "", background: "" });
+    } catch (e) {
+      console.error("Failed to sync reset:", e);
+    }
     close();
     location.reload();
   };
@@ -300,6 +337,7 @@ export const createSettingsModal = async (
 
   const handleFormUpdate = (updates: Partial<FormState>) => {
     Object.assign(state, updates);
+    dirty = true;
     liveApplyBannerBg(state);
     rerender();
   };
@@ -404,6 +442,9 @@ export const createSettingsModal = async (
           await chrome.storage.local.set(batchData as Record<string, unknown>);
         if (keysToRemove.length > 0)
           await chrome.storage.local.remove(keysToRemove);
+        // From here the new look is the stored one: an Escape while the cloud
+        // sync below is pending must not paint the old one back.
+        committed = true;
 
         imgHistory.avatar = addToHistory(state.avatar, imgHistory.avatar);
         imgHistory.banner = addToHistory(state.banner, imgHistory.banner);

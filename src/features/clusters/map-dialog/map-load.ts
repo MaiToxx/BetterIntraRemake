@@ -57,13 +57,24 @@ export async function ensureClusterData(
     if (state.seatPosCache.has(key) && state.svgViewBoxes.has(key)) {
       return "cached";
     }
-    let cached = await getCachedCluster(campusId, c.id);
+    const cached = await getCachedCluster(campusId, c.id);
     let svgText = cached?.svg;
+    // An expired map served because the worker failed: shown, but not saved
+    // back as fresh, so the next open asks the worker again.
+    let stale = false;
     if (!svgText) {
       const url = `${WORKER_URL}/api/v1/cluster/svg?url=${encodeURIComponent(c.svg)}`;
-      const res = await fetch(url, { signal });
-      if (!res.ok) return null;
-      svgText = await res.text();
+      try {
+        const res = await fetch(url, { signal });
+        if (res.ok) svgText = await res.text();
+      } catch (err) {
+        if (signal?.aborted) throw err;
+      }
+      if (!svgText) {
+        svgText = (await getCachedCluster(campusId, c.id, { allowStale: true }))?.svg;
+        if (!svgText) return null;
+        stale = true;
+      }
     }
     if (!state.svgViewBoxes.has(key)) {
       const svgDoc = new DOMParser().parseFromString(svgText, "image/svg+xml");
@@ -76,7 +87,7 @@ export async function ensureClusterData(
         .map(Number);
       state.svgViewBoxes.set(key, { w: vb[2] || 1200, h: vb[3] || 800 });
       state.seatPosCache.set(key, seatMap);
-      setCachedCluster(campusId, c.id, {
+      if (!stale) setCachedCluster(campusId, c.id, {
         svg: svgText,
         seats: [...seatMap],
         viewBox: state.svgViewBoxes.get(key)!,

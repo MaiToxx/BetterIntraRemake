@@ -33,8 +33,34 @@ export function openEditor(onSave: (updatedVisuals: VisualUrls) => void): Promis
 }
 
 /**
- * My own page: clicking the avatar opens the editor, and `onSave` receives
- * the visuals it saved. Attached once per avatar element.
+ * Makes the avatar <div> a button for the keyboard and assistive tech too:
+ * focusable, announced as a button with `label`, and activated by Enter or
+ * Space like a native one. The avatar is the only way into the editor, and a
+ * click listener alone left keyboard and screen-reader users (and link-hint
+ * extensions, which look for role=button) without it. Mouse users see no
+ * change: the focus ring (profile-card.ts) is drawn for :focus-visible only.
+ */
+function makeKeyboardButton(
+  avatarEl: HTMLElement,
+  label: string,
+  activate: () => void,
+): void {
+  avatarEl.tabIndex = 0;
+  avatarEl.setAttribute("role", "button");
+  avatarEl.setAttribute("aria-label", label);
+  avatarEl.addEventListener("keydown", (e) => {
+    // A key aimed at something inside the avatar is that element's business.
+    if (e.target !== avatarEl) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); // Space would scroll the page
+    activate();
+  });
+}
+
+/**
+ * My own page: clicking the avatar (or Enter / Space on it) opens the editor,
+ * and `onSave` receives the visuals it saved. Attached once per avatar
+ * element.
  */
 export function attachEditorListener(
   avatarEl: HTMLElement,
@@ -43,17 +69,24 @@ export function attachEditorListener(
   if (avatarEl.dataset.modalListener) return;
   avatarEl.dataset.modalListener = "true";
   avatarEl.style.cursor = "pointer";
-  avatarEl.addEventListener("click", (e) => {
-    e.stopPropagation();
+  // The title helps mouse users find the feature, as the toggle's does.
+  avatarEl.title = "Edit my profile visuals";
+  const open = () => {
     pageState.showingOriginalAvatar = false;
     void openEditor(onSave);
+  };
+  avatarEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    open();
   });
+  makeKeyboardButton(avatarEl, "Edit my profile visuals", open);
 }
 
 /**
- * Someone else's page: clicking the avatar swaps their custom avatar for the
- * original Intra picture and back. `getVisuals` is read at click time, so the
- * listener always restores the visuals currently cached for the page.
+ * Someone else's page: clicking the avatar (or Enter / Space on it) swaps
+ * their custom avatar for the original Intra picture and back. `getVisuals` is
+ * read at click time, so the listener always restores the visuals currently
+ * cached for the page.
  */
 export function attachToggleListener(
   avatarEl: HTMLElement,
@@ -63,8 +96,14 @@ export function attachToggleListener(
   avatarEl.dataset.toggleListener = "true";
   avatarEl.style.cursor = "pointer";
   avatarEl.title = "Click to view original avatar";
-  avatarEl.addEventListener("click", (e) => {
-    e.stopPropagation();
+  // A toggle button: the label stays, aria-pressed says which picture shows.
+  // Synced on focus too, because visuals.ts resets the state for a new
+  // profile without going through here.
+  const syncPressed = () =>
+    avatarEl.setAttribute("aria-pressed", String(pageState.showingOriginalAvatar));
+  syncPressed();
+  avatarEl.addEventListener("focus", syncPressed);
+  const toggle = () => {
     const currentAvatar = document.querySelector(
       AVATAR_SELECTOR,
     ) as HTMLElement;
@@ -119,5 +158,11 @@ export function attachToggleListener(
         "important",
       );
     }
+    syncPressed();
+  };
+  avatarEl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggle();
   });
+  makeKeyboardButton(avatarEl, "Show original avatar", toggle);
 }

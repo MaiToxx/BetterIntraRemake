@@ -1,5 +1,6 @@
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
+import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
 import { hashLogin } from "../../../core/crypto.ts";
 import { createCountdown } from "../../../core/dom/countdown.ts";
 import {
@@ -38,6 +39,18 @@ interface EvalStatsData {
   >;
   global: { total: number; failed: number; successPercentage: number | null };
 }
+
+/**
+ * What the card shows. `roulette` is null when the history could not be
+ * fetched: the card then says so, instead of "0 wins / 0 points" passing for
+ * the student's real record.
+ */
+interface ProfileStats {
+  roulette: RouletteEntry[] | null;
+  evalStats: EvalStatsData | null;
+}
+
+const UNAVAILABLE: ProfileStats = { roulette: null, evalStats: null };
 
 function formatRouletteDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -102,23 +115,38 @@ function getTargetLogin(): string | null {
   return null;
 }
 
-async function fetchProfileStats(targetLogin: string): Promise<{
-  roulette: RouletteEntry[];
-  evalStats: EvalStatsData | null;
-}> {
-  const cloudLogin = await getCloudLogin();
-  const sessionToken = await getConfig("CLOUD_TOKEN");
-  if (!cloudLogin || !sessionToken) return { roulette: [], evalStats: null };
-
+async function fetchProfileStats(targetLogin: string): Promise<ProfileStats> {
   if (AUTH_MODE === "intra") {
     // No 42 API on the self-hosted worker: read the Intra v2 pages instead
-    // (see profile-stats-intra.ts), cached locally for an hour per login.
+    // (see profile-stats-intra.ts), with the student's own Intra cookies, so
+    // no cloud session is needed. Cached locally for an hour per login, but
+    // only a complete read: a failed page would otherwise be shown as the
+    // real numbers for that hour.
     const cached = await readProfileStatsCache(targetLogin);
-    if (cached) return cached;
+    if (cached) {
+      // storage is only checked to hold an object: an entry without a list
+      // is unknown, not an empty history
+      return {
+        roulette: Array.isArray(cached.roulette) ? cached.roulette : null,
+        evalStats: cached.evalStats ?? null,
+      };
+    }
     const data = await fetchProfileStatsViaIntra(targetLogin);
-    if (data.evalStats) await writeProfileStatsCache(targetLogin, data);
-    return data;
+    if (data.complete) {
+      await writeProfileStatsCache(targetLogin, {
+        roulette: data.roulette,
+        evalStats: data.evalStats,
+      });
+    }
+    return {
+      roulette: data.rouletteLoaded ? data.roulette : null,
+      evalStats: data.evalStats,
+    };
   }
+
+  const cloudLogin = await getCloudLogin();
+  const sessionToken = await getConfig("CLOUD_TOKEN");
+  if (!cloudLogin || !sessionToken) return UNAVAILABLE;
 
   const hashedLogin = await hashLogin(cloudLogin);
 
@@ -134,32 +162,41 @@ async function fetchProfileStats(targetLogin: string): Promise<{
         headers: { Authorization: `Bearer ${sessionToken}` },
       },
     );
-    if (!res.ok) return { roulette: [], evalStats: null };
+    if (!res.ok) return UNAVAILABLE;
 
     const data = (await res.json()) as {
-      roulette: { entries: RouletteEntry[] };
-      evalStats: EvalStatsData;
+      roulette?: { entries?: RouletteEntry[] };
+      evalStats?: EvalStatsData;
     };
 
+    const entries = data.roulette?.entries;
     return {
-      roulette: data.roulette?.entries || [],
+      roulette: Array.isArray(entries) ? entries : null,
       evalStats: data.evalStats || null,
     };
   } catch {
-    return { roulette: [], evalStats: null };
+    return UNAVAILABLE;
   }
 }
 
+/** Stands in for a count that could not be fetched. */
+const NO_VALUE = "—";
+
 function buildRouletteSection(
-  entries: RouletteEntry[],
+  entries: RouletteEntry[] | null,
   showHistory: boolean,
   loading: boolean,
 ): HTMLElement {
   const section = document.createElement("div");
 
-  const wins = new Set(entries.map((e) => formatRouletteDate(e.created_at)))
-    .size;
-  const points = entries.reduce((acc, e) => acc + e.sum, 0);
+  const wins =
+    entries === null
+      ? NO_VALUE
+      : String(new Set(entries.map((e) => formatRouletteDate(e.created_at))).size);
+  const points =
+    entries === null
+      ? NO_VALUE
+      : String(entries.reduce((acc, e) => acc + e.sum, 0));
   const { dateLabel } = getNextRoulette();
 
   const counters = document.createElement("div");
@@ -179,7 +216,7 @@ function buildRouletteSection(
   if (loading) {
     winValue.appendChild(createSkeleton({ width: "28px", height: "20px" }));
   } else {
-    winValue.textContent = String(wins);
+    winValue.textContent = wins;
   }
   winCol.appendChild(winValue);
   counters.appendChild(winCol);
@@ -198,7 +235,7 @@ function buildRouletteSection(
   if (loading) {
     ptsValue.appendChild(createSkeleton({ width: "36px", height: "20px" }));
   } else {
-    ptsValue.textContent = String(points);
+    ptsValue.textContent = points;
   }
   ptsCol.appendChild(ptsValue);
   counters.appendChild(ptsCol);
@@ -224,6 +261,13 @@ function buildRouletteSection(
 
   section.appendChild(counters);
 
+  if (!loading && entries === null) {
+    const note = document.createElement("div");
+    note.style.cssText = "font-size: 13px; opacity: 0.6; text-align: center;";
+    note.textContent = "Couldn't load roulette history";
+    section.appendChild(note);
+  }
+
   if (showHistory && loading) {
     const divider = document.createElement("div");
     divider.style.cssText =
@@ -240,7 +284,7 @@ function buildRouletteSection(
     section.appendChild(list);
   }
 
-  if (showHistory && !loading && entries.length > 0) {
+  if (showHistory && !loading && entries !== null && entries.length > 0) {
     const divider = document.createElement("div");
     divider.style.cssText =
       "border-top: 1px solid hsl(var(--border)); margin: 8px 0;";
@@ -417,7 +461,11 @@ function buildEvalStatsSection(data: EvalStatsData): HTMLElement {
     const failedTd = document.createElement("td");
     failedTd.style.cssText =
       "padding: 4px 4px !important; color: inherit !important;";
-    if (m.failed > 0) failedTd.style.color = "rgb(239,68,68) !important";
+    // The priority goes in setProperty's third argument: "... !important"
+    // inside a style.color value is invalid, so it was silently dropped and
+    // the "inherit !important" above always won.
+    if (m.failed > 0)
+      failedTd.style.setProperty("color", "rgb(239,68,68)", "important");
     failedTd.textContent = String(m.failed);
     tr.appendChild(failedTd);
 
@@ -425,14 +473,15 @@ function buildEvalStatsSection(data: EvalStatsData): HTMLElement {
     pctTd.style.cssText =
       "padding: 4px 4px !important; font-weight: 500 !important;";
     if (m.successPercentage !== null) {
-      pctTd.style.color =
-        m.successPercentage >= 80
-          ? "rgb(34,197,94) !important"
-          : "rgb(239,68,68) !important";
+      pctTd.style.setProperty(
+        "color",
+        m.successPercentage >= 80 ? "rgb(34,197,94)" : "rgb(239,68,68)",
+        "important",
+      );
       pctTd.textContent = `${m.successPercentage}%`;
     } else {
       pctTd.textContent = "—";
-      pctTd.style.color = "hsl(var(--primary) / 0.3) !important";
+      pctTd.style.setProperty("color", "hsl(var(--primary) / 0.3)", "important");
     }
     tr.appendChild(pctTd);
 
@@ -505,7 +554,7 @@ function ensureCard(force: boolean): HTMLElement | null {
  */
 function renderCard(
   card: HTMLElement,
-  rouletteEntries: RouletteEntry[],
+  rouletteEntries: RouletteEntry[] | null,
   evalStats: EvalStatsData | null,
   showRouletteHistory: boolean,
   loading: boolean,
@@ -588,17 +637,25 @@ export async function initRouletteStats() {
 
   const showHistory = await getConfig("PROFILE_SHOW_ROULETTE_HISTORY");
   const cloudLogin = await getCloudLogin();
-  const targetLogin = getTargetLogin() || cloudLogin;
+  let targetLogin = getTargetLogin();
+  if (AUTH_MODE === "intra") {
+    // The Intra v2 pages are read with the student's own cookies: no cloud
+    // session needed, so on your own profile the page login stands in for
+    // the cloud one (as for the marks list).
+    targetLogin ||= cloudLogin || getLoginFromPage();
+  } else {
+    // The worker computes the stats and wants a session: signed out there is
+    // nothing to fetch, and a card of zeros would pass for real data.
+    if (!cloudLogin || !(await getConfig("CLOUD_TOKEN"))) return;
+    targetLogin ||= cloudLogin;
+  }
   if (!targetLogin) return;
 
   rouletteStatsPolling = true;
 
   // Fire the worker request right away: it must not wait for the intra grid to
   // be in the DOM, otherwise the card can only be filled after both are done.
-  const statsPromise = fetchProfileStats(targetLogin).catch(() => ({
-    roulette: [] as RouletteEntry[],
-    evalStats: null as EvalStatsData | null,
-  }));
+  const statsPromise = fetchProfileStats(targetLogin).catch(() => UNAVAILABLE);
 
   let attempts = 0;
   const poll = () => {
@@ -618,7 +675,7 @@ export async function initRouletteStats() {
 
     // The card takes its slot in the grid immediately, with placeholders where
     // the worker values go, so nothing pops in once the request resolves.
-    renderCard(card, [], null, showHistory, true);
+    renderCard(card, null, null, showHistory, true);
 
     statsPromise.then(({ roulette, evalStats }) => {
       rouletteStatsInitialized = true;

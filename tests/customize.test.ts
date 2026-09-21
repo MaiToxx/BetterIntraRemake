@@ -66,7 +66,8 @@ describe("buildCustomizeCss", () => {
       CUSTOM_ACCENT_COLOR: "#ff0000",
     });
     expect(css).toContain("--primary: 0 100% 50% !important");
-    expect(css).toContain("--primary-foreground: 0 0% 100%");
+    // Pure red: black text is 5.3:1, white only 4.0:1 (customize-contrast.test.ts)
+    expect(css).toContain("--primary-foreground: 0 0% 0%");
     expect(css).toContain("--theme-color: #ff0000");
   });
 

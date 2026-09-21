@@ -3,7 +3,7 @@
  * the tab's grid, dimmed or hidden) and the control its kind asks for. The
  * dispatch below is the one place that maps a setting kind to its renderer.
  */
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { until } from "lit-html/directives/until.js";
 import { getConfig } from "../../../core/config.ts";
 import { renderCalendarPanel } from "../../calendar/calendar.ui.ts";
@@ -11,7 +11,7 @@ import { renderPresetsPanel } from "../../customize/presets.ui.ts";
 import { renderCardsPanel } from "../../customize/cards.ui.ts";
 import { renderAboutPanel } from "../hub.about.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import type { LiveOptions } from "./context.ts";
+import { settingIds, type LiveOptions } from "./context.ts";
 import {
   renderColor,
   renderEmoji,
@@ -31,8 +31,21 @@ import { renderShortcutsPanel } from "./shortcuts.ts";
 import { renderThemePreset } from "./theme-preset.ts";
 
 /**
+ * Kinds whose controls another module draws: their card becomes a group
+ * named by the setting's label, so those controls are at least announced in
+ * the right context. Every other kind names its own controls (basic.ts...).
+ */
+const PANEL_KINDS: ReadonlySet<string> = new Set([
+  "shortcuts",
+  "custom-presets",
+  "custom-cards",
+]);
+
+/**
  * A divider is a bare title and the full-width panels (About, Calendar,
  * feature cards) draw their own frame; every other setting sits in a card.
+ * The label and description get the ids of settingIds(def), which the
+ * controls point at.
  */
 export function renderSetting(
   def: HubSettingDef,
@@ -61,6 +74,8 @@ export function renderSetting(
     def.colSpan != null
       ? (COLSPAN_CLASSES[def.colSpan - 1] ?? "col-span-full")
       : "col-span-full";
+  const ids = settingIds(def);
+  const panel = PANEL_KINDS.has(def.kind);
 
   return html`<div
     class="card bg-base-200 shadow-sm p-3 sm:p-4 ${gridClass} ${hidden
@@ -75,13 +90,18 @@ export function renderSetting(
         : "flex-col sm:flex-row sm:items-center"} justify-between gap-3 sm:gap-4"
     >
       <div class="flex flex-col">
-        <span class="text-sm">${def.label}</span>
+        <span class="text-sm" id="${ids.label}">${def.label}</span>
         ${def.desc
-          ? html`<span class="text-xs opacity-50">${def.desc}</span>`
+          ? html`<span class="text-xs opacity-50" id="${ids.desc}"
+              >${def.desc}</span
+            >`
           : ""}
       </div>
       <div
         class="${isFullWidth ? "w-full" : "flex-none self-end sm:self-auto"}"
+        role="${panel ? "group" : nothing}"
+        aria-labelledby="${panel ? ids.label : nothing}"
+        aria-describedby="${panel && ids.desc ? ids.desc : nothing}"
       >
         ${renderSettingControl(def, enabled, live)}
       </div>

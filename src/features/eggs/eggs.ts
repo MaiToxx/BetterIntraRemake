@@ -14,6 +14,11 @@
  *
  * Every secret found is remembered in EGGS_FOUND (local only) and counted
  * in the About tab.
+ *
+ * With reduced motion (the OS preference, or the Advanced "Disable
+ * animations" switch) a secret is still found and announced, but nothing
+ * moves: no barrel roll, no hue cycling, no confetti, no digital rain, and
+ * Maxwell stands still instead of walking and spinning.
  */
 import { html, render } from "lit-html";
 import { getConfigMany } from "../../core/config.ts";
@@ -89,8 +94,39 @@ export async function recordEgg(id: EggId): Promise<boolean> {
 /* Effects                                                             */
 /* ------------------------------------------------------------------ */
 
-const TOAST_ID = "ft-egg-toast";
+/**
+ * Set by initEasterEggs (and refreshed by gearClicked) from the Advanced
+ * "Disable animations" switch.
+ */
+let animationsDisabled = false;
 
+/** The OS asks for less motion, or the user switched animations off here. */
+function prefersStill(): boolean {
+  if (animationsDisabled) return true;
+  try {
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  } catch {
+    return false;
+  }
+}
+
+const TOAST_ID = "ft-egg-toast";
+/** How long after the live region exists its text is written (see toast()). */
+const TOAST_ANNOUNCE_DELAY_MS = 50;
+let toastHide: ReturnType<typeof setTimeout> | undefined;
+let toastAnnounce: ReturnType<typeof setTimeout> | undefined;
+
+/**
+ * The pill at the bottom of the screen. Its text is there at once, as before
+ * (the profile greeting reads it back), but hidden from screen readers: what
+ * they hear is a separate, visually hidden polite live region, written a
+ * moment later. A region is announced when its text CHANGES, not when it is
+ * inserted with it; emptied first, a repeated message is read again. The
+ * <style> sits outside both.
+ */
 export function toast(message: string, ms = 4500): void {
   let host = document.getElementById(TOAST_ID);
   if (!host) {
@@ -109,13 +145,30 @@ export function toast(message: string, ms = 4500): void {
           box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
           animation: ft-egg-in 0.35s ease-out;
         }
+        #${TOAST_ID}.still { animation: none; }
+        #${TOAST_ID} [role="status"] {
+          position: absolute; width: 1px; height: 1px; overflow: hidden;
+          clip-path: inset(50%); white-space: nowrap;
+        }
         @keyframes ft-egg-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+        @media (prefers-reduced-motion: reduce) { #${TOAST_ID} { animation: none; } }
       </style>
-      <span>${message}</span>`,
+      <span aria-hidden="true">${message}</span>
+      <span role="status" aria-live="polite" aria-atomic="true"></span>`,
     host,
   );
+  host.classList.toggle("still", prefersStill());
+  const region = host.querySelector<HTMLElement>('[role="status"]');
+  if (region) region.textContent = "";
+  clearTimeout(toastAnnounce);
+  toastAnnounce = setTimeout(() => {
+    if (region) region.textContent = message;
+  }, TOAST_ANNOUNCE_DELAY_MS);
+  // One timer for the pill: each toast used to schedule its own removal, and
+  // the first one's cut the second short.
+  clearTimeout(toastHide);
   const mine = host;
-  setTimeout(() => {
+  toastHide = setTimeout(() => {
     if (mine.isConnected) mine.remove();
   }, ms);
 }
@@ -253,11 +306,16 @@ const catSvg = (onClick?: (e: Event) => void) => html`
         <path d="M20 52 l16 2 M20 60 l16 -2 M84 52 l-16 2 M84 60 l-16 -2" stroke="#ddd" stroke-width="1.2" />
       </svg>`;
 
-export function maxwell(seconds = 9): void {
+/**
+ * `still`: he sits in the bottom-left corner for the same time instead of
+ * walking across and spinning (reduced motion).
+ */
+export function maxwell(seconds = 9, still = false): void {
   const id = "ft-egg-maxwell";
   if (document.getElementById(id)) return;
   const host = document.createElement("div");
   host.id = id;
+  if (still) host.classList.add("still");
   const remove = () => host.remove();
   render(
     html`<style>
@@ -268,11 +326,13 @@ export function maxwell(seconds = 9): void {
         }
         #${id} svg { width: 100%; height: 100%; animation: ft-mx-spin 1.6s linear infinite; transform-style: preserve-3d; }
         #${id}.fast svg { animation-duration: 0.45s; }
+        #${id}.still { left: 16px; animation: none; cursor: default; }
+        #${id}.still svg { animation: none; }
         @keyframes ft-mx-walk { from { left: -160px; } to { left: 100vw; } }
         @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
         @media (prefers-reduced-motion: reduce) { #${id} svg { animation: none; } }
       </style>
-      ${catSvg(() => host.classList.toggle("fast"))}`,
+      ${catSvg(still ? undefined : () => host.classList.toggle("fast"))}`,
     host,
   );
   (document.body || document.documentElement).appendChild(host);
@@ -284,11 +344,13 @@ export function maxwell(seconds = 9): void {
  * each on its own drift and spin. Typing "maxwell" again while a cat is
  * on screen summons them.
  */
-export function maxwellInvasion(seconds = 12, count = 48): void {
+export function maxwellInvasion(seconds = 12, count = 48, still = false): void {
   const id = "ft-egg-maxwells";
   if (document.getElementById(id)) return;
   const host = document.createElement("div");
   host.id = id;
+  // Reduced motion: the cats are all there, but none of them drifts or spins.
+  if (still) host.classList.add("still");
   const cats = Array.from({ length: count }, (_, i) => ({
     left: Math.random() * 100,
     top: Math.random() * 100,
@@ -305,6 +367,7 @@ export function maxwellInvasion(seconds = 12, count = 48): void {
         #${id} .cat svg { width: 100%; height: 100%; animation: ft-mx-spin var(--spin) linear infinite; transform-style: preserve-3d; }
         @keyframes ft-mxs-drift { from { margin-top: -6vh; margin-left: calc(var(--dir) * -6vw); } to { margin-top: 6vh; margin-left: calc(var(--dir) * 6vw); } }
         @keyframes ft-mx-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        #${id}.still .cat, #${id}.still .cat svg { animation: none; }
         @media (prefers-reduced-motion: reduce) { #${id} .cat, #${id} .cat svg { animation: none; } }
       </style>
       ${cats.map(
@@ -342,8 +405,12 @@ export async function gearClicked(): Promise<void> {
   gearClicks.push(now);
   if (gearClicks.length < 7) return;
   gearClicks = [];
-  const { EASTER_EGGS_ENABLED } = await getConfigMany(["EASTER_EGGS_ENABLED"]);
+  const { EASTER_EGGS_ENABLED, DISABLE_ANIMATIONS } = await getConfigMany([
+    "EASTER_EGGS_ENABLED",
+    "DISABLE_ANIMATIONS",
+  ]);
   if (EASTER_EGGS_ENABLED === false) return;
+  animationsDisabled = DISABLE_ANIMATIONS === true;
   await savePreset("🐇 Hacker", {
     ...defaultCustomization(),
     CUSTOM_ACCENT_ENABLED: true,
@@ -357,7 +424,7 @@ export async function gearClicked(): Promise<void> {
     CUSTOM_SCROLLBAR: "accent",
     CUSTOM_PAGE_BG_PRESET: "mono",
   });
-  matrixRain(4);
+  if (!prefersStill()) matrixRain(4);
   await found("hacker", "Wake up, Neo… the 🐇 Hacker preset is in Customize > Presets");
 }
 
@@ -366,6 +433,17 @@ function isTypingTarget(t: EventTarget | null): boolean {
   if (!el) return false;
   const tag = el.tagName;
   return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+/**
+ * Whether a key event was typed into a field. On a document listener
+ * `e.target` is the shadow HOST for a field inside a shadow root (every hub
+ * field, the friends login box, the preset names...), while the composed
+ * path still starts at the field itself.
+ */
+function isTypingEvent(e: Event): boolean {
+  const path = typeof e.composedPath === "function" ? e.composedPath() : [];
+  return isTypingTarget(path[0] ?? e.target);
 }
 
 function checkTimeAndDay(): void {
@@ -411,7 +489,7 @@ function checkFortyTwoHours(): void {
     const monthKey = new Date().toISOString().slice(0, 7);
     if (localStorage.getItem("ft-egg-42") !== monthKey) {
       localStorage.setItem("ft-egg-42", monthKey);
-      confetti();
+      if (!prefersStill()) confetti();
       void found("fortytwo", "42h00 this month. The answer to everything ✨");
     }
     return true;
@@ -458,32 +536,43 @@ let initialised = false;
 export async function initEasterEggs(): Promise<void> {
   if (initialised) return;
   initialised = true;
-  const { EASTER_EGGS_ENABLED } = await getConfigMany(["EASTER_EGGS_ENABLED"]);
+  const { EASTER_EGGS_ENABLED, DISABLE_ANIMATIONS } = await getConfigMany([
+    "EASTER_EGGS_ENABLED",
+    "DISABLE_ANIMATIONS",
+  ]);
   if (EASTER_EGGS_ENABLED === false) return;
+  animationsDisabled = DISABLE_ANIMATIONS === true;
 
   const feed = createSequenceMatcher(SEQUENCES, (id) => {
+    // Asked at each hit: the OS preference can change while the page is open.
+    const still = prefersStill();
     if (id === "konami") {
-      partyMode();
+      if (!still) partyMode();
       void found("konami", "Party mode 🎉");
     } else if (id === "barrel") {
-      barrelRoll();
+      if (!still) barrelRoll();
       void found("barrel", "Do a barrel roll! 🛩️");
     } else if (id === "matrix") {
-      matrixRain();
+      if (!still) matrixRain();
       void found("matrix", "There is no spoon 🥄");
     } else if (id === "maxwell") {
       if (document.getElementById("ft-egg-maxwell")) {
-        maxwellInvasion();
+        maxwellInvasion(undefined, undefined, still);
         void found("invasion", "FULL MAXWELL 🐈‍⬛🐈‍⬛🐈‍⬛");
       } else {
-        maxwell();
-        void found("maxwell", "Maxwell 🐈‍⬛ (click him to spin faster, type his name again for more)");
+        maxwell(undefined, still);
+        void found(
+          "maxwell",
+          still
+            ? "Maxwell 🐈‍⬛ (type his name again for more)"
+            : "Maxwell 🐈‍⬛ (click him to spin faster, type his name again for more)",
+        );
       }
     }
   });
   document.addEventListener("keydown", (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (isTypingTarget(e.target)) return;
+    if (isTypingEvent(e)) return;
     feed(e.key);
   });
 

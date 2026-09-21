@@ -1,0 +1,196 @@
+/**
+ * Easter eggs and the people they must not bother: someone typing in one of
+ * Better Intra's own fields (they live in shadow roots, where a document
+ * listener only sees the host), someone who asked for less motion (the OS
+ * preference or the Advanced "Disable animations" switch), and someone who
+ * uses a screen reader (the toast is a live region).
+ */
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+type Listener = EventListenerOrEventListenerObject;
+/** keydown listeners each fresh module instance adds, removed after each case. */
+const added: Listener[] = [];
+
+async function startEggs(stored: Record<string, unknown> = {}) {
+  await chrome.storage.local.clear();
+  if (Object.keys(stored).length) await chrome.storage.local.set(stored);
+  vi.resetModules();
+  const mod = await import("../src/features/eggs/eggs.ts");
+  await mod.initEasterEggs();
+  return mod;
+}
+
+function typeInto(target: EventTarget, text: string | string[]) {
+  for (const key of typeof text === "string" ? [...text] : text) {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { key, bubbles: true, composed: true }),
+    );
+  }
+}
+
+/** A text field inside an open shadow root, like every hub field. */
+function shadowInput(): HTMLInputElement {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = host.attachShadow({ mode: "open" });
+  const input = document.createElement("input");
+  root.appendChild(input);
+  return input;
+}
+
+function reducedMotion(on: boolean) {
+  (window as unknown as { matchMedia: unknown }).matchMedia = vi.fn((query: string) => ({
+    matches: on && query === "(prefers-reduced-motion: reduce)",
+    media: query,
+  }));
+}
+
+async function foundEggs(): Promise<unknown> {
+  // found() records asynchronously, after the effect started.
+  await vi.advanceTimersByTimeAsync(0);
+  return (await chrome.storage.local.get("EGGS_FOUND")).EGGS_FOUND;
+}
+
+const KONAMI = [
+  "ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown",
+  "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a",
+];
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  document.body.replaceChildren();
+  document.head.replaceChildren();
+  document.documentElement.removeAttribute("style");
+  const real = document.addEventListener.bind(document);
+  vi.spyOn(document, "addEventListener").mockImplementation(
+    (type: string, fn: Listener, opts?: boolean | AddEventListenerOptions) => {
+      if (type === "keydown") added.push(fn);
+      real(type, fn, opts);
+    },
+  );
+  // jsdom has no 2D context; a stub lets the canvas effects mount.
+  const ctx = new Proxy({}, { get: () => () => {}, set: () => true });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
+    ctx as unknown as CanvasRenderingContext2D,
+  );
+  reducedMotion(false);
+});
+
+afterEach(() => {
+  for (const fn of added.splice(0)) document.removeEventListener("keydown", fn);
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  delete (window as unknown as { matchMedia?: unknown }).matchMedia;
+});
+
+describe("typing in Better Intra's own fields", () => {
+  it("does not trigger a secret from a field inside a shadow root", async () => {
+    await startEggs();
+    const input = shadowInput();
+    typeInto(input, "barrel");
+    typeInto(input, "matrix");
+    expect(document.documentElement.style.transform).toBe("");
+    expect(document.querySelector("canvas")).toBeNull();
+    expect(await foundEggs()).toBeUndefined();
+  });
+
+  it("still triggers from the page itself", async () => {
+    await startEggs();
+    typeInto(document.body, "barrel");
+    expect(document.documentElement.style.transform).toBe("rotate(360deg)");
+    expect(await foundEggs()).toEqual(["barrel"]);
+  });
+
+  it("ignores light-DOM fields as before", async () => {
+    await startEggs();
+    const input = document.createElement("textarea");
+    document.body.appendChild(input);
+    typeInto(input, "barrel");
+    expect(document.documentElement.style.transform).toBe("");
+  });
+});
+
+describe("reduced motion", () => {
+  for (const [why, stored, os] of [
+    ["the OS preference", {}, true],
+    ["the Disable animations switch", { DISABLE_ANIMATIONS: true }, false],
+  ] as const) {
+    it(`finds the secrets but moves nothing, with ${why}`, async () => {
+      reducedMotion(os);
+      await startEggs(stored);
+
+      // One at a time: two secrets recorded in the same tick race on storage.
+      typeInto(document.body, "barrel");
+      expect(document.documentElement.style.transform).toBe("");
+      expect(await foundEggs()).toEqual(["barrel"]);
+
+      typeInto(document.body, KONAMI);
+      expect(document.getElementById("ft-egg-party")).toBeNull();
+      expect(await foundEggs()).toContain("konami");
+
+      typeInto(document.body, "matrix");
+      // Neither the konami confetti nor the digital rain.
+      expect(document.querySelector("canvas")).toBeNull();
+      expect(await foundEggs()).toContain("matrix");
+
+      typeInto(document.body, "maxwell");
+      const cat = document.getElementById("ft-egg-maxwell");
+      expect(cat?.classList.contains("still")).toBe(true);
+      expect(await foundEggs()).toContain("maxwell");
+      typeInto(document.body, "maxwell");
+      expect(document.getElementById("ft-egg-maxwells")?.classList.contains("still")).toBe(true);
+      // Listed in EGG_IDS order.
+      expect(await foundEggs()).toEqual(["konami", "barrel", "matrix", "maxwell", "invasion"]);
+    });
+  }
+
+  it("keeps every effect when nothing asks for less motion", async () => {
+    await startEggs();
+    typeInto(document.body, KONAMI);
+    expect(document.getElementById("ft-egg-party")).not.toBeNull();
+    expect(document.querySelector("canvas")).not.toBeNull();
+    typeInto(document.body, "maxwell");
+    expect(document.getElementById("ft-egg-maxwell")?.classList.contains("still")).toBe(false);
+  });
+});
+
+describe("the toast", () => {
+  it("is announced through a polite live region written after it exists", async () => {
+    const { toast } = await startEggs();
+    toast("Party mode", 1000);
+    const host = document.getElementById("ft-egg-toast")!;
+    const region = host.querySelector<HTMLElement>('[role="status"]');
+    expect(region).not.toBeNull();
+    expect(region!.getAttribute("aria-live")).toBe("polite");
+    // The <style> is not inside what gets announced.
+    expect(region!.querySelector("style")).toBeNull();
+    // What the eye sees is there at once, and hidden from screen readers so
+    // that the message is not read twice.
+    const pill = host.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+    expect(pill.textContent).toBe("Party mode");
+    expect(region!.textContent).toBe("");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(region!.textContent).toBe("Party mode");
+
+    // Emptied first, so the same message is read again.
+    toast("Party mode", 1000);
+    expect(region!.textContent).toBe("");
+    await vi.advanceTimersByTimeAsync(100);
+    expect(document.querySelectorAll("#ft-egg-toast")).toHaveLength(1);
+    expect(region!.textContent).toBe("Party mode");
+
+    // The first toast's timer (due 1000 ms after it) does not cut the second
+    // one short; the second one's own timer removes it.
+    await vi.advanceTimersByTimeAsync(850);
+    expect(host.isConnected).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(host.isConnected).toBe(false);
+  });
+
+  it("does not slide in under reduced motion", async () => {
+    reducedMotion(true);
+    const { toast } = await startEggs();
+    toast("Party mode");
+    expect(document.getElementById("ft-egg-toast")!.classList.contains("still")).toBe(true);
+  });
+});

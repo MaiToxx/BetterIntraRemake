@@ -12,7 +12,7 @@ import GRIP_VERTICAL_SVG from "../../../assets/svg/grip-vertical.svg?raw";
 import RESET_SVG from "../../../assets/svg/reset.svg?raw";
 import { getConfig } from "../../../core/config.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import { saveSetting } from "./context.ts";
+import { saveSetting, settingIds } from "./context.ts";
 
 export function renderCardOrder(
   def: HubSettingDef,
@@ -21,6 +21,11 @@ export function renderCardOrder(
   const container = document.createElement("div");
   container.className = "w-full flex flex-col gap-2 relative mt-2";
   container.setAttribute("data-card-order-panel", "true");
+  // Its buttons (Reset, one eye per card) are announced under the setting.
+  const ids = settingIds(def);
+  container.setAttribute("role", "group");
+  container.setAttribute("aria-labelledby", ids.label);
+  if (ids.desc) container.setAttribute("aria-describedby", ids.desc);
 
   let draggedIdx: number | null = null;
 
@@ -48,12 +53,13 @@ export function renderCardOrder(
         <button
           type="button"
           class="btn btn-xs btn-outline btn-error gap-1 absolute -top-11 right-0 md:right-2 z-30"
+          aria-label="Reset ${def.label}"
           ?disabled="${!enabled}"
           @click="${() => {
             if (enabled) resetToDefault();
           }}"
         >
-          <span class="size-3 flex items-center justify-center"
+          <span class="size-3 flex items-center justify-center" aria-hidden="true"
             >${unsafeHTML(RESET_SVG)}</span
           >
           Reset
@@ -118,14 +124,19 @@ export function renderCardOrder(
                         class="p-1 -ml-1 rounded hover:bg-black/10 transition-colors pointer-events-auto cursor-pointer flex items-center justify-center text-white"
                         @click="${toggleVisibility}"
                         data-tip="${isDisabled ? "Show card" : "Hide card"}"
+                        aria-label="${isDisabled
+                          ? "Show"
+                          : "Hide"} ${displayName} card"
                       >
                         ${isDisabled
                           ? html`<span
                               class="size-4 opacity-80 flex items-center justify-center"
+                              aria-hidden="true"
                               >${unsafeHTML(EYE_SLASH_SVG)}</span
                             >`
                           : html`<span
                               class="size-4 opacity-60 flex items-center justify-center"
+                              aria-hidden="true"
                               >${unsafeHTML(EYE_SVG)}</span
                             >`}
                       </button>

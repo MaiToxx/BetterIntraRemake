@@ -1,4 +1,7 @@
 import { html, TemplateResult } from "lit-html";
+import { cssUrl, sanitizeCssColor } from "../../../core/security/css-sanitize.ts";
+
+const TRANSPARENT = new Set(["transparent"]);
 
 export interface AvatarEditorState {
   url: string;
@@ -24,9 +27,8 @@ export function renderAvatarEditor(
   return html`
     <div
       id="ft-avatar-preview"
-      style="width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px;border-radius:9999px;background-image:${state.url
-        ? `url("${state.url}")`
-        : "none"};background-size:${state.scale}%;background-position:${state.posX}% ${state.posY}%;background-color:${state.bgColor};background-repeat:no-repeat;${decoBoxShadow}cursor:grab;flex-shrink:0;user-select:none;"
+      style="width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px;border-radius:9999px;background-image:${cssUrl(state.url) ||
+      "none"};background-size:${state.scale}%;background-position:${state.posX}% ${state.posY}%;background-color:${sanitizeCssColor(state.bgColor, TRANSPARENT) || "transparent"};background-repeat:no-repeat;${decoBoxShadow}cursor:grab;flex-shrink:0;user-select:none;"
       @mousedown="${onPreviewMouseDown(onUpdate)}"
       @wheel="${onPreviewWheel(onUpdate, state)}"
     ></div>

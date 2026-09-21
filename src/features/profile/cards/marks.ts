@@ -3,6 +3,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { waitForIntrapyToken } from "../../../core/intra/intrapy.ts";
 import { INTRA_FONT } from "../../logtime/constants.ts";
 import CHECK_SVG from "../../../assets/svg/check.svg?raw";
 import X_SVG from "../../../assets/svg/x.svg?raw";
@@ -38,43 +39,10 @@ let marksCache: Record<string, MarkedProject[]> = {};
 let marksInitialized = false;
 let ownProfileLoading = false;
 let otherProfileRunning = false;
-let cachedToken: string | null = null;
 let cachedLogin: string | null = null;
 
-function waitForToken(timeout = 15000): Promise<string | null> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const handler = (e: CustomEvent) => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      resolve(e.detail);
-    };
-    const cleanup = () => {
-      document.removeEventListener(
-        "42_INTRAPY_TOKEN",
-        handler as EventListener,
-      );
-      clearTimeout(timer);
-    };
-    document.addEventListener("42_INTRAPY_TOKEN", handler as EventListener);
-
-    const stored = sessionStorage.getItem("ft_intrapy_token");
-    if (stored) {
-      resolved = true;
-      cleanup();
-      resolve(stored);
-      return;
-    }
-
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeout);
-  });
-}
+/** How long to wait for the page to hand over a usable Intra token. */
+const TOKEN_WAIT_MS = 15000;
 
 /**
  * The API returns "YYYY-MM-DDTHH:MM:SS" without a timezone, meaning UTC.
@@ -152,24 +120,45 @@ function waitForCursusId(timeout = 10000): Promise<string> {
   });
 }
 
+/**
+ * The marked projects of `login` in `cursusId`, or null when the request
+ * failed (expired token, network error...). null is never cached, so the next
+ * cursus switch asks again instead of showing "no projects" for the rest of
+ * the page.
+ */
 async function fetchMarks(
   login: string,
   token: string,
   cursusId: string,
-): Promise<MarkedProject[]> {
+): Promise<MarkedProject[] | null> {
   const url = `https://intrapy.intra.42.fr/api/v1/users/${login}/projects/marked?cursus_id=${cursusId}`;
   try {
     const res = await fetch(url, {
       headers: { Authorization: token },
     });
     if (!res.ok) {
-      return [];
+      return null;
     }
     const data = (await res.json()) as MarkedProject[];
+    if (!Array.isArray(data)) return null;
     return data.filter((p) => p.final_mark !== null);
   } catch (err) {
-    return [];
+    return null;
   }
+}
+
+/** The cached marks for `key`, fetched (and cached) on a miss; null if that failed. */
+async function getMarks(
+  key: string,
+  login: string,
+  token: string,
+  cursusId: string,
+): Promise<MarkedProject[] | null> {
+  const cached = marksCache[key];
+  if (cached) return cached;
+  const fetched = await fetchMarks(login, token, cursusId);
+  if (fetched) marksCache[key] = fetched;
+  return fetched;
 }
 
 function findCard(title: "PROJECTS" | "MARKS"): HTMLElement | null {
@@ -478,17 +467,20 @@ function injectFinishedProjects(card: HTMLElement, marks: MarkedProject[]) {
 async function handleCursusSwitch(cursusId: string) {
   if (ownProfileLoading) return;
   const login = cachedLogin;
-  const token = cachedToken;
-  if (!login || !token) return;
+  if (!login) return;
 
   const cardPromise = waitForCard("PROJECTS");
-  if (!marksCache[cursusId]) {
+  let marks: MarkedProject[] | null = marksCache[cursusId] ?? null;
+  if (!marks) {
     void cardPromise.then((card) => card && showMarksSkeleton(card));
-    marksCache[cursusId] = await fetchMarks(login, token, cursusId);
+    // The token of the page load is short-lived: by the time the student
+    // switches cursus it has often expired, so take the current one.
+    const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
+    marks = token ? await getMarks(cursusId, login, token, cursusId) : null;
   }
   const card = await cardPromise;
   if (card) {
-    injectFinishedProjects(card, marksCache[cursusId]);
+    injectFinishedProjects(card, marks ?? []);
   } else {
     removeMarksSkeleton();
   }
@@ -785,7 +777,7 @@ export async function initMarks() {
     const cardPromise = waitForCard("PROJECTS");
     void cardPromise.then((card) => card && showMarksSkeleton(card));
 
-    const token = await waitForToken(15000);
+    const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
     if (!token) {
       removeMarksSkeleton();
       ownProfileLoading = false;
@@ -793,7 +785,6 @@ export async function initMarks() {
     }
 
     cachedLogin = profileLogin;
-    cachedToken = token;
 
     document.addEventListener("42_CURSUS_ID", ((e: CustomEvent) => {
       const cursusId =
@@ -802,13 +793,11 @@ export async function initMarks() {
     }) as EventListener);
 
     const cursusId = await waitForCursusId(10000);
-    if (!marksCache[cursusId]) {
-      marksCache[cursusId] = await fetchMarks(profileLogin, token, cursusId);
-    }
+    const marks = await getMarks(cursusId, profileLogin, token, cursusId);
 
     const card = await cardPromise;
     if (card) {
-      injectFinishedProjects(card, marksCache[cursusId]);
+      injectFinishedProjects(card, marks ?? []);
     } else {
       removeMarksSkeleton();
     }
@@ -826,14 +815,12 @@ export async function initMarks() {
 
     otherProfileRunning = true;
     let marksData: MarkedProject[] | undefined;
-    const token = await waitForToken(15000);
+    const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
     const cursusId = token ? await waitForCursusId(10000) : null;
     if (token && cursusId) {
       const key = `OTHER_${targetLogin}_${cursusId}`;
-      if (!marksCache[key]) {
-        marksCache[key] = await fetchMarks(targetLogin, token, cursusId);
-      }
-      marksData = marksCache[key];
+      marksData =
+        (await getMarks(key, targetLogin, token, cursusId)) ?? undefined;
     }
     const enhanced = await enhanceExistingMarks(card, marksData);
     otherProfileRunning = false;

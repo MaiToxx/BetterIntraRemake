@@ -1,7 +1,7 @@
 /**
  * The scrolling body of the friends panel: the message that fits the current
- * state (not connected, session expired, loading, no friends, nobody online)
- * or the list of friend rows itself.
+ * state (not connected, session expired, loading, loading failed, no friends,
+ * nobody online) or the list of friend rows itself.
  */
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
@@ -25,9 +25,80 @@ function renderEmpty() {
 }
 
 /**
+ * The list could not be loaded at all. It used to fall through to "No friends
+ * yet", which told a student with 20 saved logins that their list was gone.
+ */
+function renderLoadError(state: WidgetState) {
+  return html`<div
+    class="flex flex-col items-center gap-3 py-12 px-6 text-center"
+    role="alert"
+  >
+    <span class="text-lg font-bold opacity-60">Could not load your friends</span>
+    <p class="text-sm opacity-50">
+      Your Intra session may have expired, or the network is down. Your list
+      is still saved; reloading the page usually fixes it.
+    </p>
+    <button
+      type="button"
+      class="btn btn-primary btn-sm font-bold mt-2"
+      @click="${state.onRefresh}"
+    >
+      Retry
+    </button>
+  </div>`;
+}
+
+/** Part of the list could not be refreshed: say so above what is shown. */
+function renderRefreshWarning(state: WidgetState) {
+  return html`<div
+    class="flex items-center gap-2 px-5 py-2 text-sm text-base-content bg-warning/15 border-b border-warning/40"
+    role="alert"
+  >
+    <span class="flex-1 min-w-0"
+      >Could not refresh everything: some friends may be missing or out of
+      date.</span
+    >
+    <button
+      type="button"
+      class="btn btn-xs btn-ghost shrink-0"
+      @click="${state.onRefresh}"
+    >
+      Retry
+    </button>
+  </div>`;
+}
+
+/**
  * Content of `.friends-list`. `sorted` is what survives the online filter,
  * already in display order.
  */
+/**
+ * Saved logins the server does not know, each with a Remove button: without
+ * a row they could not be deleted from the widget at all.
+ */
+function renderMissing(state: WidgetState) {
+  if (state.missingLogins.length === 0) return "";
+  return html`<div
+    class="flex flex-wrap items-center gap-2 px-5 py-2 text-sm bg-base-200/60 border-b border-base-300"
+  >
+    <span class="opacity-70">Not found on the Intra:</span>
+    ${state.missingLogins.map(
+      (login) => html`<span class="badge badge-outline gap-1 pr-0">
+        ${login}
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs btn-circle min-h-0 h-5 w-5"
+          aria-label="Remove ${login} from my friends"
+          data-tip="Remove"
+          @click="${() => state.onRemoveMissing(login)}"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+      </span>`,
+    )}
+  </div>`;
+}
+
 export function renderFriendsList(state: WidgetState, sorted: FriendData[]) {
   if (state.notConnected) {
     return html`<div
@@ -78,9 +149,16 @@ export function renderFriendsList(state: WidgetState, sorted: FriendData[]) {
       <span class="loading loading-spinner loading-md"></span>
     </div>`;
   }
-  if (state.friends.length === 0) return renderEmpty();
+  if (state.friends.length === 0) {
+    return state.loadError
+      ? renderLoadError(state)
+      : html`${renderMissing(state)}${renderEmpty()}`;
+  }
+  const warning = state.loadError
+    ? renderRefreshWarning(state)
+    : renderMissing(state);
   if (sorted.length === 0) {
-    return html`<div
+    return html`${warning}<div
       class="flex flex-col items-center gap-2 py-16 opacity-40"
     >
       <span
@@ -93,7 +171,7 @@ export function renderFriendsList(state: WidgetState, sorted: FriendData[]) {
       </p>
     </div>`;
   }
-  return html`<ul class="list text-base-content">
+  return html`${warning}<ul class="list text-base-content">
     ${sorted.map(
       (f, i) =>
         html`<li

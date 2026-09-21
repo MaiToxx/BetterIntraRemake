@@ -3,13 +3,21 @@
  * it, repaints the hub in that theme at once, and flips the hub's light/dark
  * switch when the theme sits on the other side.
  */
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { THEMES } from "../../../core/theme/theme-manager.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import { saveSetting } from "./context.ts";
+import { saveSetting, settingIds } from "./context.ts";
 
 export function renderThemePreset(def: HubSettingDef, value: unknown) {
-  return html`<div class="flex flex-wrap gap-1 w-full">
+  const ids = settingIds(def);
+  // Every swatch is a radio named by its theme (aria-label, which daisyUI also
+  // prints on it); the group carries the setting's label.
+  return html`<div
+    class="flex flex-wrap gap-1 w-full"
+    role="radiogroup"
+    aria-labelledby="${ids.label}"
+    aria-describedby="${ids.desc ?? nothing}"
+  >
     ${(def.options ?? []).map((o) => {
       if ((o as { divider?: boolean }).divider) {
         return html`<div class="w-full h-px bg-base-300 my-1"></div>`;

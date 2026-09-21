@@ -10,7 +10,7 @@ import GEAR_SVG from "../../assets/svg/settings_gear.svg?raw";
 import GLOBE_OUTLINE_SVG from "../../assets/svg/globe-outline.svg?raw";
 import { getIsLight } from "../../core/theme/theme-manager.ts";
 import { getActiveFeatures } from "./hubSettings.storage.ts";
-import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+import { svgFromMarkup } from "../../core/dom/svg.ts";
 import { openClusterDialog } from "../clusters/map-dialog.ts";
 import { gearClicked } from "../eggs/eggs.ts";
 import { watchDom } from "../../core/dom/dom-wait.ts";
@@ -27,6 +27,11 @@ function findSidebarMainGroup(): HTMLDivElement | null {
   );
 }
 
+/**
+ * The sidebar entries are links around an icon: a screen reader has nothing
+ * to announce but the aria-label, and the icon itself is decoration. They are
+ * <a href>, so Tab reaches them and Enter fires the click already.
+ */
 function renderGearButton(
   onClick: (e: Event) => void,
 ): ReturnType<typeof html> {
@@ -34,12 +39,15 @@ function renderGearButton(
     id="hub-gear-btn"
     class="py-5 w-full flex justify-center hover:opacity-100 opacity-40"
     href="#"
+    aria-label="Better Intra settings"
+    data-tip="Better Intra settings"
+    data-tip-pos="right"
     @click="${(e: Event) => {
       e.preventDefault();
       onClick(e);
     }}"
   >
-    ${unsafeHTML(GEAR_SVG)}
+    ${svgFromMarkup(GEAR_SVG, { "aria-hidden": "true" })}
   </a>`;
 }
 
@@ -51,6 +59,7 @@ function renderClustersButton(
     id="ft-clusters-btn"
     class="py-5 w-full flex justify-center hover:opacity-100 opacity-40"
     href="#"
+    aria-label="Cluster map"
     data-tip="Clusters"
     data-tip-pos="right"
     @click="${(e: Event) => {
@@ -58,12 +67,12 @@ function renderClustersButton(
       onClick(e);
     }}"
   >
-    ${unsafeHTML(
-      GLOBE_OUTLINE_SVG.replace(
-        "<svg",
-        `<svg width="25" height="25" stroke="${color}"`,
-      ),
-    )}
+    ${svgFromMarkup(GLOBE_OUTLINE_SVG, {
+      width: "25",
+      height: "25",
+      stroke: color,
+      "aria-hidden": "true",
+    })}
   </a>`;
 }
 
@@ -124,8 +133,36 @@ function isSidebarComplete(): boolean {
   return !!document.getElementById("ft-clusters-btn");
 }
 
+/**
+ * True when this script outlived its extension. Chrome keeps the old content
+ * script running in open tabs after an update, a reload or a disable, but its
+ * extension APIs are gone (runtime.id is cleared), so the gear and Clusters
+ * clicks failed silently. Firefox tears the old script down instead and
+ * injects the new one (see core/lifecycle/stale-instance.ts).
+ */
+function extensionWasReloaded(): boolean {
+  try {
+    return typeof chrome === "undefined" || !chrome.runtime?.id;
+  } catch {
+    return true;
+  }
+}
+
+/** Say why nothing opens, and offer the reload that fixes it. */
+function offerReload(): void {
+  // A native dialog: our own ones read settings, which is exactly what an
+  // orphaned script can no longer do.
+  if (window.confirm("Better Intra was updated. Reload the page to use it?")) {
+    location.reload();
+  }
+}
+
 export function mountGearButton(): void {
   const open = async () => {
+    if (extensionWasReloaded()) {
+      offerReload();
+      return;
+    }
     void gearClicked();
     const { openHubModal } = await import("./hubSettings.ui.ts");
 
@@ -137,6 +174,10 @@ export function mountGearButton(): void {
   const sidebar = findSidebarMainGroup();
 
   const openClusters = () => {
+    if (extensionWasReloaded()) {
+      offerReload();
+      return;
+    }
     try {
       openClusterDialog();
     } catch (err) {}

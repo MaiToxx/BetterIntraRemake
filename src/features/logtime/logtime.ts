@@ -31,7 +31,10 @@ import type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 export type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
 const INTRAPY_BASE = "https://intrapy.intra.42.fr";
-import { WORKER_URL } from "../../core/worker.ts";
+/** How long the events fetch waits for a fresh token when the cached one expired. */
+const EVENTS_TOKEN_WAIT_MS = 10_000;
+import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
+import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
 const historyCache = new Map<string, Record<string, number>>();
 const fetchPromiseMap = new Map<string, Promise<void>>();
 
@@ -43,6 +46,33 @@ let skipScroll = false;
 let carouselYm: string | null = null;
 let viewOverflow = false;
 let headerResizeObserver: ResizeObserver | null = null;
+
+/**
+ * Whether "Load older months" can get an answer. The worker builds the history
+ * from the 42 API with its own 42 application, which the worker of an "intra"
+ * build does not have (it answers an empty history every time), and
+ * fetchHistoricalLogtime() does not even ask the worker without a session.
+ * Offering the card anyway showed a spinner, then nothing.
+ */
+async function canLoadOlder(): Promise<boolean> {
+  if (AUTH_MODE !== "oauth") return false;
+  const { CLOUD_LOGIN, CLOUD_TOKEN } = await getConfigMany([
+    "CLOUD_LOGIN",
+    "CLOUD_TOKEN",
+  ] as const);
+  return !!CLOUD_LOGIN && !!CLOUD_TOKEN;
+}
+
+/**
+ * Arms the "Load older months" card for `login`, or disarms it with null.
+ * Always assigned on a new payload: a value left over from the previous
+ * profile of a client-side navigation would load (and merge) that student's
+ * history into this one's calendar.
+ */
+function armLoadOlder(login: string | null, before: string | undefined): void {
+  loadMoreLogin = login;
+  loadMoreBefore = login ? before : undefined;
+}
 
 function extractLoginFromPath(): string | null {
   const m = location.pathname.match(/^\/users\/([^/]+)/);
@@ -156,6 +186,11 @@ const getConfigs = async (): Promise<LogtimeConfig> => {
 let isLoaded = false;
 let CONFIG: LogtimeConfig;
 export let lastStats: Record<string, string> | null = null;
+// The Intra events last fetched for your own profile. Only the render that
+// follows the events fetch is handed them; every other re-render (view
+// switch, header collapse on resize, carousel arrows, published settings,
+// load older) reuses these, or the day markers vanished until a reload.
+let lastEvents: EventsByDate | undefined;
 let currentTheme = "light";
 let primaryColor = "hsl(199 89% 48%)";
 let primaryContent = "hsl(0 0% 100%)";
@@ -182,18 +217,27 @@ function groupEventsByDate(
   return byDate;
 }
 
-async function fetchEvents(): Promise<Record<string, CalendarEvent[]>> {
+/**
+ * Your Intra events by day, or null when they could not be read (no intrapy
+ * token, HTTP error, network error, or a body that is not a list of events:
+ * {"error": ...} throws in groupEventsByDate). null is not "no events": the
+ * calendar sync must never take a failed read for an empty list and wipe the
+ * feed.
+ */
+async function fetchEvents(): Promise<EventsByDate | null> {
   try {
-    const token = sessionStorage.getItem("ft_intrapy_token");
-    if (!token) return {};
+    // Not the raw sessionStorage value: after a tab was left open it is an
+    // expired JWT, and the 401 would read as "events unknown" for the visit.
+    const token = await waitForIntrapyToken(EVENTS_TOKEN_WAIT_MS);
+    if (!token) return null;
     const res = await fetch(`${INTRAPY_BASE}/api/v1/users/me/events`, {
       headers: { Authorization: token },
     });
-    if (!res.ok) return {};
+    if (!res.ok) return null;
     const data = (await res.json()) as Record<string, CalendarEvent>;
     return groupEventsByDate(Object.values(data));
   } catch {
-    return {};
+    return null;
   }
 }
 
@@ -239,7 +283,6 @@ function makeLoadOlderHandler(
   login: string,
   before: string | undefined,
   stats: Record<string, string>,
-  eventsByDate?: EventsByDate,
 ): () => Promise<void> {
   return async () => {
     loadMoreLoading = true;
@@ -259,7 +302,7 @@ function makeLoadOlderHandler(
     const savedScroll = sw ? sw.scrollLeft : 0;
 
     restoreScrollLeft = savedScroll;
-    renderLogtime(stats, eventsByDate);
+    renderLogtime(stats);
 
     await fetchHistoricalLogtime(login, before);
     loadMoreLogin = null;
@@ -268,7 +311,7 @@ function makeLoadOlderHandler(
 
     const merged = mergeHistoryWithHook(stats, login);
     skipScroll = true;
-    renderLogtime(merged, eventsByDate);
+    renderLogtime(merged);
 
     let newAnchor = root?.querySelector(
       `[data-month="${hookMonth}"]`,
@@ -290,10 +333,11 @@ function makeLoadOlderHandler(
 
 function renderLogtime(
   stats: Record<string, string>,
-  eventsByDate?: Record<string, CalendarEvent[]>,
+  eventsByDate: EventsByDate | undefined = lastEvents,
 ): void {
   if (!stats || !CONFIG) return;
   lastStats = stats;
+  lastEvents = eventsByDate;
   // Let other modules (tracker badge) react to the *current* stats: a plain
   // 42_LOGTIME_DATA listener would run before this assignment and read the
   // previous value.
@@ -314,7 +358,7 @@ function renderLogtime(
   const monthKeys = Object.keys(byMonth).sort();
 
   const loadOlder = loadMoreLogin
-    ? makeLoadOlderHandler(loadMoreLogin, loadMoreBefore, stats, eventsByDate)
+    ? makeLoadOlderHandler(loadMoreLogin, loadMoreBefore, stats)
     : null;
 
   const monthCards: ReturnType<
@@ -334,7 +378,7 @@ function renderLogtime(
     const goTo = (ym: string) => {
       carouselYm = ym;
       skipScroll = true;
-      renderLogtime(stats, eventsByDate);
+      renderLogtime(stats);
     };
 
     monthCards.push(
@@ -604,35 +648,44 @@ function installFetchHook() {
       const cloudLogin = await getConfig("CLOUD_LOGIN");
       if (cloudLogin) {
         const hasHistory = historyCache.has(cloudLogin);
-        if (!hasHistory) {
-          loadMoreLogin = cloudLogin;
-          loadMoreBefore = before;
-        }
+        armLoadOlder(
+          !hasHistory && (await canLoadOlder()) ? cloudLogin : null,
+          before,
+        );
         const stats = hasHistory
           ? mergeHistoryWithHook(detail, cloudLogin)
           : detail;
         renderLogtime(stats);
 
         fetchEvents().then((events) => {
-          renderLogtime(lastStats || detail, events);
+          // A failed read is not "no events": keep what is drawn and leave
+          // the calendar feed alone.
+          if (!events) return;
+          // The student may have opened another profile meanwhile: these
+          // events are their own and must not land on someone else's days.
+          if (isOwnProfile()) renderLogtime(lastStats || detail, events);
 
-          const flatEvents = Object.values(events).flat();
-          const subscribed = flatEvents.filter((e) => e.is_subscribed);
-          if (subscribed.length > 0) {
-            syncCalendarIcs(subscribed);
-          }
+          const subscribed = Object.values(events)
+            .flat()
+            .filter((e) => e.is_subscribed);
+          // Also when empty: unsubscribing from the last event must drop it
+          // from the feed. An unchanged list is skipped by syncCalendarIcs.
+          syncCalendarIcs(subscribed);
         });
         return;
       }
     }
 
+    // Your events belong on your own calendar only.
+    lastEvents = undefined;
+
     const targetLogin = extractLoginFromPath();
     if (targetLogin) {
       const hasHistory = historyCache.has(targetLogin);
-      if (!hasHistory) {
-        loadMoreLogin = targetLogin;
-        loadMoreBefore = before;
-      }
+      armLoadOlder(
+        !hasHistory && (await canLoadOlder()) ? targetLogin : null,
+        before,
+      );
       const stats = hasHistory
         ? mergeHistoryWithHook(detail, targetLogin)
         : detail;
@@ -640,6 +693,7 @@ function installFetchHook() {
       return;
     }
 
+    armLoadOlder(null, undefined);
     renderLogtime(detail);
   });
 }

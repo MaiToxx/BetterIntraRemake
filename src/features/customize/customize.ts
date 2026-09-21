@@ -273,20 +273,47 @@ export function hexToHslTriplet(hex: string): string | null {
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
-/** Black or white text, whichever contrasts better with the given colour. */
-export function contrastForeground(hex: string): "0 0% 0%" | "0 0% 100%" {
+/** WCAG relative luminance of #rrggbb (0 = black, 1 = white), or null. */
+export function relativeLuminance(hex: string): number | null {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!m) return "0 0% 100%";
+  if (!m) return null;
   const n = parseInt(m[1], 16);
   const lum = (c: number) => {
     const v = c / 255;
     return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
   };
-  const L =
+  return (
     0.2126 * lum((n >> 16) & 255) +
     0.7152 * lum((n >> 8) & 255) +
-    0.0722 * lum(n & 255);
-  return L > 0.4 ? "0 0% 0%" : "0 0% 100%";
+    0.0722 * lum(n & 255)
+  );
+}
+
+/** WCAG contrast ratio of two relative luminances (1 to 21). */
+function contrastRatio(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+/**
+ * Black or white text, whichever has the higher WCAG contrast ratio with the
+ * given colour. With a second colour (a two-stop accent gradient) the text
+ * sits on both, so the pick is the one whose WORSE ratio of the two is best.
+ *
+ * It used to cut at a luminance of 0.4, but black and white are equally
+ * readable at about 0.18: every accent in between got the worse one, the 42
+ * teal (#00babc) included, white at 2.4:1 where black gives 8.7:1.
+ */
+export function contrastForeground(
+  hex: string,
+  hex2?: string,
+): "0 0% 0%" | "0 0% 100%" {
+  const stops = [hex, hex2]
+    .map((h) => (h === undefined ? null : relativeLuminance(h)))
+    .filter((l): l is number => l !== null);
+  if (stops.length === 0) return "0 0% 100%";
+  const worst = (text: number) => Math.min(...stops.map((l) => contrastRatio(l, text)));
+  // Ties keep white, as the old cut-off did for the colours it got right.
+  return worst(0) > worst(1) ? "0 0% 0%" : "0 0% 100%";
 }
 
 /** A font-family value safe to interpolate into a declaration. */
@@ -316,14 +343,32 @@ const TRANSPARENT_SURFACES = PAGE_SURFACES.split(", ")
   .map((s) => `html.dark ${s}, html:not(.dark) ${s}`)
   .join(", ");
 
+/** What the stylesheet needs to know beyond the look itself. */
+export type CustomizeCssOptions = {
+  /**
+   * The viewer turned "Disable animations" on: no looping page animation,
+   * whatever the look asks for (their own, or a visited profile's).
+   */
+  disableAnimations?: boolean;
+};
+
 /** Build the stylesheet for the current customisation settings. */
-export function buildCustomizeCss(c: CustomizeConfig): string {
+export function buildCustomizeCss(
+  c: CustomizeConfig,
+  options: CustomizeCssOptions = {},
+): string {
   const rules: string[] = [];
 
   if (c.CUSTOM_ACCENT_ENABLED) {
     const hsl = hexToHslTriplet(c.CUSTOM_ACCENT_COLOR);
     if (hsl) {
-      const fg = contrastForeground(c.CUSTOM_ACCENT_COLOR);
+      // The text sits on the gradient when there is one, so both stops count.
+      const fg = contrastForeground(
+        c.CUSTOM_ACCENT_COLOR,
+        c.CUSTOM_ACCENT_GRADIENT && hexToHslTriplet(c.CUSTOM_ACCENT_COLOR_2)
+          ? c.CUSTOM_ACCENT_COLOR_2
+          : undefined,
+      );
       // v3 theme variables; --legacy-main is used by a few components
       rules.push(
         `html, html.dark, html:not(.dark) { --primary: ${hsl} !important; --ring: ${hsl} !important; --primary-foreground: ${fg} !important; --legacy-main: hsl(${hsl}) !important; }`,
@@ -445,9 +490,9 @@ export function buildCustomizeCss(c: CustomizeConfig): string {
         `html.dark ${CARD_SURFACES.split(", ").join(", html.dark ")} { background-color: hsl(var(--card) / 0.92) !important; }`,
       );
     }
-    if (c.CUSTOM_BG_ANIMATE) {
+    if (c.CUSTOM_BG_ANIMATE && !options.disableAnimations) {
       // Slow drift of the gradient; off for people who asked their OS for
-      // less motion.
+      // less motion, and for those who switched animations off here.
       rules.push(
         `@keyframes bi-bg-drift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }`,
       );
@@ -499,8 +544,11 @@ export function defaultCustomization(): CustomizeConfig {
 }
 
 /** Stylesheet for a partial look (missing keys at their defaults). */
-export function buildLookCss(look: Partial<CustomizeConfig>): string {
-  return buildCustomizeCss({ ...defaultCustomization(), ...look });
+export function buildLookCss(
+  look: Partial<CustomizeConfig>,
+  options: CustomizeCssOptions = {},
+): string {
+  return buildCustomizeCss({ ...defaultCustomization(), ...look }, options);
 }
 
 function setStyle(id: string, css: string) {
@@ -517,9 +565,18 @@ function setStyle(id: string, css: string) {
   if (el.textContent !== css) el.textContent = css;
 }
 
+/**
+ * Read with the look but kept out of CUSTOMIZE_KEYS: it is the viewer's own
+ * preference, not part of a look that presets save or profiles publish.
+ */
+const VIEWER_KEYS = ["DISABLE_ANIMATIONS"] as const;
+
 export async function applyCustomizations(): Promise<void> {
-  const c = await getConfigMany(CUSTOMIZE_KEYS);
-  setStyle(STYLE_ID, buildCustomizeCss(c));
+  const c = await getConfigMany([...CUSTOMIZE_KEYS, ...VIEWER_KEYS]);
+  setStyle(
+    STYLE_ID,
+    buildCustomizeCss(c, { disableAnimations: c.DISABLE_ANIMATIONS === true }),
+  );
   // custom CSS last so it wins over everything above
   setStyle(CSS_ID, typeof c.CUSTOM_CSS === "string" ? c.CUSTOM_CSS : "");
 }
@@ -545,13 +602,19 @@ export async function applyVisitorLook(look: Partial<CustomizeConfig> | null): P
   const key = JSON.stringify(visitorLook);
   if (key === visitorLookKey && document.getElementById(VISITOR_STYLE_ID)) return;
   visitorLookKey = key;
-  const { CUSTOM_SHOW_OTHERS_LOOK } = await getConfigMany(["CUSTOM_SHOW_OTHERS_LOOK"]);
+  const { CUSTOM_SHOW_OTHERS_LOOK, DISABLE_ANIMATIONS } = await getConfigMany([
+    "CUSTOM_SHOW_OTHERS_LOOK",
+    ...VIEWER_KEYS,
+  ]);
   if (CUSTOM_SHOW_OTHERS_LOOK === false) {
     visitorLookKey = "";
     setStyle(VISITOR_STYLE_ID, "");
     return;
   }
-  setStyle(VISITOR_STYLE_ID, buildLookCss(visitorLook));
+  setStyle(
+    VISITOR_STYLE_ID,
+    buildLookCss(visitorLook, { disableAnimations: DISABLE_ANIMATIONS === true }),
+  );
   const own = document.getElementById(CSS_ID);
   if (own && own.nextElementSibling) own.parentElement?.appendChild(own);
 }
@@ -569,8 +632,9 @@ export async function initCustomize(): Promise<void> {
   initialised = true;
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;
-    if (CUSTOMIZE_KEYS.some((k) => k in changes)) void applyCustomizations();
-    if ("CUSTOM_SHOW_OTHERS_LOOK" in changes) {
+    const viewer = VIEWER_KEYS.some((k) => k in changes);
+    if (viewer || CUSTOMIZE_KEYS.some((k) => k in changes)) void applyCustomizations();
+    if (viewer || "CUSTOM_SHOW_OTHERS_LOOK" in changes) {
       visitorLookKey = "";
       void applyVisitorLook(visitorLook);
     }

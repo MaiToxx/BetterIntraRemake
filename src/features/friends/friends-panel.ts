@@ -6,6 +6,7 @@
  */
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
+import { ifDefined } from "lit-html/directives/if-defined.js";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { THEMES } from "../../core/theme/theme-manager.ts";
 import type { WidgetState } from "./friends-widget-state.ts";
@@ -70,12 +71,18 @@ function renderHeaderControls(state: WidgetState, onlineCount: number) {
         ? "btn-outline btn-success"
         : "btn-ghost"}"
       style="height:1.875rem;"
-      data-tip="${state.lastFetch
-        ? `Updated ${formatTimeAgo(state.lastFetch)}`
-        : "Not yet updated"}"
+      data-tip="${state.loadError
+        ? "Refresh failed (click to retry)"
+        : state.lastFetch
+          ? `Updated ${formatTimeAgo(state.lastFetch)}`
+          : "Not yet updated"}"
+      aria-label="Refresh friends"
       @click="${state.onRefresh}"
     >
-      <div class="swap ${state.loading ? "swap-active" : ""}">
+      <div
+        class="swap ${state.loading ? "swap-active" : ""}"
+        aria-hidden="true"
+      >
         <span
           class="swap-on loading loading-spinner loading-xs"
         ></span>
@@ -119,9 +126,20 @@ export function renderWidget(state: WidgetState) {
               : state.open
                 ? "Close"
                 : "Friends"}"
+            aria-label="${state.needsReconnect
+              ? "Friends: session expired, reconnect"
+              : state.open
+                ? "Close friends"
+                : "Friends"}"
+            aria-expanded="${ifDefined(
+              state.needsReconnect ? undefined : String(state.open),
+            )}"
+            aria-controls="${ifDefined(
+              state.needsReconnect ? undefined : "friends-dropdown",
+            )}"
           >
             ${state.needsReconnect
-              ? html`<div class="swap">
+              ? html`<div class="swap" aria-hidden="true">
                   <span
                     class="swap-on flex items-center justify-center w-8 h-8 [&>svg]:w-full [&>svg]:h-full [&>svg]:fill-current"
                     >${unsafeHTML(WARNING_SVG)}</span
@@ -132,7 +150,10 @@ export function renderWidget(state: WidgetState) {
                   >
                 </div>`
               : html`
-                  <div class="swap ${state.open ? "swap-active" : ""}">
+                  <div
+                    class="swap ${state.open ? "swap-active" : ""}"
+                    aria-hidden="true"
+                  >
                     <span class="swap-on text-3xl">✕</span>
                     <span
                       class="swap-off flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:fill-current"
@@ -144,11 +165,15 @@ export function renderWidget(state: WidgetState) {
         </div>
       </div>
 
-      <!-- Dropdown -->
+      <!-- Dropdown. Closed, it is only faded out (so the fade can play):
+           inert takes its controls out of the Tab order and away from
+           screen readers, which otherwise walked through every hidden row. -->
       <div
+        id="friends-dropdown"
         class="friends-dropdown card card-border bg-base-100 shadow-xl ${state.open
           ? ""
           : "closed"}"
+        ?inert="${!state.open}"
       >
         <!-- Header -->
         <div

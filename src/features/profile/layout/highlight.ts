@@ -46,9 +46,23 @@ function injectHighlightStyles() {
     .${GLOWING_CLASS} {
       animation: ft-pulsate 2s infinite ease-in-out !important;
     }
+    /* Without motion the seat still glows, at the pulse's brightest. */
+    @media (prefers-reduced-motion: reduce) {
+      .${GLOWING_CLASS} {
+        animation: none !important;
+        filter: drop-shadow(0 0 8px #ff0055) drop-shadow(0 0 15px #ff0055) !important;
+      }
+    }
+    html.ft-glow-still .${GLOWING_CLASS} {
+      animation: none !important;
+      filter: drop-shadow(0 0 8px #ff0055) drop-shadow(0 0 15px #ff0055) !important;
+    }
   `;
   const target = document.head || document.documentElement;
   target.appendChild(style);
+  void getConfig("DISABLE_ANIMATIONS").then((disabled) => {
+    if (disabled) document.documentElement.classList.add("ft-glow-still");
+  });
 }
 
 /**

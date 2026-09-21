@@ -115,11 +115,20 @@ export async function fetchCampusList(
   if (!force && cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
     return cachedData.manifest;
   }
-  const res = await fetch(`${CAMPUS_BASE}/campuses.json`, {
-    cache: force ? "no-store" : undefined,
-  });
-  if (!res.ok) throw new Error("Failed to fetch campus list");
-  const manifest = (await res.json()) as CampusManifest;
+  let manifest: CampusManifest;
+  try {
+    const res = await fetch(`${CAMPUS_BASE}/campuses.json`, {
+      cache: force ? "no-store" : undefined,
+    });
+    if (!res.ok) throw new Error("Failed to fetch campus list");
+    manifest = (await res.json()) as CampusManifest;
+  } catch (e) {
+    // Stale-if-error: an expired list beats none while the worker is down
+    // (or over quota). A forced fetch is a request for fresh data (the hub's
+    // reload button), so it still reports the failure.
+    if (!force && cachedData) return cachedData.manifest;
+    throw e;
+  }
   await chrome.storage.local.set({
     [MANIFEST_CACHE_KEY]: { manifest, timestamp: Date.now() },
   });
@@ -133,11 +142,12 @@ export async function loadCampusData(
   const resolvedId = await resolveCampusId(campusId, force);
   if (!resolvedId) throw new Error("No campus data available");
   const cacheKey = `${CACHE_PREFIX}${resolvedId}`;
+  // Also the stale-if-error fallback below. Not read for a forced load: that
+  // one is a request for fresh data (the hub's reload), so it must fail loudly.
+  let cachedData: { data: ClusterDataFile; timestamp: number } | undefined;
   if (!force) {
     const cached = await chrome.storage.local.get(cacheKey);
-    const cachedData = cached[cacheKey] as
-      | { data: ClusterDataFile; timestamp: number }
-      | undefined;
+    cachedData = cached[cacheKey] as typeof cachedData;
     if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
       return cachedData.data;
     }
@@ -145,13 +155,21 @@ export async function loadCampusData(
   const existing = force ? undefined : inFlightLoads.get(cacheKey);
   if (existing) return existing;
   const load = (async () => {
-    const prefix = await resolveCampusFolder(resolvedId, force);
-    const res = await fetch(`${CAMPUS_BASE}/${prefix}.json`, {
-      cache: force ? "no-store" : undefined,
-    });
-    if (!res.ok)
-      throw new Error(`Failed to fetch campus data for ${resolvedId}`);
-    const data = (await res.json()) as ClusterDataFile;
+    let data: ClusterDataFile;
+    try {
+      const prefix = await resolveCampusFolder(resolvedId, force);
+      const res = await fetch(`${CAMPUS_BASE}/${prefix}.json`, {
+        cache: force ? "no-store" : undefined,
+      });
+      if (!res.ok)
+        throw new Error(`Failed to fetch campus data for ${resolvedId}`);
+      data = (await res.json()) as ClusterDataFile;
+    } catch (e) {
+      // Stale-if-error: the cluster list, transcripts, exits and badges of
+      // an hour ago are better than none while the worker is unreachable.
+      if (cachedData) return cachedData.data;
+      throw e;
+    }
     await chrome.storage.local.set({
       [cacheKey]: { data, timestamp: Date.now() },
     });

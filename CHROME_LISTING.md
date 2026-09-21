@@ -3,7 +3,7 @@
 Better Intra adds quality-of-life features to the 42 Intra v3 experience.
 
 ### 📅 Logtime
-Replace the default logtime view with a monthly calendar showing your logged hours at a glance. Each month is a colour-coded grid — darker means more hours per day. Switch to a **heatmap view** for a GitHub-style contribution map, or a **compact view** that shows past months as summary cards. Set a monthly goal (default 140h) and see a progress bar with your percentage and remaining hours. Track your daily average, last active date, and optionally use emoji-mode to gamify your hours. With cloud sync, click "Load older months" to fetch your **complete logtime history** from your first day. Fully customisable colours and animations. Subscribed 42 events appear as markers on your logtime calendar days.
+Replace the default logtime view with a monthly calendar showing your logged hours at a glance. Each month is a colour-coded grid — darker means more hours per day. Switch to a **heatmap view** for a GitHub-style contribution map, or a **compact view** that shows past months as summary cards. Set a monthly goal (default 140h) and see a progress bar with your percentage and remaining hours. Track your daily average, last active date, and optionally use emoji-mode to gamify your hours. Fully customisable colours and animations. Subscribed 42 events appear as markers on your logtime calendar days.
 
 ### 🖥️ Clusters
 See directional arrows on the cluster map showing which way each seat faces (works for all campuses with submitted cluster data). Switch between clusters with a dropdown, toggle arrows on/off, and set a default cluster that loads automatically. Your campus is auto-detected — no manual setup needed.

@@ -3,6 +3,15 @@
  * with its switch and, for some, a sub-switch.
  */
 import type { HubSettingDef } from "../hubSettings.data.ts";
+import { AUTH_MODE } from "../../../core/worker.ts";
+
+/**
+ * The roulette card reads its numbers from the worker in oauth mode, but in
+ * intra mode from the Intra v2 pages with the student's own cookies
+ * (profile-stats-intra.ts): there it runs signed out, so the hub must not
+ * lock its switches.
+ */
+const ROULETTE_NEEDS_CLOUD = AUTH_MODE !== "intra";
 
 export const EXTRAS_SETTINGS: readonly HubSettingDef[] = [
   {
@@ -50,13 +59,13 @@ export const EXTRAS_SETTINGS: readonly HubSettingDef[] = [
         color: "info",
         big: true,
         desc: "Adds a card with roulette wins, points, and next draw countdown.",
-        requiresCloud: true,
+        requiresCloud: ROULETTE_NEEDS_CLOUD,
         subToggle: {
           label: "Show roulette history",
           value: "PROFILE_SHOW_ROULETTE_HISTORY",
           desc: "Displays the full timeline of past roulette wins inside the card.",
           dependsOn: "PROFILE_SHOW_ROULETTE",
-          requiresCloud: true,
+          requiresCloud: ROULETTE_NEEDS_CLOUD,
         },
       },
     ],

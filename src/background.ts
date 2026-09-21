@@ -19,6 +19,12 @@ const UPDATE_PERIOD_MINUTES = 6 * 60;
 const RELEASES_API = __REPO_RELEASES_API__;
 /** Delay between a new CLOUD_TOKEN and the Intra tabs reload (see onChanged). */
 const RELOAD_AFTER_LOGIN_DELAY_MS = 500;
+/**
+ * Longest wait for one Intra page (FT_FETCH_INTRA_PAGE). The v2 Intra is often
+ * slow; without a bound the card that asked keeps its skeleton up until the
+ * browser's own network timeout, minutes later.
+ */
+const INTRA_PAGE_TIMEOUT_MS = 15000;
 
 /**
  * In-flight update check. The alarm, the browser start-up and the popup's
@@ -114,6 +120,8 @@ async function fetchIntraPage(
     const res = await fetch(parsed.toString(), {
       credentials: "include",
       redirect: "follow",
+      // also bounds res.text() below: the body stream is aborted with it
+      signal: AbortSignal.timeout(INTRA_PAGE_TIMEOUT_MS),
     });
     // a redirect to the sign-in page means the session is gone
     if (!res.ok || /signin\.intra\.42\.fr/.test(res.url)) {

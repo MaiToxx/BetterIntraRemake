@@ -3,22 +3,30 @@
  * detected campus and the reload of its configuration, and Reset all data.
  * These are one-shot buttons, not stored settings.
  */
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { getConfig } from "../../../core/config.ts";
 import { fetchCampusList } from "../../clusters/clusters.data.ts";
 import { clearCampusConfigCache, loadCampusData } from "../../campus/campus.ts";
 import { exportableSettings, sanitizeBackup } from "../backup.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import type { LiveOptions } from "./context.ts";
+import { settingIds, type LiveOptions } from "./context.ts";
 
 export function renderAction(def: HubSettingDef) {
   const { actionType, actionLabel } = def as {
     actionType?: string;
     actionLabel?: string;
   };
+  const ids = settingIds(def);
+  const desc = ids.desc ?? nothing;
 
   if (actionType === "backup") {
-    return html`<div class="flex gap-2">
+    // Two buttons, each named by its own word, under the setting's label.
+    return html`<div
+      class="flex gap-2"
+      role="group"
+      aria-labelledby="${ids.label}"
+      aria-describedby="${desc}"
+    >
       <button
         type="button"
         class="btn btn-sm btn-primary font-bold"
@@ -36,10 +44,15 @@ export function renderAction(def: HubSettingDef) {
     </div>`;
   }
 
+  // A lone "Reload" or "Reset" says too little: the button is named by the
+  // setting's label ("Reload campus config", "Reset all data"), which keeps
+  // the visible word for voice control.
   if (actionType === "reload-campus") {
     return html`<button
       type="button"
       class="btn btn-sm btn-primary font-bold"
+      aria-labelledby="${ids.label}"
+      aria-describedby="${desc}"
       @click="${() => void reloadCampusConfig()}"
     >
       ${actionLabel || "Reload"}
@@ -49,6 +62,8 @@ export function renderAction(def: HubSettingDef) {
   return html`<button
     type="button"
     class="btn btn-sm btn-error font-bold"
+    aria-labelledby="${ids.label}"
+    aria-describedby="${desc}"
     @click="${resetAllData}"
   >
     ${actionLabel || "Reset"}

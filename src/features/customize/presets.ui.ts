@@ -139,6 +139,7 @@ export function renderPresetsPanel() {
                 type="text"
                 class="input input-accent input-sm w-48"
                 placeholder="Preset name"
+                aria-label="Preset name"
                 maxlength="40"
                 data-preset-name
                 @keydown="${(e: KeyboardEvent) => {

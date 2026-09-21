@@ -119,11 +119,10 @@ A **Customize** tab in the hub restyles every Intra page live, and syncs with yo
 * **Goal tracking** (default 140 h), daily average, last-active label, remaining hours on hover.
 * **Emoji mode** — pick an emoji, give it a value, track monthly "earnings" with a cap.
 * **Custom colours** and rainbow palettes; calendar events overlaid on the days.
-* **Older months ☁️** — "Load older months" fetches the complete history.
 
 ### 📆 Calendar sync ☁️
 
-The **Calendar** tab of the hub generates a private `.ics` link (with a QR code for phones) that Google Calendar, Apple Calendar or Outlook can subscribe to. Every time you open your own profile, the Intra events you are subscribed to are pushed to the worker, each with a 15-minute reminder. *Regenerate* invalidates the old link.
+The **Calendar** tab of the hub generates a private `.ics` link (with a QR code for phones) that Google Calendar, Apple Calendar or Outlook can subscribe to. Every time you open your own profile, the Intra events you are subscribed to are pushed to the worker, each with a 15-minute reminder. *Regenerate* revokes the old link at once, and so does wiping your cloud data.
 
 ### 🖥️ Clusters
 
@@ -151,11 +150,13 @@ Four switches in the Advanced tab that make the **Intra page itself** cheaper, a
 * **Pause when the tab is hidden** — the page's animations and transitions stop while you are in another tab.
 * **Connect early to the image server** — saves the connection setup on the first avatar, usually 100 to 300 ms.
 
-The extension is also much lighter than it used to be. Its script went from 969 KB (1.9) to 557 KB, its popup from 335 KB to 38 KB, and a default-theme page parses 127 KB of CSS instead of 301 KB, once rather than once per widget. Settings are read from memory instead of one storage round trip each (about 50 reads down to 1 when a profile opens), and nothing polls in the background any more. Numbers and method in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
+The extension is also much lighter than it used to be. Its script went from 969 KB (1.9) to 576 KB, its popup from 335 KB to 40 KB, and a default-theme page parses 128 KB of CSS instead of 301 KB, once rather than once per widget. Settings are read from memory instead of one storage round trip each (about 50 reads down to 1 when a profile opens), and nothing polls in the background any more. Numbers and method in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ### ⚙️ Settings hub
 
 The gear in the Intra sidebar opens the hub: Profile, Extras, Clusters, Logtime, Shortcuts, Calendar, Customize, Advanced, About. Feature toggles, per-feature reset, backup and restore (JSON), auto-detected campus, theme toggle, cloud status.
+
+Everything the extension adds works from the keyboard and with a screen reader: the hub's tabs follow the arrow keys, every control has a name, and the avatar, the settings gear and the Clusters button are real buttons. The system's *reduce motion* setting, or **Disable animations** in Advanced, stills every animation the extension draws, easter eggs included.
 
 ### Not available in this edition
 
@@ -165,6 +166,7 @@ These upstream features cannot work on this fork's worker, so they were removed 
 * **Students directory** — the worker builds it with a 42 API application token, for the Belgium campus only.
 * **⭐ Outstanding flag** — the worker reads it from the 42 API with a token that Intra sign-in sessions do not have.
 * **Image upload to the worker** — needs an R2 bucket; use any image host and paste the URL instead.
+* **Older logtime months** — "Load older months" reads the whole history through the 42 API, which also needs an application on the worker. The card stays hidden (its code is kept for workers that have one), and the calendar shows the months the Intra page itself loads.
 
 The **transcript download** is still in the extension but only shows up on campuses whose campus file lists their transcript templates, which today is only Belgium ([campuses/belgium.json](campuses/belgium.json)). It needs no server: adding the Mulhouse records to [campuses/mulhouse.json](campuses/mulhouse.json) would be enough to turn it on.
 

@@ -3,6 +3,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { waitForIntrapyToken } from "../../../core/intra/intrapy.ts";
 import { INTRA_FONT } from "../../logtime/constants.ts";
 import CHECK_CIRCLE_SVG from "../../../assets/svg/check-circle.svg?raw";
 
@@ -14,54 +15,33 @@ interface Achievement {
 }
 
 const INJECTED_ID = "ft-achievements-injected";
+/** How long to wait for the page to hand over a usable Intra token. */
+const TOKEN_WAIT_MS = 30000;
+/**
+ * A failed request is asked again on a later pass, but not before this long:
+ * profile.ts runs a pass on every burst of Intra mutations, and an API that
+ * keeps failing must not be called on each of them.
+ */
+const RETRY_AFTER_MS = 30000;
 let achievementsInitialized = false;
 let lastInjectedLogin: string | null = null;
+let retryNotBefore = 0;
 
-function waitForToken(timeout = 15000): Promise<string | null> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const handler = (e: CustomEvent) => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      resolve(e.detail);
-    };
-    const cleanup = () => {
-      document.removeEventListener(
-        "42_INTRAPY_TOKEN",
-        handler as EventListener,
-      );
-      clearTimeout(timer);
-    };
-    document.addEventListener("42_INTRAPY_TOKEN", handler as EventListener);
-    const stored = sessionStorage.getItem("ft_intrapy_token");
-    if (stored) {
-      resolved = true;
-      cleanup();
-      resolve(stored);
-      return;
-    }
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeout);
-  });
-}
-
+/** The achievements of `login`, or null when the request failed. */
 async function fetchAchievements(
   login: string,
   token: string,
-): Promise<Achievement[]> {
+): Promise<Achievement[] | null> {
   try {
     const res = await fetch(
       `https://intrapy.intra.42.fr/api/v1/users/${login}/achievements`,
       { headers: { Authorization: token } },
     );
-    if (!res.ok) return [];
-    return (await res.json()) as Achievement[];
+    if (!res.ok) return null;
+    const data = (await res.json()) as Achievement[];
+    return Array.isArray(data) ? data : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -214,13 +194,20 @@ export async function initAchievements() {
   const login = (await getCloudLogin()) || pageLogin;
   if (!login) return;
   if (achievementsInitialized && login === lastInjectedLogin) return;
+  if (Date.now() < retryNotBefore) return;
 
-  const token = await waitForToken(30000);
+  const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
   if (!token) return;
   achievementsInitialized = true;
   lastInjectedLogin = login;
 
   const achievements = await fetchAchievements(login, token);
+  if (achievements === null) {
+    // A failure is not "no achievements": leave the door open for a later pass
+    achievementsInitialized = false;
+    retryNotBefore = Date.now() + RETRY_AFTER_MS;
+    return;
+  }
   if (achievements.length === 0) return;
 
   await tryInject(achievements);

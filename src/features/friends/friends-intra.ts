@@ -122,13 +122,19 @@ export function buildFriendFromIntra(
   };
 }
 
-async function getJson(url: string, token: string): Promise<Raw | Raw[] | null> {
+interface JsonReply {
+  body: Raw | Raw[] | null;
+  /** HTTP status, or 0 when the request itself failed (offline, bad body). */
+  status: number;
+}
+
+async function getJson(url: string, token: string): Promise<JsonReply> {
   try {
     const res = await fetch(url, { headers: { Authorization: token } });
-    if (!res.ok) return null;
-    return (await res.json()) as Raw | Raw[];
+    if (!res.ok) return { body: null, status: res.status };
+    return { body: (await res.json()) as Raw | Raw[], status: res.status };
   } catch {
-    return null;
+    return { body: null, status: 0 };
   }
 }
 
@@ -163,11 +169,24 @@ async function mapLimit<T, R>(
   return out;
 }
 
-export async function fetchFriendsDataViaIntra(
+/** What intrapy said about a list of logins. */
+export interface IntraFriendsResult {
+  /** The logins intrapy knows, in the order they were asked for. */
+  friends: FriendData[];
+  /** Logins /users answered 404 for: the only proof that a login is wrong. */
+  notFound: string[];
+  /**
+   * Logins that could not be checked: no fresh page token, 401 (expired
+   * session), 429, 5xx or offline. They may well exist.
+   */
+  failed: string[];
+}
+
+export async function fetchFriendsIntraResult(
   logins: string[],
-): Promise<FriendData[]> {
+): Promise<IntraFriendsResult> {
   const token = await waitForIntrapyToken(6000);
-  if (!token) return [];
+  if (!token) return { friends: [], notFound: [], failed: [...logins] };
 
   const store = await chrome.storage.local.get(LAST_ONLINE_KEY);
   const lastOnline: Record<string, number> =
@@ -176,33 +195,56 @@ export async function fetchFriendsDataViaIntra(
 
   const results = await mapLimit(logins, CONCURRENCY, async (login) => {
     const base = `${INTRAPY}/users/${encodeURIComponent(login)}`;
-    const [userRaw, cursus, visuals] = await Promise.all([
+    const [userReply, cursusReply, visuals] = await Promise.all([
       getJson(base, token),
       getJson(`${base}/cursus`, token),
       fetchVisuals(login),
     ]);
-    const user = Array.isArray(userRaw) ? null : userRaw;
+    const user = Array.isArray(userReply.body) ? null : userReply.body;
     // /summary only adds the profile picture: skip it when /users already has
     // one (it is still consulted for an unknown login, see below)
     const summaryRaw = hasProfilePicture(user)
       ? null
-      : await getJson(`${base}/summary`, token);
+      : (await getJson(`${base}/summary`, token)).body;
     const summary = Array.isArray(summaryRaw) ? null : summaryRaw;
-    // unknown login (add-friend validation relies on an empty result)
-    if (!user && !summary) return null;
+    if (!user && !summary) {
+      // Adding a friend deletes the login on "not-found": only a real 404
+      // may say so. An expired session or a rate limit is a failed check.
+      return {
+        login,
+        status: userReply.status === 404 ? "not-found" : "failed",
+      } as const;
+    }
 
     const friend = buildFriendFromIntra(
       login,
       user,
       summary,
-      cursus,
+      cursusReply.body,
       lastOnline[login] ?? null,
     );
     if (friend.isOnline) lastOnline[login] = now;
 
-    return applyIntraVisuals(friend, visuals);
+    return { login, status: "ok", friend: applyIntraVisuals(friend, visuals) } as const;
   });
 
   await chrome.storage.local.set({ [LAST_ONLINE_KEY]: lastOnline });
-  return results.filter((f): f is FriendData => f !== null);
+  const out: IntraFriendsResult = { friends: [], notFound: [], failed: [] };
+  for (const r of results) {
+    if (r.status === "ok") out.friends.push(r.friend);
+    else if (r.status === "not-found") out.notFound.push(r.login);
+    else out.failed.push(r.login);
+  }
+  return out;
+}
+
+/**
+ * The friends intrapy knows among `logins`. Unknown logins and logins that
+ * could not be checked are both left out: use fetchFriendsIntraResult() to
+ * tell them apart.
+ */
+export async function fetchFriendsDataViaIntra(
+  logins: string[],
+): Promise<FriendData[]> {
+  return (await fetchFriendsIntraResult(logins)).friends;
 }

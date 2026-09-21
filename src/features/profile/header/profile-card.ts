@@ -16,6 +16,21 @@ const INFO_CARD_ID = "ft-info-card";
 let _badgeTheme: string = "dark";
 let _cursusListenerInitialized = false;
 
+/**
+ * Enter and Space activate `el` as they would a native button. For badges that
+ * must stay <div>s (the flex/badge layout and the [data-ft-seat] rules depend
+ * on it) but used to answer clicks only, out of reach from the keyboard and of
+ * link-hint extensions.
+ */
+function onKeyboardActivate(el: HTMLElement, activate: () => void) {
+  el.addEventListener("keydown", (e) => {
+    if (e.target !== el) return;
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault(); // Space would scroll the page
+    activate();
+  });
+}
+
 function extractItems(statsBar: HTMLElement) {
   const items: { label: string; value: string }[] = [];
   for (const child of statsBar.children) {
@@ -53,7 +68,17 @@ function populateMainBadges(
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const badge = document.createElement("div");
+    // The wallet opens the shop: a real link (focusable, Enter, middle-click,
+    // Ctrl+click, the URL in the status bar) rather than a <div> with
+    // window.open(). Same classes, and preflight gives links `color: inherit`
+    // and no underline, so it looks the same.
+    const isWallet = item.label.includes("₳");
+    const badge = document.createElement(isWallet ? "a" : "div");
+    if (badge instanceof HTMLAnchorElement) {
+      badge.href = "https://shop.intra.42.fr/";
+      badge.target = "_blank";
+      badge.rel = "noopener";
+    }
     badge.setAttribute("data-ft-badge", "");
     badge.className =
       "badge badge-lg h-auto flex w-full justify-between gap-4 px-5 py-1.5 text-lg";
@@ -77,12 +102,11 @@ function populateMainBadges(
     value.className = "value text-lg font-semibold";
     value.textContent = item.value;
 
-    if (item.label.includes("₳")) {
+    if (isWallet) {
       badge.style.cursor = "pointer";
-      badge.addEventListener("click", (e) => {
-        e.stopPropagation();
-        window.open("https://shop.intra.42.fr/", "_blank");
-      });
+      // The link opens the shop by itself; the page's handlers above it still
+      // must not see the click.
+      badge.addEventListener("click", (e) => e.stopPropagation());
     }
 
     badge.appendChild(label);
@@ -148,8 +172,6 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   badge.style.borderRadius = "0.75rem";
   badge.style.color = "inherit";
   badge.style.fontWeight = "600";
-  badge.style.cursor = "pointer";
-  badge.setAttribute("data-tip", "View on cluster map");
 
   let clusters = CLUSTERS;
   if (clusters.length === 0) {
@@ -161,22 +183,32 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   const cluster = clusters.find((c) =>
     seatText.toLowerCase().startsWith(c.name.toLowerCase()),
   );
-  if (cluster) {
-    badge.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openClusterDialog({ seatId: seatText });
-    });
-  }
 
   const value = document.createElement("span");
   value.className = "value text-lg font-semibold";
   value.textContent = seatText;
   badge.appendChild(value);
 
-  const linkIcon = document.createElement("span");
-  linkIcon.className = "size-3.5 flex items-center justify-center fill-current";
-  appendSvg(linkIcon, ARROW_SHARE_SVG);
-  badge.appendChild(linkIcon);
+  // Pointer, tooltip and arrow only when the seat is on a cluster we can
+  // show: a seat on another campus looked like a link and did nothing.
+  if (cluster) {
+    const open = () => void openClusterDialog({ seatId: seatText });
+    badge.style.cursor = "pointer";
+    badge.setAttribute("data-tip", "View on cluster map");
+    badge.tabIndex = 0;
+    badge.setAttribute("role", "button");
+    badge.setAttribute("aria-label", `Show ${seatText} on the cluster map`);
+    badge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      open();
+    });
+    onKeyboardActivate(badge, open);
+
+    const linkIcon = document.createElement("span");
+    linkIcon.className = "size-3.5 flex items-center justify-center fill-current";
+    appendSvg(linkIcon, ARROW_SHARE_SVG);
+    badge.appendChild(linkIcon);
+  }
 
   wrapper.prepend(badge);
   applyBadgeLayout(wrapper);
@@ -204,14 +236,28 @@ function injectGivePointsButton(statsBar: HTMLElement, container: HTMLElement) {
   }
   if (!evBadge || evBadge.querySelector("[data-ft-give-points]")) return;
 
-  evBadge.style.cursor = "pointer";
+  // No pointer on the whole badge: only the icon below reacts to a click.
   evBadge.style.justifyContent = "space-between";
 
-  const wrapper = document.createElement("span");
+  // The modern card hides the Intra's stats bar, and with it the Intra's own
+  // give-points <button>. Its stand-in has to be a button as well (focusable,
+  // Enter and Space, announced with a name), or keyboard and screen-reader
+  // users lose the feature. Preflight strips the button's own look, and the
+  // inline reset does the same while the shared sheet is still loading.
+  const wrapper = document.createElement("button");
+  wrapper.type = "button";
   wrapper.setAttribute("data-ft-give-points", "");
+  wrapper.setAttribute(
+    "aria-label",
+    giveBtn.getAttribute("aria-label") || "Give evaluation points",
+  );
   wrapper.style.cssText =
-    "display:inline-flex;align-items:center;margin-left:auto;cursor:pointer;";
-  wrapper.appendChild(svg.cloneNode(true));
+    "display:inline-flex;align-items:center;margin-left:auto;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;";
+  const icon = svg.cloneNode(true) as SVGElement;
+  // The name comes from aria-label; the icon itself is decoration.
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  wrapper.appendChild(icon);
   wrapper.addEventListener("click", (e) => {
     e.stopPropagation();
     giveBtn.click();
@@ -276,6 +322,12 @@ function createInfoCard(
     [data-ft-seat]:not([data-ft-unavailable]):hover {
       box-shadow: 0 0 22px 4px rgba(16,185,129,0.35);
       border-color: #34d399 !important;
+    }
+    /* Keyboard focus only: a mouse click draws nothing new. */
+    [data-ft-badge]:focus-visible,
+    [data-ft-give-points]:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
     }
   `;
 
@@ -363,6 +415,14 @@ function injectProfileCardStyles() {
     /* --- Profile Picture --- */
     .ft-profile-card .bg-cover.rounded-full {
       border-color: var(--user-color, #00babc) !important;
+    }
+
+    /* The avatar is a button for the keyboard too (avatar-clicks.ts): show
+       where focus is, for keyboard focus only. */
+    .ft-profile-card [data-modal-listener]:focus-visible,
+    .ft-profile-card [data-toggle-listener]:focus-visible {
+      outline: 3px solid var(--user-color, #00babc);
+      outline-offset: 3px;
     }
 
     /* --- User Name --- */

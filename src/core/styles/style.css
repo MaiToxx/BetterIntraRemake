@@ -128,6 +128,47 @@
   transition: transform 0.2s ease-in-out;
 }
 
+/*
+ * Reduced motion, once for every shadow root that uses this sheet: the
+ * rainbow badges, the pulsing seat glow, daisyUI's dropdown and progress
+ * animations, every transition. shared-styles.ts adopts the same rules
+ * without the media query (NO_MOTION_CSS) while the Advanced "Disable
+ * animations" switch is on; tests/shared-styles.test.ts keeps the two equal.
+ *
+ * Why a layer: widgets write `animation: ... !important` in their own
+ * unlayered <style>, and an unlayered !important beats an unlayered one of
+ * lower specificity (`*`). An !important in ANY layer beats every unlayered
+ * !important, so these win without knowing the widgets' selectors.
+ *
+ * Why not `animation: none`: each animation still runs, in 1 ms, once, and
+ * keeps its last frame (fill-mode both). So what an animation shows stays
+ * shown: the seat glow ends lit, a rainbow ends painted, anything that fades
+ * in ends visible, and animationend still fires. Transitions end at once, so
+ * a toggle or a tab switch still changes state, just without the slide.
+ * Spinners are the exception: turning is how they say "still loading", so
+ * they keep turning, slowly, as daisyUI's own .loading does here.
+ */
+@layer bi-motion {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 1ms !important;
+      animation-delay: 0s !important;
+      animation-iteration-count: 1 !important;
+      animation-fill-mode: both !important;
+      transition-duration: 0s !important;
+      transition-delay: 0s !important;
+      scroll-behavior: auto !important;
+    }
+    .spinning {
+      animation-duration: 2.4s !important;
+      animation-iteration-count: infinite !important;
+      animation-fill-mode: none !important;
+    }
+  }
+}
+
 @plugin "daisyui/theme" {
   name: "soap";
   default: false;

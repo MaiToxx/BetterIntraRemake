@@ -36,16 +36,44 @@ function renderDeleteBar(state: WidgetState) {
 }
 
 /**
+ * The last add error, announced as it appears. When the login was saved but
+ * could not be checked, Retry checks it again and Remove takes it back out.
+ */
+function renderAddError(state: WidgetState) {
+  if (!state.addError) return "";
+  return html`<div
+    class="flex items-center gap-2 max-w-72 bg-base-100 rounded-box shadow px-3 py-2"
+  >
+    <p class="text-error text-sm px-0.5" role="alert">${state.addError}</p>
+    ${state.addPending
+      ? html`<button
+          type="button"
+          class="btn btn-xs btn-outline btn-error shrink-0"
+          @click="${state.onRetryAdd}"
+          ?disabled="${state.addLoading}"
+        >
+          Retry
+        </button>
+        <button
+          type="button"
+          class="btn btn-xs btn-ghost shrink-0"
+          aria-label="Remove ${state.addPending} from my friends"
+          @click="${state.onCancelAdd}"
+          ?disabled="${state.addLoading}"
+        >
+          Remove
+        </button>`
+      : ""}
+  </div>`;
+}
+
+/**
  * Collapsed: a single "+" button. Expanded: delete-mode button, login input,
  * Add and close, with the last error above them.
  */
 function renderAddForm(state: WidgetState) {
   return html`<div class="flex flex-col items-end gap-2">
-    ${state.addError
-      ? html`<p class="text-error text-sm px-0.5">
-          ${state.addError}
-        </p>`
-      : ""}
+    ${renderAddError(state)}
     <div
       class="friends-add-expand ${state.addOpen
         ? ""
@@ -78,8 +106,16 @@ function renderAddForm(state: WidgetState) {
               )}"
             @keydown="${(e: KeyboardEvent) => {
               if (e.key === "Enter") state.onAdd();
-              if (e.key === "Escape") state.onToggleAdd();
+              if (e.key === "Escape") {
+                // Escape here closes the add form only: the widget's own
+                // Escape handler (which closes the whole panel) must not see
+                // it, so a second Escape is needed to close the panel.
+                e.preventDefault();
+                e.stopPropagation();
+                state.onToggleAdd();
+              }
             }}"
+            aria-label="Login to add"
             ?disabled="${state.addLoading}"
           />`
         : ""}

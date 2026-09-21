@@ -3,7 +3,7 @@
  * for some, a sub-switch that depends on the add-on or on the cloud account.
  * The def only lists the cards: their keys are read here, when the tab draws.
  */
-import { html } from "lit-html";
+import { html, nothing } from "lit-html";
 import { getConfig } from "../../../core/config.ts";
 import type { FeatureCardOption, HubSettingDef } from "../hubSettings.data.ts";
 import { saveSetting } from "./context.ts";
@@ -55,6 +55,10 @@ function renderFeatureCard(params: {
   enabled: boolean;
 }): ReturnType<typeof html> {
   const { opt, value, subValue, disabled, subDisabled, enabled } = params;
+  // The switches point at the card's own title and text (the tab's grid is
+  // one shadow root, and each key is on one card only, so ids are unique).
+  const id = `hub-fc-${opt.value}`;
+  const subId = opt.subToggle ? `hub-fc-${opt.subToggle.value}` : "";
   return html`
     <div
       class="card bg-base-200 shadow-sm p-4 flex flex-col gap-3 border border-t-4 ${disabled
@@ -65,8 +69,10 @@ function renderFeatureCard(params: {
     >
       <div class="flex items-center justify-between gap-2">
         <div class="flex flex-col gap-1">
-          <h3 class="font-bold text-base">${opt.label}</h3>
-          ${opt.desc ? html`<p class="text-xs opacity-70">${opt.desc}</p>` : ""}
+          <h3 class="font-bold text-base" id="${id}-label">${opt.label}</h3>
+          ${opt.desc
+            ? html`<p class="text-xs opacity-70" id="${id}-desc">${opt.desc}</p>`
+            : ""}
         </div>
         <input
           type="checkbox"
@@ -74,6 +80,8 @@ function renderFeatureCard(params: {
             ? "toggle-xl toggle-primary"
             : "toggle-lg toggle-accent"}"
           data-setting-key="${opt.value}"
+          aria-labelledby="${id}-label"
+          aria-describedby="${opt.desc ? `${id}-desc` : nothing}"
           ?checked="${Boolean(value)}"
           ?disabled="${!enabled || disabled}"
           @change="${(e: Event) =>
@@ -91,11 +99,14 @@ function renderFeatureCard(params: {
                 class="flex flex-col justify-center gap-1"
                 style="min-height: 3.5rem"
               >
-                <span class="text-sm font-semibold leading-5"
+                <span class="text-sm font-semibold leading-5" id="${subId}-label"
                   >${opt.subToggle.label}</span
                 >
                 ${opt.subToggle.desc
-                  ? html`<p class="text-xs opacity-70 leading-4 line-clamp-2">
+                  ? html`<p
+                      class="text-xs opacity-70 leading-4 line-clamp-2"
+                      id="${subId}-desc"
+                    >
                       ${opt.subToggle.desc}
                     </p>`
                   : ""}
@@ -104,6 +115,8 @@ function renderFeatureCard(params: {
                 type="checkbox"
                 class="toggle toggle-accent"
                 data-setting-key="${opt.subToggle.value}"
+                aria-labelledby="${subId}-label"
+                aria-describedby="${opt.subToggle.desc ? `${subId}-desc` : nothing}"
                 ?checked="${Boolean(subValue)}"
                 ?disabled="${!enabled || disabled || subDisabled}"
                 @change="${(e: Event) =>

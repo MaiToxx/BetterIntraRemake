@@ -70,6 +70,9 @@ function renderDialogShell(): ReturnType<typeof html> {
 function createDialog(): HTMLDialogElement {
   const dialog = document.createElement("dialog");
   dialog.id = "hub-dialog";
+  // Its visible title is inside the shadow root, where aria-labelledby on
+  // this light-DOM element cannot reach: name it directly.
+  dialog.setAttribute("aria-label", `${HUB_INFO.name} settings`);
   dialog.className =
     "modal-box hub-modal-box p-0 overflow-hidden bg-base-100 rounded-3xl shadow-2xl border-none outline-none";
 
@@ -79,6 +82,11 @@ function createDialog(): HTMLDialogElement {
 
   document.body.appendChild(dialog);
   dialog.addEventListener("click", (e) => {
+    // Only a click on the backdrop, which targets the <dialog> itself. A key
+    // that activates a control inside (Space on a switch, Enter on a button,
+    // an arrow key moving between the tabs) fires a click at (0, 0), outside
+    // the box: the bounds test alone closed the hub on every such key.
+    if (e.target !== dialog) return;
     const dialogDimensions = dialog.getBoundingClientRect();
     if (
       e.clientX < dialogDimensions.left ||
@@ -178,6 +186,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
           <div
             class="size-8 flex items-center justify-center"
             style="color: #00babc;"
+            aria-hidden="true"
           >
             ${unsafeHTML(ICON_SVG)}
           </div>
@@ -189,10 +198,12 @@ async function createModal(active: FeatureId[]): Promise<void> {
           </div>
         </div>
         <button
+          type="button"
           class="btn btn-circle btn-ghost"
+          aria-label="Close settings"
           @click="${() => dialog.close()}"
         >
-          ✕
+          <span aria-hidden="true">✕</span>
         </button>
       </div>
 
@@ -221,6 +232,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
 
       <div
         role="tablist"
+        aria-label="Settings sections"
         class="tabs tabs-lg tabs-border flex-1 overflow-hidden"
       >
         ${tabsContent}
@@ -233,16 +245,26 @@ async function createModal(active: FeatureId[]): Promise<void> {
           <label
             class="swap btn btn-accent border border-base-content/20 text-center items-center"
           >
+            <!-- Both faces of the swap are in the DOM (one is only faded out),
+              so the label's text reads "Light Dark": the switch is named by
+              what "checked" means instead. -->
             <input
               type="checkbox"
               id="hub-theme-toggle"
+              aria-label="Dark theme"
               ?checked="${currentTheme === "dark"}"
             />
-            <span class="swap-on flex items-center justify-center gap-1">
+            <span
+              class="swap-on flex items-center justify-center gap-1"
+              aria-hidden="true"
+            >
               ${unsafeHTML(SUN_SVG)}
               <span class="text-sm font-bold">Light</span>
             </span>
-            <span class="swap-off flex items-center justify-center gap-1">
+            <span
+              class="swap-off flex items-center justify-center gap-1"
+              aria-hidden="true"
+            >
               ${unsafeHTML(MOON_SVG)}
               <span class="text-sm font-bold">Dark</span>
             </span>
@@ -262,7 +284,11 @@ async function createModal(active: FeatureId[]): Promise<void> {
               >Synced at ${dateString}</span
             >
             ${isConnected
-              ? html`<div class="join">
+              ? html`<div
+                  class="join"
+                  role="radiogroup"
+                  aria-label="Cloud push"
+                >
                   <input
                     type="radio"
                     name="hub-auto-push"
@@ -293,7 +319,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
           id="hub-reload"
           class="btn btn-success px-8 font-bold flex items-center gap-2"
         >
-          <span class="size-5 flex items-center justify-center">
+          <span class="size-5 flex items-center justify-center" aria-hidden="true">
             ${unsafeHTML(RELOAD_SVG)}
           </span>
           Reload

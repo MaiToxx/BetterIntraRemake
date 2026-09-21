@@ -26,6 +26,13 @@ const GRID_COLS_CLASSES = ["", "", "md:grid-cols-2", "md:grid-cols-3"] as const;
  * Every tab, in FEATURE_DEFS order. A tab that is not always on is dimmed
  * while its feature is off, and a setting is drawn disabled or hidden as
  * `gates` says (see dependents.ts).
+ *
+ * A tab is daisyUI's radio tab: one radio group, so the browser already
+ * gives it one Tab stop (the checked tab) and moves between tabs with the
+ * arrow keys, which also switches the panel (`:checked + .tab-content`).
+ * What it lacked was the tab semantics: role="tab" on the radio, named by
+ * the feature (the icon is hidden), aria-selected kept in step by
+ * bindTabPanels(), and a panel labelled by its tab.
  */
 export function renderTabsContent(
   active: FeatureId[],
@@ -62,15 +69,27 @@ export function renderTabsContent(
         ? (GRID_COLS_CLASSES[f.cols] ?? "md:grid-cols-3")
         : "md:grid-cols-3";
 
+    const tabId = `hub-tab-${f.id}`;
+    const panelId = `hub-panel-${f.id}`;
     return html`<label class="tab flex items-center gap-2">
-        <input type="radio" name="hub_tabs" ?checked="${idx === 0}" />
-        <span class="size-4 flex items-center justify-center">
+        <input
+          type="radio"
+          name="hub_tabs"
+          role="tab"
+          aria-labelledby="${tabId}"
+          aria-controls="${panelId}"
+          aria-selected="${idx === 0 ? "true" : "false"}"
+          ?checked="${idx === 0}"
+        />
+        <span class="size-4 flex items-center justify-center" aria-hidden="true">
           ${unsafeHTML(f.icon)}
         </span>
-        ${f.name}
+        <span id="${tabId}">${f.name}</span>
       </label>
       <div
         role="tabpanel"
+        id="${panelId}"
+        aria-labelledby="${tabId}"
         class="tab-content bg-base-100 border-base-300 p-0 overflow-y-auto"
       >
         <div
@@ -88,14 +107,19 @@ export function renderTabsContent(
                 >
                   <div class="flex flex-col">
                     <h2 class="text-lg font-bold leading-tight">${f.name}</h2>
-                    <p class="text-xs opacity-70">${f.desc}</p>
+                    <p class="text-xs opacity-70" id="hub-feature-desc-${f.id}">
+                      ${f.desc}
+                    </p>
                   </div>
                   <div class="flex items-center gap-3">
                     <button
                       class="btn btn-sm btn-outline btn-error flex items-center gap-2"
                       data-reset-feature="${f.id}"
+                      aria-label="Reset ${f.name} settings"
                     >
-                      <span class="size-3.5 flex items-center justify-center"
+                      <span
+                        class="size-3.5 flex items-center justify-center"
+                        aria-hidden="true"
                         >${unsafeHTML(RESET_SVG)}</span
                       >
                       Reset
@@ -103,6 +127,8 @@ export function renderTabsContent(
                     <input
                       type="checkbox"
                       class="toggle toggle-xl toggle-primary hub-feature-toggle"
+                      aria-label="Enable ${f.name}"
+                      aria-describedby="hub-feature-desc-${f.id}"
                       data-id="${f.id}"
                       ?checked="${enabled && !cloudDisabled}"
                       ?disabled="${cloudDisabled}"
@@ -117,6 +143,7 @@ export function renderTabsContent(
               >
                 <span
                   class="size-14 opacity-40 flex items-center justify-center [&_path]:fill-current"
+                  aria-hidden="true"
                   >${unsafeHTML(FORTY_TWO_SVG)}</span
                 >
                 <p class="opacity-50 max-w-72 text-sm">
@@ -125,6 +152,7 @@ export function renderTabsContent(
                 <button
                   type="button"
                   class="btn bg-[#00babc] text-white border-none hover:bg-[#1fd2d4] h-12 text-base flex items-center justify-center gap-3 transition-colors duration-200"
+                  aria-label="Connect with 42"
                   @click="${async () => {
                     loginWith42(async () => {
                       await clearAuthFailed();
@@ -135,6 +163,7 @@ export function renderTabsContent(
                   <span class="font-bold tracking-wide">Connect with</span>
                   <span
                     class="size-8 flex items-center justify-center [&_path]:fill-current"
+                    aria-hidden="true"
                   >
                     ${unsafeHTML(FORTY_TWO_SVG)}
                   </span>
@@ -152,8 +181,19 @@ export function renderTabsContent(
   });
 }
 
-/** Wires the feature switch and the Reset button of every tab header. */
+/**
+ * Wires the tabs (aria-selected follows the checked radio, whichever way it
+ * got checked: click, arrow key) and the feature switch and the Reset button
+ * of every tab header.
+ */
 export function bindTabPanels(shadow: ShadowRoot): void {
+  const tabs = shadow.querySelectorAll<HTMLInputElement>('input[name="hub_tabs"]');
+  tabs.forEach((tab) =>
+    tab.addEventListener("change", () =>
+      tabs.forEach((t) => t.setAttribute("aria-selected", String(t.checked))),
+    ),
+  );
+
   shadow.querySelectorAll("input.hub-feature-toggle").forEach((toggle: any) => {
     toggle.addEventListener("change", async () => {
       const id = toggle.dataset.id;

@@ -3,43 +3,13 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import FREEZE_SVG from "../../../assets/svg/freeze.svg?raw";
 import { createCountdown } from "../../../core/dom/countdown.ts";
 import { tickWhileVisible, waitForElement } from "../../../core/dom/dom-wait.ts";
+import { waitForIntrapyToken } from "../../../core/intra/intrapy.ts";
+import { getConfig } from "../../../core/config.ts";
 
 const INJECTED_ID = "ft-freeze-card";
 
-function waitForToken(timeout = 15000): Promise<string | null> {
-  return new Promise((resolve) => {
-    let resolved = false;
-    let timer: ReturnType<typeof setTimeout>;
-
-    const handler = (e: CustomEvent) => {
-      if (resolved) return;
-      resolved = true;
-      cleanup();
-      resolve(e.detail);
-    };
-    const cleanup = () => {
-      document.removeEventListener(
-        "42_INTRAPY_TOKEN",
-        handler as EventListener,
-      );
-      clearTimeout(timer);
-    };
-    document.addEventListener("42_INTRAPY_TOKEN", handler as EventListener);
-
-    const stored = sessionStorage.getItem("ft_intrapy_token");
-    if (stored) {
-      resolved = true;
-      cleanup();
-      resolve(stored);
-      return;
-    }
-
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(null);
-    }, timeout);
-  });
-}
+/** How long to wait for the page to hand over a usable Intra token. */
+const TOKEN_WAIT_MS = 20000;
 
 async function fetchCursusData(login: string, token: string): Promise<any[]> {
   try {
@@ -198,12 +168,23 @@ function buildFreezeCard(profileCard: HTMLElement, freezeUntil: string) {
   card.style.cssText = `min-height: 200px;`;
 
   const iconWrap = document.createElement("div");
-  iconWrap.style.cssText = `width: 2.5rem; height: 2.5rem; color: #fff; animation: ft-freeze-spin 8s linear infinite;`;
+  iconWrap.className = "ft-freeze-spin";
+  iconWrap.style.cssText = `width: 2.5rem; height: 2.5rem; color: #fff;`;
   if (!document.getElementById("ft-freeze-spin-style")) {
     const style = document.createElement("style");
     style.id = "ft-freeze-spin-style";
-    style.textContent = `@keyframes ft-freeze-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+    // A class rather than an inline animation, so that the reduced-motion
+    // preference and the "Disable animations" switch can stop it.
+    style.textContent = [
+      "@keyframes ft-freeze-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }",
+      ".ft-freeze-spin { animation: ft-freeze-spin 8s linear infinite; }",
+      "@media (prefers-reduced-motion: reduce) { .ft-freeze-spin { animation: none; } }",
+      "html.ft-freeze-still .ft-freeze-spin { animation: none; }",
+    ].join("\n");
     document.head.appendChild(style);
+    void getConfig("DISABLE_ANIMATIONS").then((disabled) => {
+      if (disabled) document.documentElement.classList.add("ft-freeze-still");
+    });
   }
   render(unsafeHTML(FREEZE_SVG), iconWrap);
 
@@ -253,7 +234,7 @@ export async function initFreezeCard() {
       }
     }
 
-    const token = await waitForToken(20000);
+    const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
     if (!token) return;
 
     const cursusList = await fetchCursusData(targetLogin, token);

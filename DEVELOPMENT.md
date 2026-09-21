@@ -57,6 +57,7 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
   - `dom/` — `dom-wait.ts` (observer-based waits and visibility-aware tickers: use them instead of `setInterval` polling), tooltips, skeletons, dialogs, countdown, `svg.ts` (bundled icons without HTML strings).
   - `security/` — CSS value sanitisers for anything that ends up in a stylesheet.
   - `intra/` — Intra knowledge: `intrapy.ts`, the page selectors, profile login detection.
+  - `lifecycle/` — `stale-instance.ts`, imported first by `main.ts`: after an add-on update, an open tab still holds the old instance's nodes (dead gear and Clusters button, a second friends widget). It removes them and the "already bound" flags before anything mounts. `own-ids.ts` lists the id prefixes the extension owns; add yours there when a feature mounts a node with a new id.
 - `src/features/` — self-contained features: `account/`, `announcement/`, `calendar/`, `campus/`, `clusters/`, `customize/`, `eggs/`, `friends/`, `hub/` (`settings/` one data module per tab, `controls/` one renderer per setting family), `logtime/`, `performance/`, `profile/` (`header/`, `cards/`, `layout/`, `extras/`), `shortcuts/`, `subjects/`.
 - `scripts/move-modules.mjs` — move files and rewrite every relative import that points at them (`git mv` keeps history); dry run by default. `scripts/reorganise-plan.json` is the plan used for the 1.11.0 layout.
 - `manifests/` — per-browser manifest templates.

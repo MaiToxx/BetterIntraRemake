@@ -5,25 +5,35 @@ the numbers from creeping up.
 
 ## What it costs today
 
-Measured on the minified v1.11.0 build (`npm run measure`, `dist-firefox`;
+Measured on the minified v1.12.0 build (`npm run measure`, `dist-firefox`;
 `dist-chrome` is the same output with a different manifest):
 
 | file                 |      raw |     gzip | loaded                                   |
 | -------------------- | -------: | -------: | ---------------------------------------- |
-| `content.js`         | 556.5 KB | 167.5 KB | on every `*.intra.42.fr` page            |
-| `shared-styles.css`  | 127.4 KB |  19.9 KB | once, then served from cache             |
+| `content.js`         | 575.8 KB | 173.1 KB | on every `*.intra.42.fr` page            |
+| `shared-styles.css`  | 128.4 KB |  20.0 KB | once, then served from cache             |
 | `theme-dark-v2.css`  |  62.4 KB |  10.4 KB | only on the old v2 Intra                 |
-| `popup.js`           |  38.2 KB |  12.5 KB | when the popup opens                     |
+| `popup.js`           |  39.9 KB |  13.1 KB | when the popup opens                     |
 | `shared-themes.css`  |  37.5 KB |   6.1 KB | only with a preset other than light/dark |
 | `theme-dark-v3.css`  |  12.3 KB |   2.1 KB | with the dark theme on v3                |
 | `theme-light-v3.css` |  10.0 KB |   1.6 KB | with a light theme preset                |
 | `auth-callback.js`   |   9.8 KB |   4.3 KB | on the worker callback page              |
-| `hook.js`            |   4.1 KB |   1.4 KB | in the page's own world, at document_start |
+| `hook.js`            |   4.2 KB |   1.4 KB | in the page's own world, at document_start |
 | `background.js`      |   2.7 KB |   1.3 KB | once per browser session                 |
 
 Raw is the number that matters. An extension file is read from disk, never
 downloaded, so nothing un-gzips it: what the browser pays on an Intra page load
 is parsing `content.js`.
+
+### What changed in 1.12.0
+
+`content.js` grew by 19 KB (556.5 to 575.8 KB) with this release's fixes:
+accessible names and keyboard handling in the hub and on the profile, the
+friends widget's failure states, the stale-if-error caches and the cleanup
+after an add-on update. Measured with the Firefox harness against 1.11.1
+(`npm run smoke:firefox -- --compare`, 3 cold and 10 warm loads each), the
+app's first writes and the hub's opening times did not move (every median
+within 1 ms on warm loads).
 
 ### What changed in 1.11.0
 

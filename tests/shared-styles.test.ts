@@ -87,6 +87,39 @@ function installChromeWithPreset(preset: string | (() => Promise<string>)) {
   };
 }
 
+/**
+ * chrome with a storage area holding `values` and an onChanged that `change()`
+ * fires: the hub flipping a switch while widgets are on screen. `gate`, when
+ * given, holds every storage answer until it resolves.
+ */
+function installChromeWithSettings(values: Record<string, unknown>, gate?: Promise<void>) {
+  const listeners: ((changes: Record<string, unknown>, area: string) => void)[] = [];
+  const stored = { ...values };
+  (globalThis as Record<string, unknown>).chrome = {
+    runtime: { getURL: vi.fn((file: string) => `chrome-extension://better-intra/${file}`) },
+    storage: {
+      local: {
+        get: vi.fn(async (keys: string | string[]) => {
+          await gate;
+          const out: Record<string, unknown> = {};
+          for (const k of typeof keys === "string" ? [keys] : keys) out[k] = stored[k];
+          return out;
+        }),
+        set: vi.fn(async () => {}),
+        remove: vi.fn(async () => {}),
+        clear: vi.fn(async () => {}),
+      },
+      onChanged: { addListener: vi.fn((fn: (typeof listeners)[number]) => listeners.push(fn)) },
+    },
+  };
+  return {
+    change(key: string, next: unknown) {
+      stored[key] = next;
+      for (const fn of listeners) fn({ [key]: { newValue: next } }, "local");
+    },
+  };
+}
+
 /** Let every pending promise (storage read, fetch, parse) settle. */
 function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -497,6 +530,134 @@ describe("shared-themes.css", () => {
     const root = makeRoot();
     mod.adoptSharedStyles(root);
     expect(textsOf(root)).toEqual([CSS_TEXT, THEMES_TEXT]);
+  });
+});
+
+/*
+ * The Advanced "Disable animations" switch: every root served gets the
+ * reduced-motion rules of style.css without their media query, as one more
+ * adopted sheet, for as long as the switch is on.
+ */
+describe("Disable animations", () => {
+  it("adopts NO_MOTION_CSS into every root, adopted and linked alike, while it is on", async () => {
+    useConstructableSheets(true);
+    installChromeWithSettings({ DISABLE_ANIMATIONS: true });
+    installFetch(okResponse);
+    const mod = await loadModule();
+    const { html, render } = await import("lit-html");
+    await mod.preloadSharedStyles();
+    await flush();
+
+    const adopted = makeRoot();
+    mod.adoptSharedStyles(adopted, ".pill{color:red}");
+    expect(textsOf(adopted)).toEqual([CSS_TEXT, ".pill{color:red}", mod.NO_MOTION_CSS]);
+
+    const linked = makeRoot();
+    render(
+      html`${mod.sharedStylesLink()}<style>
+          .n {
+            z-index: 1;
+          }
+        </style>`,
+      linked,
+    );
+    // jsdom loads no stylesheet; a browser fires this once the file is in.
+    linked.querySelector("link")!.dispatchEvent(new Event("load"));
+    expect(textsOf(linked)).toEqual([mod.NO_MOTION_CSS]);
+
+    // One parsed sheet for the whole page, and never twice in a root.
+    expect(adoptedOf(linked)[0]).toBe(adoptedOf(adopted)[2]);
+    mod.adoptSharedStyles(adopted);
+    linked.querySelector("link")!.dispatchEvent(new Event("load"));
+    expect(adoptedOf(adopted)).toHaveLength(3);
+    expect(adoptedOf(linked)).toHaveLength(1);
+  });
+
+  it("adds nothing while it is off, the default", async () => {
+    useConstructableSheets(true);
+    installChromeWithSettings({});
+    installFetch(okResponse);
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+    await flush();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}"]);
+  });
+
+  it("reaches the roots already on screen when switched on, and leaves them when switched off", async () => {
+    useConstructableSheets(true);
+    const storage = installChromeWithSettings({ DISABLE_ANIMATIONS: false });
+    installFetch(okResponse);
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+    await flush();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}"]);
+
+    storage.change("DISABLE_ANIMATIONS", true);
+    await flush();
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}", mod.NO_MOTION_CSS]);
+
+    storage.change("DISABLE_ANIMATIONS", false);
+    await flush();
+    expect(textsOf(root)).toEqual([CSS_TEXT, ".pill{color:red}"]);
+  });
+
+  it("serves a root mounted before the setting was read", async () => {
+    useConstructableSheets(true);
+    let answer!: () => void;
+    installChromeWithSettings(
+      { DISABLE_ANIMATIONS: true },
+      new Promise<void>((resolve) => (answer = resolve)),
+    );
+    installFetch(okResponse);
+    const mod = await loadModule();
+    await mod.preloadSharedStyles();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root);
+    expect(textsOf(root)).toEqual([CSS_TEXT]);
+
+    answer();
+    await flush();
+    expect(textsOf(root)).toEqual([CSS_TEXT, mod.NO_MOTION_CSS]);
+  });
+
+  it("falls back to a <style> first in the root without constructable sheets", async () => {
+    useConstructableSheets(false);
+    const storage = installChromeWithSettings({ DISABLE_ANIMATIONS: true });
+    installFetch(okResponse);
+    const mod = await loadModule();
+    await flush();
+
+    const root = makeRoot();
+    mod.adoptSharedStyles(root, ".pill{color:red}");
+    const nodes = [...root.children];
+    // First, out of the way of a lit render; its layer makes the place moot.
+    expect(nodes.map((n) => n.tagName)).toEqual(["STYLE", "LINK", "STYLE"]);
+    expect(nodes[0].textContent).toBe(mod.NO_MOTION_CSS);
+    expect(nodes[0].hasAttribute("data-bi-no-motion")).toBe(true);
+    expect(adoptedOf(root)).toHaveLength(0);
+
+    storage.change("DISABLE_ANIMATIONS", false);
+    await flush();
+    expect([...root.children].map((n) => n.tagName)).toEqual(["LINK", "STYLE"]);
+  });
+
+  it("does not crash without an extension context", async () => {
+    useConstructableSheets(true);
+    (globalThis as Record<string, unknown>).chrome = { runtime: {} };
+    const mod = await loadModule();
+    await flush();
+
+    const root = makeRoot();
+    expect(() => mod.adoptSharedStyles(root, ".pill{color:red}")).not.toThrow();
+    expect(root.querySelector("style[data-bi-no-motion]")).toBeNull();
+    expect(adoptedOf(root)).toHaveLength(0);
   });
 });
 
@@ -943,6 +1104,53 @@ describe("shared-styles.css contents", () => {
     }
     // The two values the popup switches between really differ.
     expect(base100(ruleOf("light")!)).not.toBe(base100(ruleOf("dark")!));
+  });
+
+  it("stops motion under prefers-reduced-motion, in a layer of its own, with NO_MOTION_CSS's rules", async () => {
+    const { NO_MOTION_CSS } = await import("../src/core/styles/shared-styles.ts");
+    const { optimize } = (await import("@tailwindcss/node")) as unknown as TailwindNode;
+    // The block as the build writes it: a layer holding the media query.
+    const block = /@layer bi-motion\{@media \(prefers-reduced-motion:\s*reduce\)\{([\s\S]*?\})\}\}/.exec(
+      coreCss,
+    );
+    expect(block, "the reduced-motion block of style.css").not.toBeNull();
+    // A layer after every other one of the sheet. Its !important rules beat
+    // the widgets' unlayered !important ones (an !important in any layer
+    // does), which is what reaches `animation: ... !important` in a widget's
+    // own <style> without naming its selectors.
+    const layers = [...coreCss.matchAll(/@layer ([a-z-]+)[,;{]/g)].map((m) => m[1]);
+    expect(layers.indexOf("bi-motion")).toBe(layers.length - 1);
+    expect(layers.filter((l) => l === "bi-motion")).toHaveLength(1);
+
+    const byRule = (rules: Rule[]) =>
+      Object.fromEntries(
+        rules.map((r) => [
+          r.selectors.join(","),
+          r.body
+            .split(";")
+            .map((d) => d.trim())
+            .filter(Boolean)
+            .sort(),
+        ]),
+      );
+    const built = byRule(rulesOf(block![1]));
+    // Normalised by the same minifier as the build, so both read alike.
+    const adopted = optimize(NO_MOTION_CSS, { minify: true }).code;
+    expect(adopted.startsWith("@layer bi-motion{")).toBe(true);
+    expect(adopted).not.toContain("@media");
+    expect(byRule(rulesOf(adopted))).toEqual(built);
+
+    // Every element of the root, and its pseudo-elements.
+    const all = built["*,:before,:after"];
+    expect(all).toContain("animation-duration:1ms!important");
+    expect(all).toContain("animation-iteration-count:1!important");
+    // The last frame stays: a glow ends lit, a fade-in ends visible.
+    expect(all).toContain("animation-fill-mode:both!important");
+    expect(all).toContain("transition-duration:0s!important");
+    // Spinners keep saying "loading", slowly; the class is one src/ writes.
+    expect(built[".spinning"]).toContain("animation-iteration-count:infinite!important");
+    expect(srcClasses.has("spinning")).toBe(true);
+    expect(Object.keys(built).sort()).toEqual(["*,:before,:after", ".spinning"]);
   });
 
   it("never renders a daisyUI theme-controller, so its :has() selectors stay dead", () => {

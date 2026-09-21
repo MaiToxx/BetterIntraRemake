@@ -121,7 +121,9 @@ export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
     defaultValue: CONFIG_DEFAULT.PROFILE_SHOW_MARKS,
     grid: true,
     colSpan: 1,
-    requiresCloud: true,
+    // No requiresCloud: the list is read from intrapy with the page's own
+    // Intra token and login (marks.ts), so it runs signed out too, and a
+    // signed-out student must be able to turn it off.
   },
   {
     feature: "profile",
@@ -137,7 +139,6 @@ export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
     grid: true,
     colSpan: 1,
     dependsOn: "PROFILE_SHOW_MARKS",
-    requiresCloud: true,
   },
   {
     feature: "profile",

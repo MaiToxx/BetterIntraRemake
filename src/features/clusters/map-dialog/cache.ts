@@ -17,9 +17,16 @@ interface SvgsCacheEntry {
   cachedAt: number;
 }
 
+/**
+ * The cached map of one cluster, or null when there is none or it is older
+ * than 7 days. `allowStale` also returns an expired entry: for when the
+ * worker's /cluster/svg fetch failed, since last week's map beats an empty
+ * pane (only a fallback: a fresh fetch must stay the first choice).
+ */
 export async function getCachedCluster(
   campusId: string,
   clusterId: string,
+  opts: { allowStale?: boolean } = {},
 ): Promise<CachedCluster | null> {
   const key = `${SVG_CACHE_PREFIX}${campusId}_${clusterId}`;
   const result = (await chrome.storage.local.get(key)) as Record<string, string>;
@@ -27,7 +34,9 @@ export async function getCachedCluster(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as CachedCluster;
-    if (Date.now() - parsed.cachedAt > CACHE_TTL) return null;
+    if (!opts.allowStale && Date.now() - parsed.cachedAt > CACHE_TTL) {
+      return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -99,10 +108,12 @@ export async function scrapeCampusSVGUrls(
         chrome.storage.local.set({
           [cacheKey]: { data, cachedAt: Date.now() },
         });
+        return data;
       }
-      return data;
     }
   } catch {
   }
-  return {};
+  // meta.intra.42.fr unreachable, signed out or changed: last known URLs
+  // (they rarely change) rather than a map dialog with no clusters at all.
+  return entry?.data ?? {};
 }

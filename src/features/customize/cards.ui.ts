@@ -69,6 +69,7 @@ export function renderCardsPanel() {
               type="checkbox"
               class="checkbox checkbox-xs checkbox-accent"
               title="Use a custom ${label.toLowerCase()} colour"
+              aria-label="Custom ${label.toLowerCase()} colour for ${CARD_LABELS[id]}"
               .checked="${!!value}"
               @change="${(e: Event) => {
                 const on = (e.target as HTMLInputElement).checked;
@@ -81,6 +82,7 @@ export function renderCardsPanel() {
             <input
               type="color"
               class="input input-accent p-0.5 w-9 h-7"
+              aria-label="${label} colour for ${CARD_LABELS[id]}"
               .value="${value ?? fallback}"
               ?disabled="${!value}"
               @change="${(e: Event) => {
@@ -96,6 +98,7 @@ export function renderCardsPanel() {
           <input
             type="checkbox"
             class="toggle toggle-xs toggle-accent"
+            aria-label="Glow on ${CARD_LABELS[id]}"
             .checked="${!!look.glow}"
             @change="${(e: Event) => {
               const on = (e.target as HTMLInputElement).checked;
@@ -110,6 +113,7 @@ export function renderCardsPanel() {
           type="button"
           class="btn btn-ghost btn-xs"
           title="Back to the default look for this card"
+          aria-label="Clear the ${CARD_LABELS[id]} look"
           ?disabled="${!map[id]}"
           @click="${() => update(id, (l) => {
             delete l.bg;

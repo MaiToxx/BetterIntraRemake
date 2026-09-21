@@ -1,12 +1,24 @@
 import { hashLogin } from "../../core/crypto.ts";
 
 import { WORKER_URL } from "../../core/worker.ts";
+
+/** What an event of the feed is built from (a subset of the Intra event). */
+interface IcsEvent {
+  id: number;
+  name: string;
+  kind: string;
+  begin_at: string;
+  end_at: string;
+  location?: string;
+}
+
 function escapeIcs(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
     .replace(/;/g, "\\;")
     .replace(/,/g, "\\,")
-    .replace(/\n/g, "\\n");
+    // CRLF, lone CR and LF alike: a bare CR would end the content line
+    .replace(/\r\n|\r|\n/g, "\\n");
 }
 
 function formatIcsDate(iso: string): string {
@@ -17,27 +29,21 @@ function formatIcsDate(iso: string): string {
     .replace(/\.\d{3}/, "");
 }
 
-function computeHash(events: { id: number; begin_at: string }[]): string {
+// Covers every field the .ics is built from: with only id and begin_at, a
+// subscribed event whose end, name or room changed was never re-uploaded.
+// An empty list hashes to "0", so dropping the last event is uploaded once.
+function computeHash(events: IcsEvent[]): string {
   let h = 0;
   for (const e of events) {
-    h = ((h << 5) - h + e.id) | 0;
-    for (let i = 0; i < e.begin_at.length; i++) {
-      h = ((h << 5) - h + e.begin_at.charCodeAt(i)) | 0;
+    const key = `${e.id}|${e.kind}|${e.begin_at}|${e.end_at}|${e.name}|${e.location ?? ""}`;
+    for (let i = 0; i < key.length; i++) {
+      h = ((h << 5) - h + key.charCodeAt(i)) | 0;
     }
   }
   return String(h);
 }
 
-export function generateIcs(
-  events: {
-    id: number;
-    name: string;
-    kind: string;
-    begin_at: string;
-    end_at: string;
-    location?: string;
-  }[],
-): string {
+export function generateIcs(events: IcsEvent[]): string {
   const lines: string[] = [];
   lines.push(
     "BEGIN:VCALENDAR",
@@ -75,14 +81,7 @@ export function generateIcs(
 }
 
 export async function syncCalendarIcs(
-  events: {
-    id: number;
-    name: string;
-    kind: string;
-    begin_at: string;
-    end_at: string;
-    location?: string;
-  }[],
+  events: IcsEvent[],
   force = false,
 ): Promise<void> {
   const store = await chrome.storage.local.get([

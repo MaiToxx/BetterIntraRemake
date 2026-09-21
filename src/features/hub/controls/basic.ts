@@ -4,6 +4,10 @@
  * emoji. Each shows the stored value and saves on change; setting.ts draws
  * the card around it. The text control also checks public profile links as
  * they are typed.
+ *
+ * Each control takes its accessible name from the label of its card and its
+ * description from the card's text (aria-labelledby / aria-describedby, ids
+ * from settingIds(def)): the label is a sibling <span>, not a <label>.
  */
 import { html, nothing } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
@@ -12,7 +16,7 @@ import { CLUSTERS } from "../../campus/campus.ts";
 import type { LinkKind } from "../../profile/extras/extras.ts";
 import { normalizeLink } from "../../profile/extras/extras-sanitize.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import { saveSetting, type LiveOptions } from "./context.ts";
+import { saveSetting, settingIds, type LiveOptions } from "./context.ts";
 
 /** Only the shapes normalizeLink() accepts are published: say so live. */
 const LINK_HINTS: Record<string, string> = {
@@ -27,12 +31,29 @@ function linkFieldIsValid(kind: LinkKind, value: string): boolean {
   return value.trim() === "" || normalizeLink(kind, value) !== null;
 }
 
+/**
+ * aria-describedby of a control: the setting's description, plus the link
+ * hint while it shows. Only while it shows: a reference to a hidden element
+ * is still read, so a valid link would be announced as "Not recognised".
+ */
+function describedBy(def: HubSettingDef, withHint = false): string | typeof nothing {
+  const ids = settingIds(def);
+  const refs = [ids.desc, withHint ? ids.hint : undefined].filter(Boolean);
+  return refs.length ? refs.join(" ") : nothing;
+}
+
 /** Shows or hides the hint under a link field as the user types. */
 function checkLinkField(def: HubSettingDef) {
   return (e: Event) => {
     const input = e.target as HTMLInputElement;
     const ok = linkFieldIsValid(def.linkKind!, input.value);
     input.classList.toggle("input-error", !ok);
+    // Set here rather than by a re-render: lit keeps what the template gave
+    // until its own value changes, and this template is drawn once.
+    input.setAttribute("aria-invalid", String(!ok));
+    const refs = describedBy(def, !ok);
+    if (refs === nothing) input.removeAttribute("aria-describedby");
+    else input.setAttribute("aria-describedby", refs);
     const hint = input.parentElement?.querySelector<HTMLElement>("[data-link-hint]");
     if (hint) hint.hidden = ok;
   };
@@ -58,6 +79,8 @@ export function renderToggle(
     type="checkbox"
     class="toggle toggle-lg toggle-accent"
     data-setting-key="${def.key}"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
     ?checked="${Boolean(value)}"
     ?disabled="${!enabled}"
     @change="${(e: Event) =>
@@ -87,6 +110,8 @@ export function renderNumber(
           step="${def.step ?? nothing}"
           .value="${String(value)}"
           data-setting-key="${def.key}"
+          aria-labelledby="${settingIds(def).label}"
+          aria-describedby="${describedBy(def)}"
           ?disabled="${!enabled}"
           @change="${(e: Event) =>
             saveSetting(
@@ -104,6 +129,8 @@ export function renderNumber(
         step="${def.step ?? nothing}"
         .value="${String(value)}"
         data-setting-key="${def.key}"
+        aria-labelledby="${settingIds(def).label}"
+        aria-describedby="${describedBy(def)}"
         ?disabled="${!enabled}"
         @change="${(e: Event) =>
           saveSetting(def.key!, numericValue((e.target as HTMLInputElement).value))}"
@@ -130,6 +157,8 @@ export function renderSelect(
   return html`<select
     class="select select-accent w-44"
     data-setting-key="${def.key}"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
     ?disabled="${!enabled}"
     @change="${(e: Event) =>
       saveSetting(def.key!, (e.target as HTMLSelectElement).value)}"
@@ -158,6 +187,8 @@ export function renderColor(
     class="input input-accent p-1 w-20 h-10"
     .value="${String(value)}"
     data-setting-key="${def.key}"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
     ?disabled="${!enabled}"
     @change="${(e: Event) =>
       saveSetting(def.key!, (e.target as HTMLInputElement).value)}"
@@ -174,7 +205,14 @@ export function renderRadioGroup(
     def.key === "PROFILE_EVENT_TYPE_FILTER" && live.eventTypes.length > 0
       ? eventTypeChoices(live)
       : (def.options ?? []);
-  return html`<div class="join">
+  // Each radio is named by its own option (aria-label is also what daisyUI
+  // shows on the button); the group carries the setting's label.
+  return html`<div
+    class="join"
+    role="radiogroup"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
+  >
     ${options.map(
       (o) =>
         html`<input
@@ -205,7 +243,9 @@ export function renderUrl(
     <label
       class="input input-accent validator flex items-center gap-2 w-full"
     >
-      <span class="h-[1em] opacity-50 flex items-center justify-center"
+      <span
+        class="h-[1em] opacity-50 flex items-center justify-center"
+        aria-hidden="true"
         >${unsafeHTML(LINK_SVG)}</span
       >
       <input
@@ -214,6 +254,8 @@ export function renderUrl(
         placeholder="https://beemovie.com/beemovie.gif"
         .value="${String(value)}"
         data-setting-key="${def.key}"
+        aria-labelledby="${settingIds(def).label}"
+        aria-describedby="${describedBy(def)}"
         ?disabled="${!enabled}"
         pattern="^(https?://)?.*"
         class="grow"
@@ -232,6 +274,10 @@ export function renderText(
   // fullWidth: renderSetting stacks the label over a w-full wrapper,
   // the input only has to fill it. `nothing` drops the attribute, a
   // def without maxLength keeps an unlimited input.
+  const ids = settingIds(def);
+  const valid = def.linkKind
+    ? linkFieldIsValid(def.linkKind, String(value || ""))
+    : true;
   const input = html`<input
     type="text"
     class="input input-accent ${def.fullWidth ? "w-full" : "w-60"}"
@@ -239,6 +285,9 @@ export function renderText(
     maxlength="${def.maxLength ?? nothing}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"
+    aria-labelledby="${ids.label}"
+    aria-describedby="${describedBy(def, !valid)}"
+    aria-invalid="${def.linkKind ? String(!valid) : nothing}"
     ?disabled="${!enabled}"
     @input="${def.linkKind ? checkLinkField(def) : nothing}"
     @change="${(e: Event) =>
@@ -253,8 +302,9 @@ export function renderText(
     ${input}
     <span
       data-link-hint
+      id="${ids.hint}"
       class="text-xs text-error leading-tight"
-      ?hidden="${linkFieldIsValid(def.linkKind, String(value || ""))}"
+      ?hidden="${valid}"
       >${LINK_HINTS[def.linkKind]}</span
     >
   </div>`;
@@ -272,6 +322,8 @@ export function renderTextarea(
     placeholder="${def.placeholder || ""}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
     ?disabled="${!enabled}"
     @change="${(e: Event) =>
       saveSetting(def.key!, (e.target as HTMLTextAreaElement).value)}"
@@ -290,6 +342,8 @@ export function renderEmoji(
     maxlength="${def.maxLength ?? 6}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"
+    aria-labelledby="${settingIds(def).label}"
+    aria-describedby="${describedBy(def)}"
     ?disabled="${!enabled}"
     @change="${(e: Event) =>
       saveSetting(def.key!, (e.target as HTMLInputElement).value)}"

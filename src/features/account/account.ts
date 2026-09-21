@@ -427,10 +427,14 @@ export async function wipeAllCloudData(): Promise<boolean> {
     );
 
     if (response.ok) {
+      // The worker revoked every calendar link: forget ours too, or the
+      // panel keeps showing (and the next push re-uploads) a dead one.
       await chrome.storage.local.remove([
         "CLOUD_TOKEN",
         "CLOUD_LOGIN",
         "CLOUD_AUTH_FAILED",
+        "CALENDAR_SYNC_TOKEN",
+        "CALENDAR_EVENTS_HASH",
       ]);
       return true;
     }

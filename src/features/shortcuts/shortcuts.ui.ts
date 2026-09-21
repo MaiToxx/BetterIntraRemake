@@ -61,7 +61,10 @@ export const getContrastColor = (hex: string): string => {
 export function renderShortcutRow(
   link: ShortcutLink,
   onDelete: () => void,
+  position?: number,
 ): ReturnType<typeof html> {
+  // The placeholders are not names: each field says which shortcut it edits.
+  const which = position ? `Shortcut ${position}` : "Shortcut";
   return html` <div
     class="link-group flex flex-row gap-2 border border-base-300 rounded-lg p-2 bg-base-200/30 items-end"
   >
@@ -70,6 +73,7 @@ export function renderShortcutRow(
         type="text"
         class="input w-16 text-center text-xl"
         data-shortcuts-emoji
+        aria-label="${which} emoji"
         .value="${link.emoji || ""}"
         placeholder="🐝"
         maxlength="2"
@@ -80,6 +84,7 @@ export function renderShortcutRow(
         type="text"
         class="input w-full"
         data-shortcuts-name
+        aria-label="${which} name"
         .value="${link.name}"
         placeholder="Name"
         maxlength="20"
@@ -92,6 +97,7 @@ export function renderShortcutRow(
         placeholder="https://example.com"
         .value="${link.url}"
         data-shortcuts-url
+        aria-label="${which} address"
         pattern="^(https?://)?.*"
       />
     </div>
@@ -99,14 +105,16 @@ export function renderShortcutRow(
       type="color"
       class="input w-12 p-1 cursor-pointer"
       data-shortcuts-color
+      aria-label="${which} colour"
       .value="${link.color}"
     />
     <button
       type="button"
       class="btn btn-outline btn-error"
+      aria-label="Remove ${which.toLowerCase()}"
       @click="${onDelete}"
     >
-      ✕
+      <span aria-hidden="true">✕</span>
     </button>
   </div>`;
 }
@@ -126,7 +134,7 @@ export function renderShortcutsSettings(
     <div class="shortcuts-settings flex flex-col gap-4">
       <div class="space-y-2" @input="${onInput}">
         ${links.map((link, idx) =>
-          renderShortcutRow(link, () => onDeleteRow(idx)),
+          renderShortcutRow(link, () => onDeleteRow(idx), idx + 1),
         )}
       </div>
 

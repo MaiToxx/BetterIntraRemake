@@ -1,3 +1,8 @@
+// FIRST, and keep it first: it removes what an earlier instance of the
+// extension left in this tab (Firefox injects the new content.js into open
+// tabs on update) and it does so at import time, so it must run before any
+// other module's top-level code. See the module's comment.
+import "./core/lifecycle/stale-instance.ts";
 import { initLogtime } from "./features/logtime/logtime.ts";
 import { initClusters } from "./features/clusters/clusters.ts";
 import { initProfile } from "./features/profile/profile.ts";

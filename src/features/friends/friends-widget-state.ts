@@ -12,6 +12,7 @@ import { SORT_MODES, type SortDir, type SortMode } from "./friends-sort.ts";
 export interface WidgetData {
   open: boolean;
   loading: boolean;
+  /** The last load failed (in part): the list shows an error and Retry. */
   loadError: boolean;
   friends: FriendData[];
   sortBy: SortMode;
@@ -20,6 +21,18 @@ export interface WidgetData {
   addInput: string;
   addLoading: boolean;
   addError: string;
+  /**
+   * A login saved although the check could not reach the server: the add
+   * form offers to check it again (shown with addError, cleared with it).
+   */
+  addPending: string | null;
+  /**
+   * Saved logins the server answered for without a row (the Intra has no
+   * such user: a typo saved while the check could not run). Listed with a
+   * Remove button; never deleted on their own, since a changed API could
+   * make every login look unknown.
+   */
+  missingLogins: string[];
   addOpen: boolean;
   lastFetch: number | null;
   theme: string;
@@ -42,6 +55,12 @@ export interface WidgetHandlers {
   onCancelDelete: () => void;
   onInputChange: (val: string) => void;
   onAdd: () => void;
+  /** Check addPending again. */
+  onRetryAdd: () => void;
+  /** Give up on addPending: remove it from the list. */
+  onCancelAdd: () => void;
+  /** Remove one of missingLogins from the list. */
+  onRemoveMissing: (login: string) => void;
   onToggleAdd: () => void;
   onConnect: () => void;
   /** A row swapped between the custom and the 42 avatar: re-render. */
@@ -85,6 +104,8 @@ export async function loadInitialData(): Promise<WidgetData> {
     addInput: "",
     addLoading: false,
     addError: "",
+    addPending: null,
+    missingLogins: [],
     addOpen: false,
     lastFetch: null,
     theme: daisyTheme,

@@ -359,8 +359,12 @@ describe what the harness observed on v1.11.0.
   answers 404, so cloud sync, public profiles and statistics never run.
 - **Other pages**: profile.intra.42.fr v2, `/users/<login>`, projects and
   other subdomains, the auth callback, and a page restored from bfcache.
-- **Lifecycle**: updating or reloading the add-on with a tab open, the popup,
-  the background script beyond its first run.
+- **Lifecycle**: the popup and the background script beyond their first run.
+  Updating the add-on with a tab open is not one of the automated checks, but
+  it was checked by hand with the harness for 1.12.0 (install 1.11.1, load the
+  page, install the new build over it): one friends widget, one theme link,
+  and the gear and Clusters button work. 1.11.1 over itself still shows the
+  old bug, which is what `src/core/lifecycle/stale-instance.ts` fixes.
 - **Load counts of extension files.** BiDi does not report `moz-extension://`
   loads, so "content-main.js is fetched once" cannot be checked here. Use the
   Browser Toolbox.
