@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 
 /**
  * shared-styles.ts is a page-wide singleton: one fetch, one parsed sheet, one
@@ -266,5 +268,323 @@ describe("sharedStylesLink", () => {
     render(mod.sharedStylesLink(), root);
 
     expect(root.querySelector("link")).toBeNull();
+  });
+});
+
+/*
+ * What goes INTO shared-styles.css. style.css trims the sheet three ways (see
+ * the comments there): Tailwind scans src/ only, daisyUI builds only the
+ * components src/ uses, and the 33 duplicated theme blocks became one rule per
+ * theme. A lost rule is a silently unstyled widget, so these cases compile the
+ * real style.css exactly like @tailwindcss/vite does (same compiler, same
+ * scanner, same lightningcss pass) and check the result against src/.
+ */
+
+const REPO = path.resolve(__dirname, "..");
+const SRC = path.join(REPO, "src");
+const STYLE_CSS = path.join(SRC, "assets", "style.css");
+const POPUP_CONFIG = path.join(REPO, "vite.popup.config.ts");
+
+type TailwindNode = {
+  compile: (
+    css: string,
+    opts: { base: string; from: string; onDependency: (p: string) => void },
+  ) => Promise<{
+    root: "none" | null | { base: string; pattern: string };
+    sources: { base: string; pattern: string; negated: boolean }[];
+    build: (candidates: string[]) => string;
+  }>;
+  optimize: (css: string, opts: { minify: boolean }) => { code: string };
+};
+type Oxide = {
+  Scanner: new (opts: { sources: { base: string; pattern: string; negated: boolean }[] }) => {
+    scan: () => string[];
+  };
+};
+
+/** Compile a style.css text the way @tailwindcss/vite does for a build. */
+async function compileSheet(css: string): Promise<string> {
+  // Both ship with @tailwindcss/vite, which is what the build itself runs.
+  const { compile, optimize } = (await import("@tailwindcss/node")) as unknown as TailwindNode;
+  const { Scanner } = (await import("@tailwindcss/oxide")) as unknown as Oxide;
+  const compiler = await compile(css, {
+    base: path.dirname(STYLE_CSS),
+    from: STYLE_CSS,
+    onDependency() {},
+  });
+  const root =
+    compiler.root === "none"
+      ? []
+      : compiler.root === null
+        ? [{ base: REPO, pattern: "**/*", negated: false }]
+        : [{ ...compiler.root, negated: false }];
+  const scanner = new Scanner({ sources: [...root, ...compiler.sources] });
+  return optimize(compiler.build(scanner.scan()), { minify: true }).code;
+}
+
+type Rule = { selectors: string[]; body: string };
+
+/** Every style rule, flattened out of @media/@layer/@supports/... */
+function rulesOf(css: string): Rule[] {
+  const out: Rule[] = [];
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  const walk = (t: string) => {
+    let depth = 0;
+    let start = 0;
+    let open = -1;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (c === "{") {
+        if (depth === 0) open = i;
+        depth++;
+      } else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          const head = t.slice(start, open).trim();
+          const body = t.slice(open + 1, i);
+          if (/^@(media|supports|layer|container|scope|starting-style)\b/.test(head)) walk(body);
+          else if (!head.startsWith("@")) out.push({ selectors: splitList(head), body });
+          start = i + 1;
+        }
+      } else if (c === ";" && depth === 0) {
+        start = i + 1;
+      }
+    }
+  };
+  walk(text);
+  return out;
+}
+
+function selectorsOf(rules: Rule[]): Set<string> {
+  return new Set(rules.flatMap((r) => r.selectors));
+}
+
+function splitList(head: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const c of head) {
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    if (c === "," && depth === 0) {
+      parts.push(cur.trim());
+      cur = "";
+    } else cur += c;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  return parts;
+}
+
+/** First class a selector names (unescaped), or null. */
+function leadingClass(selector: string): string | null {
+  const m = selector.match(/\.((?:\\.|[A-Za-z0-9_-])+)/);
+  return m ? m[1].replace(/\\(.)/g, "$1") : null;
+}
+
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...sourceFiles(p));
+    // .css is left out on purpose: Tailwind never scans it, and the theme
+    // sheets / style.css name classes as selectors, not as markup.
+    else if (/\.(ts|svg|json|html)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+
+/**
+ * Class names src/ can put on an element: class="..." / className values
+ * (string parts and the string literals of their ${...}), className: "..." in
+ * Object.assign, classList.add/toggle(...) and setAttribute("class", ...).
+ * Deliberately generous; a false positive here only makes the check stricter.
+ */
+function classesWrittenBySrc(): Set<string> {
+  const classes = new Set<string>();
+  const TOKEN = /^[!A-Za-z0-9_:\-/.[\]#%()]+$/;
+  const take = (text: string) => {
+    for (const tok of text.split(/\s+/)) if (tok && TOKEN.test(tok)) classes.add(tok);
+  };
+  const literals = (text: string) =>
+    [...text.matchAll(/(["'`])((?:(?!\1)[^\\]|\\.)*)\1/g)].map((m) => m[2]);
+  for (const file of [...sourceFiles(SRC), POPUP_CONFIG]) {
+    const t = fs.readFileSync(file, "utf8");
+    const attr = /\bclass(?:Name)?\s*(?:=|:)\s*(["'`])/g;
+    let m: RegExpExecArray | null;
+    while ((m = attr.exec(t))) {
+      const quote = m[1];
+      let i = attr.lastIndex;
+      let depth = 0;
+      let plain = "";
+      let inner = "";
+      while (i < t.length) {
+        if (t[i] === "$" && t[i + 1] === "{") {
+          depth++;
+          plain += " ";
+          i += 2;
+          continue;
+        }
+        if (depth > 0 && t[i] === "}") {
+          depth--;
+          i++;
+          continue;
+        }
+        if (depth === 0 && t[i] === quote) break;
+        if (depth === 0) plain += t[i];
+        else inner += t[i];
+        i++;
+      }
+      take(plain);
+      for (const l of literals(inner)) take(l);
+    }
+    const call = /\b(?:classList\.(?:add|toggle)|setAttribute)\s*\(/g;
+    while ((m = call.exec(t))) {
+      let i = call.lastIndex;
+      let depth = 1;
+      const from = i;
+      while (i < t.length && depth) {
+        if (t[i] === "(") depth++;
+        else if (t[i] === ")") depth--;
+        i++;
+      }
+      const args = t.slice(from, i - 1);
+      if (m[0].startsWith("setAttribute") && !/^\s*["']class["']/.test(args)) continue;
+      for (const l of literals(args)) take(l);
+    }
+  }
+  return classes;
+}
+
+/**
+ * daisyUI components whose classes src/ writes but that the sheet has NEVER
+ * built (v1.10.0 did not include them either: its shipped shared-styles.css has
+ * no .checkbox / .validator rule). Those elements have always had the browser's
+ * look; adding the component would restyle live widgets, which is a design
+ * decision, not a size one. "carousel" is an extractor false positive.
+ */
+const NEVER_STYLED: Record<string, string> = {
+  checkbox: "customize/cards.ui.ts and friends.ui.ts use checkbox-* classes",
+  validator: "hubSettings.ui.ts and profile.modal.ts put it on inputs",
+  carousel: 'not a class: the "carousel" operand of a comparison in logtime/render.ts',
+};
+
+function neverStyled(cls: string): boolean {
+  return Object.keys(NEVER_STYLED).some((c) => cls === c || cls.startsWith(`${c}-`));
+}
+
+/** Every id the v1.10.0 style.css passed to daisyUI's `root` option. */
+const ROOT_IDS = [
+  "hub-shadow-wrapper", "events-shadow-wrapper", "profile-shadow-wrapper",
+  "profile-badges-shadow", "cluster-shadow-host", "shortcuts-shadow-wrapper",
+  "friends-shadow-wrapper", "ft-friend-btn-shadow", "logtime-shadow-wrapper",
+  "popup-root", "project-badges-shadow", "cluster-map-dialog",
+  "profile-modal-host", "better-intra-sort-host", "ft-tracker-card",
+  "ft-transcript-dialog", "ft-star-total-host", "ft-subject-update-host",
+];
+
+describe("shared-styles.css contents", () => {
+  let styleCss = "";
+  let realRules: Rule[];
+  let real: Set<string>;
+  let reference: Set<string>;
+  let srcClasses: Set<string>;
+
+  beforeAll(async () => {
+    styleCss = fs.readFileSync(STYLE_CSS, "utf8");
+    // Same file with every daisyUI component and no candidate exclusions: what
+    // src/ would get if nothing had been trimmed.
+    const untrimmed = styleCss
+      .replace(/@source not inline\([^)]*\);/g, "")
+      .replace(/\n\s*include:[^;]*;/, "");
+    expect(untrimmed).not.toBe(styleCss);
+    const [realCss, referenceCss] = await Promise.all([
+      compileSheet(styleCss),
+      compileSheet(untrimmed),
+    ]);
+    realRules = rulesOf(realCss);
+    real = selectorsOf(realRules);
+    reference = selectorsOf(rulesOf(referenceCss));
+    srcClasses = classesWrittenBySrc();
+  }, 120_000);
+
+  it("scans src/ (and the popup.html template) only", () => {
+    // Auto-detection read the whole repo: .agents/, tests/, docs, *.md.
+    expect(styleCss).toMatch(/@import\s+"tailwindcss"\s+source\(none\);/);
+    expect(styleCss).toMatch(/@source\s+"\.\.\/";/);
+    expect(styleCss).toMatch(/@source\s+"\.\.\/\.\.\/vite\.popup\.config\.ts";/);
+    expect(real.has(".p-4")).toBe(true); // popup.html's only class
+  });
+
+  it("passes daisyUI a real include list, not one bracketed string", () => {
+    // A bracketed list reaches daisyUI as a single string that it
+    // substring-matches, which silently changes what gets built.
+    const include = styleCss.match(/\n\s*include:([^;]*);/);
+    expect(include).not.toBeNull();
+    expect(include![1]).not.toMatch(/[[\]]/);
+  });
+
+  it("keeps every rule keyed on a class src/ writes", () => {
+    expect(srcClasses.size).toBeGreaterThan(300);
+    const lost = [...reference].filter((sel) => {
+      const cls = leadingClass(sel);
+      return cls !== null && srcClasses.has(cls) && !neverStyled(cls) && !real.has(sel);
+    });
+    // If this fails, src/ started using a daisyUI component (or a candidate)
+    // that style.css leaves out: add it back to `include` / drop the exclusion.
+    expect(lost).toEqual([]);
+  });
+
+  it("still trims something, or the trimming above went away", () => {
+    const trimmed = [...reference].filter((sel) => !real.has(sel));
+    expect(trimmed.length).toBeGreaterThan(0);
+    expect(trimmed.some((sel) => sel.startsWith(".tooltip"))).toBe(true);
+    expect(trimmed).toContain(".\\!loading");
+  });
+
+  it("applies every hub preset through its own [data-theme] rule", async () => {
+    const themes = Object.keys(
+      JSON.parse(
+        fs.readFileSync(path.join(SRC, "features/profile/theme/themes.json"), "utf8"),
+      ) as Record<string, unknown>,
+    );
+    expect(themes).toHaveLength(36);
+    const selectorText = [...real].join("\n");
+    for (const theme of themes) expect(selectorText).toContain(`[data-theme=${theme}]`);
+  });
+
+  it("gives the widget root ids aqua's variables only, as v1.10.0 rendered them", () => {
+    // v1.10.0 listed the ids in daisyUI's `root`, which put them on all 33
+    // built-in theme blocks; the last one, aqua, is what the browser applied
+    // (an id outranks [data-theme]). style.css now emits just that rule, on
+    // purpose: see the comment there before touching it.
+    const mentionsId = (sel: string) => ROOT_IDS.some((id) => sel.includes(`#${id}`));
+    // Theme blocks only: style.css also has its own #hub-shadow-wrapper rules.
+    const idRules = realRules.filter(
+      (r) => r.selectors.some(mentionsId) && /--color-base-100\s*:/.test(r.body),
+    );
+    expect(idRules.length).toBeGreaterThan(0);
+    for (const rule of idRules) {
+      const themesNamed = new Set(
+        rule.selectors.flatMap((s) => [...s.matchAll(/(?:data-theme|value)=([a-z]+)/g)].map((m) => m[1])),
+      );
+      expect([...themesNamed]).toEqual(["aqua"]);
+    }
+    const idSelectors = idRules.flatMap((r) => r.selectors).filter(mentionsId).sort();
+    expect(idSelectors).toEqual(
+      [
+        ...ROOT_IDS.slice(0, -1).map((id) => `#${id}`),
+        "#ft-subject-update-host:has(input.theme-controller[value=aqua]:checked)",
+      ].sort(),
+    );
+  });
+
+  it("never renders a daisyUI theme-controller, so its :has() selectors stay dead", () => {
+    // The trimmed theme blocks dropped 32 "#ft-subject-update-host:has(input.
+    // theme-controller...)" copies; that is only a no-op while nothing in
+    // src/ renders such an input.
+    const users = [...sourceFiles(SRC), POPUP_CONFIG].filter((f) =>
+      fs.readFileSync(f, "utf8").includes("theme-controller"),
+    );
+    expect(users).toEqual([]);
   });
 });

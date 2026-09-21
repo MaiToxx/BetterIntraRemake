@@ -121,6 +121,10 @@ A **Customize** tab in the hub restyles every Intra page live, and syncs with yo
 * **Custom colours** and rainbow palettes; calendar events overlaid on the days.
 * **Older months ☁️** — "Load older months" fetches the complete history.
 
+### 📆 Calendar sync ☁️
+
+The **Calendar** tab of the hub generates a private `.ics` link (with a QR code for phones) that Google Calendar, Apple Calendar or Outlook can subscribe to. Every time you open your own profile, the Intra events you are subscribed to are pushed to the worker, each with a 15-minute reminder. *Regenerate* invalidates the old link.
+
 ### 🖥️ Clusters
 
 * **Chair direction markers** on the cluster map, a **cluster picker**, a **default cluster**, open profiles in a new tab.
@@ -151,11 +155,18 @@ The extension is also lighter than it used to be: since 1.10.0 its script went f
 
 ### ⚙️ Settings hub
 
-The gear in the Intra sidebar opens the hub: Profile, Extras, Clusters, Logtime, Shortcuts, Customize, Advanced, About. Feature toggles, per-feature reset, backup and restore (JSON), auto-detected campus, theme toggle, cloud status.
+The gear in the Intra sidebar opens the hub: Profile, Extras, Clusters, Logtime, Shortcuts, Calendar, Customize, Advanced, About. Feature toggles, per-feature reset, backup and restore (JSON), auto-detected campus, theme toggle, cloud status.
 
 ### Not available in this edition
 
-These upstream features need a 42 API application on the server, which this fork does not have: Discord evaluation reminders, calendar (ICS) subscription, the students directory, image upload to the worker (use any image host and paste the URL), the ⭐ Outstanding flag and the transcript download (Belgium-only). Their tabs may still appear in the hub but do nothing useful.
+These upstream features cannot work on this fork's worker, so they were removed from the extension and their code no longer ships:
+
+* **Discord evaluation reminders** — need a Discord bot and a 42 API token on the server.
+* **Students directory** — the worker builds it with a 42 API application token, for the Belgium campus only.
+* **⭐ Outstanding flag** — the worker reads it from the 42 API with a token that Intra sign-in sessions do not have.
+* **Image upload to the worker** — needs an R2 bucket; use any image host and paste the URL instead.
+
+The **transcript download** is still in the extension but only shows up on campuses whose campus file lists their transcript templates, which today is only Belgium ([campuses/belgium.json](campuses/belgium.json)). It needs no server: adding the Mulhouse records to [campuses/mulhouse.json](campuses/mulhouse.json) would be enough to turn it on.
 
 ---
 

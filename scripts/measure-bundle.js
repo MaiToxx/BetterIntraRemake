@@ -33,14 +33,14 @@ const root = resolve(here, "..");
  * the sheet to creep back into the JavaScript.
  */
 const BUDGETS_KB = {
-  "content.js": 640, // v1.10.0: 607 KB
-  "popup.js": 48, // v1.10.0: 34 KB
+  "content.js": 590, // v1.11.0: 556 KB
+  "popup.js": 44, // v1.11.0: 37 KB
   "auth-callback.js": 16, // v1.10.0: 10 KB
   "background.js": 12, // v1.10.0: 5 KB
   "hook.js": 8, // v1.10.0: 4 KB
   // Stylesheets are served as files: the browser parses each one once and
   // caches it, so they are budgeted separately from the code.
-  "shared-styles.css": 340, // v1.10.0: 301 KB (Tailwind + daisyUI, 36 themes)
+  "shared-styles.css": 180, // v1.11.0: 164 KB (Tailwind scans src/ only, 23 daisyUI components)
   "theme-dark-v2.css": 72, // v1.10.0: 62 KB (fetched on the v2 Intra only)
 };
 

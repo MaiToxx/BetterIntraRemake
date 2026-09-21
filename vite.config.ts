@@ -108,7 +108,7 @@ export default defineConfig({
     emptyOutDir: false,
     minify: true,
     // Without this Vite injects the compiled Tailwind sheet back into the IIFE
-    // (there is no HTML entry to link it from). We want it on disk: ~300 KB out
+    // (there is no HTML entry to link it from). We want it on disk: ~165 KB out
     // of content.js, parsed once by the browser instead of once per shadow root.
     cssCodeSplit: false,
     rollupOptions: {

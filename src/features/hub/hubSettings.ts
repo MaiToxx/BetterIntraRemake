@@ -2,14 +2,11 @@ import { html, render } from "lit-html";
 import { FeatureId } from "./hubSettings.data.ts";
 import { getConfig } from "../../config.ts";
 import GEAR_SVG from "../../assets/svg/settings_gear.svg?raw";
-import USERS_SVG from "../../assets/svg/users.svg?raw";
 import GLOBE_OUTLINE_SVG from "../../assets/svg/globe-outline.svg?raw";
 import { getIsLight } from "../profile/theme/theme-manager.ts";
 import { getActiveFeatures } from "./hubSettings.storage.ts";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { openStudentsDialog } from "../profile/students/index.ts";
 import { openClusterDialog } from "../clusters/map-dialog.ts";
-import { isPisciner } from "../../utils/intrapy.ts";
 import { gearClicked } from "../eggs/eggs.ts";
 import { watchDom } from "../../utils/dom-wait.ts";
 
@@ -38,26 +35,6 @@ function renderGearButton(
     }}"
   >
     ${unsafeHTML(GEAR_SVG)}
-  </a>`;
-}
-
-function renderStudentsButton(
-  onClick: (e: Event) => void,
-): ReturnType<typeof html> {
-  return html`<a
-    id="ft-students-btn"
-    class="py-5 w-full flex justify-center hover:opacity-100 opacity-40"
-    href="#"
-    data-tip="Students"
-    data-tip-pos="right"
-    @click="${(e: Event) => {
-      e.preventDefault();
-      onClick(e);
-    }}"
-  >
-    ${unsafeHTML(
-      USERS_SVG.replace("<svg", '<svg width="25" height="25" stroke="#fff"'),
-    )}
   </a>`;
 }
 
@@ -90,8 +67,8 @@ function renderClustersButton(
  *
  * WHY: mountGearButton() used to run every 500 ms for 10 s, and every run
  * awaited this key - 21 storage round-trips on every Intra page just to decide
- * whether the campus-12 buttons belong in the sidebar. The value only changes
- * when the campus is detected, which the listener below picks up.
+ * whether the campus-12 Clusters button belongs in the sidebar. The value only
+ * changes when the campus is detected, which the listener below picks up.
  */
 let campusPromise: Promise<string> | null = null;
 let campusIsTwelve: boolean | undefined;
@@ -133,13 +110,10 @@ function installCampusListener(): void {
 /** Everything this feature has to put in the sidebar is in place. */
 function isSidebarComplete(): boolean {
   if (!document.getElementById("hub-gear-btn")) return false;
-  // Campus still unknown: keep watching, the buttons may still be due.
+  // Campus still unknown: keep watching, the Clusters button may still be due.
   if (campusIsTwelve === undefined) return false;
   if (!campusIsTwelve) return true;
-  return (
-    !!document.getElementById("ft-students-btn") &&
-    !!document.getElementById("ft-clusters-btn")
-  );
+  return !!document.getElementById("ft-clusters-btn");
 }
 
 export function mountGearButton(): void {
@@ -154,17 +128,6 @@ export function mountGearButton(): void {
 
   const sidebar = findSidebarMainGroup();
 
-  const openStudents = async () => {
-    try {
-      const login = await getConfig("CLOUD_LOGIN");
-      if (login && (await isPisciner(login))) {
-        alert("You need to be a student to access that.");
-        return;
-      }
-      openStudentsDialog();
-    } catch (err) {}
-  };
-
   const openClusters = () => {
     try {
       openClusterDialog();
@@ -175,24 +138,21 @@ export function mountGearButton(): void {
     if ((await readCampus()) !== "12") return;
     if (!sidebar) return;
 
-    if (!document.getElementById("ft-students-btn")) {
-      const container = document.createElement("div");
-      render(renderStudentsButton(openStudents), container);
+    // Where the Students button (removed: its worker endpoints need a 42 API
+    // application) used to sit, so Clusters keeps its place in the sidebar.
+    // The anchor is taken before the await, like the Students slot was, so the
+    // gear button appended meanwhile cannot shift it.
+    if (!document.getElementById("ft-clusters-btn")) {
       const anchor = sidebar.children[1] ?? sidebar.firstElementChild;
-      if (anchor) {
-        anchor.after(container.firstElementChild!);
-      } else {
-        sidebar.appendChild(container.firstElementChild!);
-      }
-    }
-
-    const studentsBtn = document.getElementById("ft-students-btn");
-    if (studentsBtn && !document.getElementById("ft-clusters-btn")) {
       const isLight = await getIsLight();
       const color = isLight ? "#1a1d24" : "#fff";
       const container = document.createElement("div");
       render(renderClustersButton(openClusters, color), container);
-      studentsBtn.after(container.firstElementChild!);
+      if (anchor) {
+        anchor.after(container.firstElementChild!);
+      } else {
+        sidebar.prepend(container.firstElementChild!);
+      }
     }
   })();
 

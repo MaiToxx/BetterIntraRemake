@@ -4,7 +4,6 @@ import CLUSTERS from "../../assets/svg/clusters.svg?raw";
 import USER from "../../assets/svg/user.svg?raw";
 import SHORTCUT from "../../assets/svg/shortcut.svg?raw";
 import ABOUT from "../../assets/svg/about.svg?raw";
-import DISCORD_SVG from "../../assets/svg/discord.svg?raw";
 import ADVANCED_SVG from "../../assets/svg/advanced.svg?raw";
 import GRID_SVG from "../../assets/svg/grid.svg?raw";
 import CUSTOMIZE_SVG from "../../assets/svg/sun.svg?raw";
@@ -63,12 +62,6 @@ export const FEATURE_DEFS = [
     cols: 3,
   },
   {
-    id: "discord",
-    name: "Discord",
-    icon: DISCORD_SVG,
-    desc: "Get evaluation reminders via Discord DM.",
-  },
-  {
     id: "calendar",
     name: "Calendar",
     icon: CALENDAR,
@@ -118,7 +111,6 @@ export type SettingKind =
   | "about"
   | "card-order"
   | "action"
-  | "discord-panel"
   | "calendar-panel"
   | "theme-preset"
   | "rainbow-palette"
@@ -1020,15 +1012,6 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
       dependsOn: "SHORTCUTS_HIDE_IMPORTANT_LINKS",
       grid: true,
       colSpan: 2,
-    },
-  ],
-  discord: [
-    {
-      feature: "discord",
-      label: "Discord",
-      desc: "Notifications and account connection.",
-      kind: "discord-panel",
-      fullWidth: true,
     },
   ],
   extras: [

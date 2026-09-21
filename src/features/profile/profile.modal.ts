@@ -16,9 +16,7 @@ import GRIP_VERTICAL_SVG from "../../assets/svg/grip-vertical.svg?raw";
 import EYE_SVG from "../../assets/svg/eye.svg?raw";
 import EYE_SLASH_SVG from "../../assets/svg/eye-slash.svg?raw";
 import { renderAvatarEditor } from "./avatar-editor.ts";
-import { uploadImage } from "./image-upload.ts";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
-import TRIANGLE_EXCLAMATION_SVG from "../../assets/svg/triangle-exclamation.svg?raw";
 
 interface FormState {
   avatar: string;
@@ -36,7 +34,6 @@ interface FormState {
   badgeBg: string;
   badgeOrder: string[];
   badgeWrap: boolean;
-  uploading: string;
 }
 
 type ProfileTab = "avatar" | "banner" | "background" | "badges";
@@ -95,16 +92,12 @@ function renderUrlHistory(
   `;
 }
 function renderUrlField(
-  id: string,
   label: string,
   value: string,
   onInput: (val: string) => void,
   history: string[] = [],
-  uploadKey = "",
-  uploading = "",
   onClearHistory?: () => void,
 ) {
-  const isUploading = uploading === uploadKey;
   return html`
     <div class="form-control w-full">
       <label class="label py-1">
@@ -128,16 +121,6 @@ function renderUrlField(
               onInput((e.target as HTMLInputElement).value)}"
           />
         </label>
-        <button
-          type="button"
-          class="btn btn-accent shrink-0"
-          ?disabled="${isUploading}"
-          id="${id}-upload-btn"
-        >
-          ${isUploading
-            ? html`<span class="loading loading-spinner loading-xs"></span>`
-            : "Upload"}
-        </button>
       </div>
       ${renderUrlHistory(history, onInput, onClearHistory)}
     </div>
@@ -174,7 +157,6 @@ function renderPanelContent(
   currentTheme: string,
   onFormUpdate: (updates: Partial<FormState>) => void,
   history: { avatar: string[]; banner: string[]; background: string[] },
-  onUpload: (key: string) => void,
   onClearHistory: (key: "avatar" | "banner" | "background") => void,
   isConnected: boolean,
   needsReconnect: boolean,
@@ -195,13 +177,10 @@ function renderPanelContent(
       <div class="flex gap-5 items-start">
         <div class="flex-1 min-w-0">
           ${renderUrlField(
-            "PROFILE_IMAGE_URL",
             "Image URL",
             state.avatar,
             (val) => onFormUpdate({ avatar: val }),
             history.avatar,
-            "avatar",
-            state.uploading,
             () => onClearHistory("avatar"),
           )}
           <div class="flex gap-2 items-center mt-2">
@@ -308,13 +287,10 @@ function renderPanelContent(
       ${state.bannerColor
         ? ""
         : html`${renderUrlField(
-            "PROFILE_BANNER_URL",
             "Image URL",
             state.banner,
             (val) => onFormUpdate({ banner: val }),
             history.banner,
-            "banner",
-            state.uploading,
             () => onClearHistory("banner"),
           )}
           ${renderModeRadios("PROFILE_BANNER_MODE", state.bannerMode, (val) =>
@@ -370,13 +346,10 @@ function renderPanelContent(
       ${state.backgroundColor
         ? ""
         : html`${renderUrlField(
-            "PROFILE_BACKGROUND_URL",
             "Image URL",
             state.background,
             (val) => onFormUpdate({ background: val }),
             history.background,
-            "background",
-            state.uploading,
             () => onClearHistory("background"),
           )}
           ${renderModeRadios(
@@ -784,7 +757,7 @@ export const createSettingsModal = async (
     badgeWrap: await getConfig("PROFILE_BADGE_WRAP"),
   };
 
-  const state: FormState = { ...saved, uploading: "" };
+  const state: FormState = { ...saved };
 
   const imgHistory = {
     avatar: await getConfig("PROFILE_IMAGE_HISTORY"),
@@ -837,63 +810,6 @@ export const createSettingsModal = async (
     });
   };
 
-  const showAlert = (message: string) => {
-    const existing = document.getElementById("ft-alert-host");
-    if (existing) existing.remove();
-
-    const dlg = Object.assign(document.createElement("dialog"), {
-      id: "ft-alert-host",
-      className: "bg-transparent backdrop:bg-black/50",
-    });
-    Object.assign(dlg.style, {
-      padding: "0",
-      borderRadius: "1rem",
-      maxWidth: "24rem",
-    });
-
-    const host = document.createElement("div");
-    const shadow = host.attachShadow({ mode: "open" });
-
-    render(
-      html`
-        ${sharedStylesLink()}
-        <div
-          data-theme="${currentTheme}"
-          class="p-6 bg-base-100 rounded-2xl flex flex-col gap-4 text-center"
-        >
-          <div class="flex items-center justify-between">
-            <h3 class="font-bold text-lg">Better Intra</h3>
-            <span
-              class="w-8 h-8 [&>svg]:w-full [&>svg]:h-full [&>svg]:fill-current text-red-500"
-              >${unsafeHTML(TRIANGLE_EXCLAMATION_SVG)}</span
-            >
-          </div>
-          <p class="opacity-70 text-sm">${message}</p>
-          <button
-            class="btn btn-primary btn-sm"
-            @click="${() => {
-              dlg.close();
-              dlg.remove();
-            }}"
-          >
-            OK
-          </button>
-        </div>
-      `,
-      shadow,
-    );
-
-    dlg.appendChild(host);
-    document.body.appendChild(dlg);
-    dlg.showModal();
-    dlg.addEventListener("click", (e) => {
-      if (e.target === dlg) {
-        dlg.close();
-        dlg.remove();
-      }
-    });
-  };
-
   const handleFormUpdate = (updates: Partial<FormState>) => {
     Object.assign(state, updates);
     liveApplyBannerBg(state);
@@ -914,41 +830,6 @@ export const createSettingsModal = async (
     rerender();
   };
 
-  const handleUpload = async (key: string) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      if (file.size > 7 * 1024 * 1024) {
-        showAlert("File too large. Maximum size is 7 MB.");
-        return;
-      }
-      if (!file.type.startsWith("image/")) {
-        showAlert("Only image files are allowed.");
-        return;
-      }
-      if (state.uploading) return;
-      state.uploading = key;
-      rerender();
-      try {
-        const url = await uploadImage(file);
-        const updates: Partial<FormState> = {};
-        if (key === "avatar") updates.avatar = url;
-        else if (key === "banner") updates.banner = url;
-        else if (key === "background") updates.background = url;
-        handleFormUpdate(updates);
-      } catch (e) {
-        showAlert(`Upload failed: ${(e as Error).message}`);
-      } finally {
-        state.uploading = "";
-        rerender();
-      }
-    };
-    input.click();
-  };
-
   const rerender = () => {
     render(
       renderPanelContent(
@@ -956,7 +837,6 @@ export const createSettingsModal = async (
         currentTheme,
         handleFormUpdate,
         imgHistory,
-        handleUpload,
         handleClearHistory,
         isConnected,
         needsReconnect,
@@ -969,7 +849,6 @@ export const createSettingsModal = async (
       shadow,
     );
     bindButtons(shadow, close, reset);
-    if (isConnected) bindUploadButtons(shadow, handleUpload);
   };
 
   injectCustomStyles();
@@ -1110,26 +989,5 @@ function bindButtons(shadow: ShadowRoot, close: () => void, reset: () => void) {
   if (closeBtn && !closeBtn.dataset.bound) {
     closeBtn.addEventListener("click", close);
     closeBtn.dataset.bound = "1";
-  }
-}
-
-function bindUploadButtons(
-  shadow: ShadowRoot,
-  onUpload: (key: string) => void,
-) {
-  const ids = [
-    { id: "PROFILE_IMAGE_URL-upload-btn", key: "avatar" },
-    { id: "PROFILE_BANNER_URL-upload-btn", key: "banner" },
-    { id: "PROFILE_BACKGROUND_URL-upload-btn", key: "background" },
-  ];
-  for (const { id, key } of ids) {
-    const btn = shadow.querySelector(`#${id}`) as HTMLElement | null;
-    if (btn && !btn.dataset.bound) {
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        onUpload(key);
-      });
-      btn.dataset.bound = "1";
-    }
   }
 }

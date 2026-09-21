@@ -1,10 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit-html";
 
 /**
- * The compiled Tailwind/daisyUI sheet weighs ~300 KB. Concatenating it into a
- * <style> inside every shadow root meant the browser tokenised and parsed those
- * 300 KB once per widget on every page load, and both JS bundles had to carry
- * the text.
+ * The compiled Tailwind/daisyUI sheet weighs ~165 KB (~300 KB before
+ * style.css limited what Tailwind scans and what daisyUI builds). Concatenating
+ * it into a <style> inside every shadow root meant the browser tokenised and
+ * parsed all of it once per widget on every page load, and both JS bundles had
+ * to carry the text.
  *
  * It now ships as a real `shared-styles.css` file next to content.js (the bare
  * import below plus `cssCodeSplit: false` in vite.config.ts is what makes Vite

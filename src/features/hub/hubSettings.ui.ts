@@ -39,7 +39,6 @@ import { publishLookIfShared } from "../customize/publish.ts";
 import { renderCardsPanel } from "../customize/cards.ui.ts";
 import { EXTRAS_KEYS, type LinkKind } from "../profile/extras/extras.ts";
 import { normalizeLink } from "../profile/extras/extras-sanitize.ts";
-import { renderDiscordPanel } from "../discord/discord.ui.ts";
 import { renderCalendarPanel } from "../calendar/calendar.ui.ts";
 import {
   THEMES,
@@ -448,7 +447,6 @@ function renderSettingControl(def: HubSettingDef, enabled: boolean) {
     return container;
   }
 
-  if (def.kind === "discord-panel") return renderDiscordPanel();
   if (def.kind === "calendar-panel") return renderCalendarPanel();
   if (def.kind === "custom-presets") return renderPresetsPanel();
   if (def.kind === "custom-cards") return renderCardsPanel();
@@ -961,7 +959,6 @@ function renderSetting(def: HubSettingDef, enabled: boolean, hidden?: boolean) {
   }
 
   if (
-    def.kind === "discord-panel" ||
     def.kind === "about" ||
     def.kind === "calendar-panel" ||
     def.kind === "feature-cards"
@@ -1018,7 +1015,6 @@ function renderTabsContent(
   return FEATURE_DEFS.map((f, idx) => {
     const isAlwaysEnabled =
       f.id === "about" ||
-      f.id === "discord" ||
       f.id === "calendar" ||
       f.id === "advanced" ||
       f.id === "customize" ||

@@ -1,8 +1,8 @@
 # Self-hosting the cloud worker
 
 Better Intra's cloud features (42 login, settings sync, custom profile visuals
-shared with other users, live cluster occupancy proxy, evaluations / Discord
-reminders, students directory, logtime history) talk to a Cloudflare Worker.
+shared with other users, live cluster occupancy proxy, calendar sync, logtime
+history) talk to a Cloudflare Worker.
 By default the extension uses the upstream instance at
 `https://api.betterintra.com`, operated by the upstream maintainer. If that
 instance is down or you want to own your users' data, deploy your own and point
@@ -45,9 +45,12 @@ redirect, no application to register. Enable it in `package.json`:
 ```
 
 What still needs a 42 application (and stays unavailable in this mode):
-evaluation reminders / Discord, students directory, logtime history beyond
-what the Intra page provides, outstanding
-stars. Friends' live data is rebuilt from the Intra's own API by the extension (src/features/friends/friends-intra.ts); correction stats and Thursday Roulette history are rebuilt from the Intra v2 pages (src/features/profile/profile-stats-intra.ts). Settings sync, shared profile visuals, cluster
+evaluation reminders / Discord (also a Discord bot), students directory
+(Belgium campus only), outstanding stars, logtime history beyond what the
+Intra page provides. The worker keeps those endpoints, but this edition of the
+extension no longer ships the Discord, students and outstanding code: on a
+deployment without a 42 application they could never answer.
+Friends' live data is rebuilt from the Intra's own API by the extension (src/features/friends/friends-intra.ts); correction stats and Thursday Roulette history are rebuilt from the Intra v2 pages (src/features/profile/profile-stats-intra.ts). Settings sync, shared profile visuals, cluster
 map proxy, announcements, subject tracker and calendar sync work.
 
 With this mode, steps 1 and 4 below only need the storage resources and the
@@ -56,8 +59,9 @@ With this mode, steps 1 and 4 below only need the storage resources and the
 ## 1. What you need
 
 - A **Cloudflare** account (free plan is enough: Workers, KV, D1, cron triggers).
-  R2 (image upload feature) requires a payment method on file even on the free tier;
-  the feature is optional, see step 3.
+  R2 is only used by upstream's image upload, which this edition of the
+  extension does not ship: skip it (it requires a payment method on file even
+  on the free tier).
 - **Node.js** and `npx wrangler` (installed by the worker's `npm install`).
 - A **42 OAuth application**: https://profile.intra.42.fr/oauth/applications/new
   - Name: anything (e.g. `Better Intra <campus>`)
@@ -85,7 +89,7 @@ replace `nicopasla/better-intra` by `MaiToxx/BetterIntraRemake` in `SOURCES`.
 npx wrangler kv namespace create BETTER_INTRA_KV
 npx wrangler d1 create better-intra-d1
 npx wrangler d1 execute better-intra-d1 --remote --file=schema.sql
-npx wrangler r2 bucket create better-intra-images   # optional, image upload
+npx wrangler r2 bucket create better-intra-images   # upstream image upload only, not used by this edition
 ```
 
 Each command prints an id. Edit `wrangler.json`:
@@ -95,7 +99,7 @@ Each command prints an id. Edit `wrangler.json`:
 - `d1_databases[0].database_id`: the D1 id
 - `vars.CLIENT_ID`: the UID of your 42 application
 - `vars.DISCORD_ENABLED`: `"false"` unless you also set up a Discord bot; remove `DISCORD_CLIENT_ID` / `DISCORD_GUILD_ID`
-- if you skipped R2: delete the `r2_buckets` block (the image upload endpoint will answer an error, everything else works)
+- if you skipped R2: delete the `r2_buckets` block (the image upload endpoint will answer an error; this edition of the extension never calls it)
 
 ## 4. Secrets
 
@@ -110,7 +114,7 @@ Optional, only if you use the matching features:
 npx wrangler secret put PROXY_SECRET            # protects the private proxy / students refresh endpoints
 npx wrangler secret put ANNOUNCEMENT_SECRET     # lets you publish banners to all users
 npx wrangler secret put PROJECT_REFRESH_SECRET  # manual refresh of the project list
-npx wrangler secret put DISCORD_BOT_TOKEN       # Discord reminders
+npx wrangler secret put DISCORD_BOT_TOKEN       # Discord reminders (upstream extension only)
 npx wrangler secret put DISCORD_CLIENT_SECRET
 ```
 
@@ -145,6 +149,7 @@ install that build and click *Connect with 42* once.
 - The three cron triggers (evaluation reminders, project refresh, cleanup) are
   in `wrangler.json`; the free plan allows them.
 - The students directory endpoints are written for the Belgium campus
-  (campus id 12) upstream; they are harmless elsewhere.
+  (campus id 12) upstream; they are harmless elsewhere, and this edition of the
+  extension no longer calls them.
 - Upstream's own deployment pipeline is GitHub Actions with the Cloudflare
   API token as a secret; `npm run deploy` from your machine is enough to start.
