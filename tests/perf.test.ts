@@ -21,7 +21,7 @@ import {
   stopPerformance,
   type PerfFlags,
 } from "../src/features/performance/perf";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 const ALL_OFF: PerfFlags = {
   PERF_DEFER_OFFSCREEN: false,

@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { adoptSharedStyles } from "../../assets/shared-styles.ts";
+import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 
 const SHADOW_ID = "project-badges-shadow";
 

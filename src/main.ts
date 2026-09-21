@@ -7,12 +7,12 @@ import { initSubjectTracker } from "./features/subjects/tracker.ts";
 import {
   initThemeManager,
   getIsLight,
-} from "./features/profile/theme/theme-manager.ts";
+} from "./core/theme/theme-manager.ts";
 import { maybePromptRestore } from "./features/account/account.ts";
-import { initGlobalTooltips } from "./utils/tooltip.ts";
+import { initGlobalTooltips } from "./core/dom/tooltip.ts";
 import { ensureCampusData } from "./features/campus/campus.ts";
-import { updateNavAvatar } from "./features/profile/visuals.ts";
-import { AVATAR_SELECTOR } from "./features/profile/selectors.ts";
+import { updateNavAvatar } from "./features/profile/header/visuals.ts";
+import { AVATAR_SELECTOR } from "./core/intra/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
 import { initCustomize } from "./features/customize/customize.ts";

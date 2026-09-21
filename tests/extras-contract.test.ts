@@ -11,7 +11,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { EXTRAS_KEYS } from "../src/features/profile/extras/extras";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 /** Mirror of PUBLIC_EXTRAS_KEYS in better-intra-worker/src/handlers/settings.ts. */
 const PUBLISHED_BY_THE_WORKER = [

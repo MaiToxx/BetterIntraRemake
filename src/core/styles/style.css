@@ -7,8 +7,8 @@
  * tests/shared-styles.test.ts checks that no class src/ writes goes missing.
  */
 @import "tailwindcss" source(none);
-@source "../";
-@source "../../vite.popup.config.ts";
+@source "../../";
+@source "../../../vite.popup.config.ts";
 /* The only "!loading" in src/ is a JS negation, not the (3 KB) important
    variant of daisyUI's loading class. */
 @source not inline("!loading");

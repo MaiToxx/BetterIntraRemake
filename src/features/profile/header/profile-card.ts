@@ -1,12 +1,12 @@
-import { getConfig } from "../../config.ts";
-import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
-import { openClusterDialog } from "../clusters/map-dialog.ts";
-import { adoptSharedStyles } from "../../assets/shared-styles.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
-import { getIsLight } from "./theme/theme-manager.ts";
-import ARROW_SHARE_SVG from "../../assets/svg/arrow_share.svg?raw";
+import { getConfig } from "../../../core/config.ts";
+import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
+import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
+import { bindTooltips } from "../../../core/dom/tooltip.ts";
+import { getIsLight } from "../../../core/theme/theme-manager.ts";
+import ARROW_SHARE_SVG from "../../../assets/svg/arrow_share.svg?raw";
 import { initShortcutButtons, initFriendBadge } from "./personal-info.ts";
-import { injectCampusFlag } from "./campus-flags.ts";
+import { injectCampusFlag } from "../../campus/campus-flags.ts";
 
 const PROFILE_CARD_CLASS = "ft-profile-card";
 const SHADOW_HOST_ID = "profile-badges-shadow";

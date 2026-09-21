@@ -1,4 +1,4 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../../core/config.ts";
 
 let cachedCards: HTMLElement[] | null = null;
 let cachedGrid: HTMLElement | null = null;

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/config.ts", () => ({
+vi.mock("../src/core/config.ts", () => ({
   getConfig: vi.fn(async (key: string) =>
     key === "PROFILE_SHOW_ROULETTE" || key === "PROFILE_SHOW_ROULETTE_HISTORY"
       ? true
@@ -14,11 +14,11 @@ vi.mock("../src/config.ts", () => ({
 vi.mock("../src/features/account/account.ts", () => ({
   getCloudLogin: vi.fn(async () => "me"),
 }));
-vi.mock("../src/utils/crypto.ts", () => ({
+vi.mock("../src/core/crypto.ts", () => ({
   hashLogin: vi.fn(async () => "hashed"),
 }));
 
-import { initRouletteStats } from "../src/features/profile/roulette-stats.ts";
+import { initRouletteStats } from "../src/features/profile/cards/roulette-stats.ts";
 
 const nextFrame = () =>
   new Promise((resolve) => requestAnimationFrame(() => resolve(null)));

@@ -7,7 +7,7 @@
  * pastes to get the same look. Codes are validated key by key against the
  * defaults before anything is written to storage.
  */
-import { CONFIG_DEFAULT, getConfigMany } from "../../config.ts";
+import { CONFIG_DEFAULT, getConfigMany } from "../../core/config.ts";
 import { CUSTOMIZE_KEYS, sanitizeCardMap, type CustomizeConfig } from "./customize.ts";
 
 export interface CustomPreset {

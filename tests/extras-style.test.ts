@@ -19,7 +19,7 @@ import {
   AVATAR_SELECTOR,
   BACKGROUND_SELECTOR,
   BANNER_SELECTOR,
-} from "../src/features/profile/selectors";
+} from "../src/core/intra/selectors";
 import { BG_PRESETS, FONT_PRESETS } from "../src/features/customize/customize";
 
 /** Extras that change nothing on the page. */

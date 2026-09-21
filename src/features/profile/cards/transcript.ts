@@ -1,10 +1,10 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { getConfig } from "../../config.ts";
-import { getCloudLogin } from "../account/account.ts";
-import { getEffectiveTheme, THEMES } from "./theme/theme-manager.ts";
-import { loadCampusData, TranscriptEntry } from "../campus/campus.ts";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
+import { getConfig } from "../../../core/config.ts";
+import { getCloudLogin } from "../../account/account.ts";
+import { getEffectiveTheme, THEMES } from "../../../core/theme/theme-manager.ts";
+import { loadCampusData, TranscriptEntry } from "../../campus/campus.ts";
+import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
 
 async function openTranscriptDialog(
   login: string,

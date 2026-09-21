@@ -23,7 +23,7 @@ import {
   AVATAR_SELECTOR,
   BACKGROUND_SELECTOR,
   BANNER_SELECTOR,
-} from "../selectors.ts";
+} from "../../../core/intra/selectors.ts";
 import {
   LEVEL_FILL_SELECTOR,
   LIMITS,

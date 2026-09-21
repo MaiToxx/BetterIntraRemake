@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { sharedStylesLink } from "../assets/shared-styles.ts";
+import { sharedStylesLink } from "../styles/shared-styles.ts";
 
 const DIALOG_ID = "ft-confirm-dialog";
 

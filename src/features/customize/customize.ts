@@ -13,8 +13,8 @@
  * subset of these settings another user publishes on their profile (see
  * public-look.ts), which is validated key by key before reaching this file.
  */
-import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../config.ts";
-import { sanitizeCssUrl } from "../../utils/css-sanitize.ts";
+import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
+import { sanitizeCssUrl } from "../../core/security/css-sanitize.ts";
 
 /** Elements the Intra v3 theme paints with the page background colour. */
 const PAGE_SURFACES =

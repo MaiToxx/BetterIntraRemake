@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getCloudLogin, testCloudConnection } from "./account.ts";
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { AccountState, createInitialState } from "./state.ts";
 import { createHandlers } from "./handlers.ts";

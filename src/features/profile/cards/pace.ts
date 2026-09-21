@@ -1,4 +1,4 @@
-import { getMondayWeekStart } from "../logtime/heatmap.ts";
+import { getMondayWeekStart } from "../../logtime/heatmap.ts";
 
 let paceData: Record<string, string> | null = null;
 let pacePollAttempts = 0;

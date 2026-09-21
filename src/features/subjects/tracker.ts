@@ -1,5 +1,5 @@
-import { getConfig } from "../../config.ts";
-import { hashLogin } from "../../utils/crypto.ts";
+import { getConfig } from "../../core/config.ts";
+import { hashLogin } from "../../core/crypto.ts";
 import {
   decide,
   normalizeUrl,
@@ -9,7 +9,7 @@ import {
 } from "./fingerprint.ts";
 import { renderSubjectBadge } from "./ui.ts";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 const CHECK_COOLDOWN_MS = 15 * 60 * 1000;
 
 interface LocalSubjectState {

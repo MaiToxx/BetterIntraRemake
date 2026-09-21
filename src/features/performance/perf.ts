@@ -28,7 +28,7 @@
  *   - every browser API used here is feature-detected. A missing one costs the
  *     optimisation, never the page.
  */
-import { getConfigMany, type BetterIntraConfig } from "../../config.ts";
+import { getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
 
 /** The four settings of the "Lighten the Intra" block, in one storage read. */
 export const PERF_KEYS = [

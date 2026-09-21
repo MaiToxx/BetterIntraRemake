@@ -1,14 +1,14 @@
 import { html, render } from "lit-html";
 import { FeatureId } from "./hubSettings.data.ts";
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import GEAR_SVG from "../../assets/svg/settings_gear.svg?raw";
 import GLOBE_OUTLINE_SVG from "../../assets/svg/globe-outline.svg?raw";
-import { getIsLight } from "../profile/theme/theme-manager.ts";
+import { getIsLight } from "../../core/theme/theme-manager.ts";
 import { getActiveFeatures } from "./hubSettings.storage.ts";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { openClusterDialog } from "../clusters/map-dialog.ts";
 import { gearClicked } from "../eggs/eggs.ts";
-import { watchDom } from "../../utils/dom-wait.ts";
+import { watchDom } from "../../core/dom/dom-wait.ts";
 
 function findSidebarMainGroup(): HTMLDivElement | null {
   const profileLink = document.querySelector<HTMLAnchorElement>(

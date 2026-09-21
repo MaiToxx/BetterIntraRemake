@@ -1,14 +1,14 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { initAccountSettings } from "../features/account/account.ui";
+import { initAccountSettings } from "../features/account/account.ui.ts";
 // Side-effect import: emits the compiled Tailwind sheet as shared-styles.css,
 // which popup.html links itself. Importing it as a string instead used to put
 // ~300 KB into popup.js and made the popup re-parse it on every open.
-import "../assets/style.css";
+import "../core/styles/style.css";
 import ICON_SVG from "../assets/svg/icon.svg?raw";
-import { UPDATE_KEY, type UpdateInfo } from "../utils/update-check";
-import { getEffectiveTheme } from "../features/profile/theme/theme-manager";
-import { WORKER_HOST, WORKER_ORIGIN_PATTERN } from "../utils/worker";
+import { UPDATE_KEY, type UpdateInfo } from "../core/update-check";
+import { getEffectiveTheme } from "../core/theme/theme-manager";
+import { WORKER_HOST, WORKER_ORIGIN_PATTERN } from "../core/worker";
 
 function isIntraUrl(url: string | undefined): boolean {
   if (!url) return false;

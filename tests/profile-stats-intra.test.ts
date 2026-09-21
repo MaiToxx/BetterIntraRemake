@@ -13,7 +13,7 @@ import {
   resetProfileStatsCacheState,
   writeProfileStatsCache,
   type ProfileStatsCache,
-} from "../src/features/profile/profile-stats-intra";
+} from "../src/features/profile/cards/profile-stats-intra";
 
 const feedbackItem = (date: string, mark: string, positive: boolean) => `
 <li class="table-item scaleteam-list-item">

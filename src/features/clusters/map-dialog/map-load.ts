@@ -13,7 +13,7 @@ import { loadOccupancy, reapplyOccupancy } from "./occupancy";
 import { updateActiveSortControls } from "./active-sort";
 import { clearSeatGlow } from "./glow";
 import { rebuildHeader, updateCampusTime, updateDefaultSelect } from "./header";
-import { getCampusFlag } from "../../profile/campus-flags.ts";
+import { getCampusFlag } from "../../campus/campus-flags.ts";
 
 export async function buildClusters(campusId: string): Promise<ClusterInfo[]> {
   let repoClusters: { id: string; name: string }[] = [];

@@ -1,11 +1,11 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import { fetchCampusList, getCampusExits } from "./clusters.data.ts";
 import {
   getEffectiveTheme,
   getIsLight,
-} from "../profile/theme/theme-manager.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
-import { makeResizable } from "../../utils/resizable-dialog.ts";
+} from "../../core/theme/theme-manager.ts";
+import { bindTooltips } from "../../core/dom/tooltip.ts";
+import { makeResizable } from "../../core/dom/resizable-dialog.ts";
 import {
   ACTIVE_SORT_DEFAULT,
   type ActiveSortMode,

@@ -69,7 +69,7 @@ function adoptedOf(root: ShadowRoot): FakeSheet[] {
 
 async function loadModule() {
   vi.resetModules();
-  return await import("../src/assets/shared-styles.ts");
+  return await import("../src/core/styles/shared-styles.ts");
 }
 
 beforeEach(() => {
@@ -282,7 +282,7 @@ describe("sharedStylesLink", () => {
 
 const REPO = path.resolve(__dirname, "..");
 const SRC = path.join(REPO, "src");
-const STYLE_CSS = path.join(SRC, "assets", "style.css");
+const STYLE_CSS = path.join(SRC, "core", "styles", "style.css");
 const POPUP_CONFIG = path.join(REPO, "vite.popup.config.ts");
 
 type TailwindNode = {
@@ -510,8 +510,9 @@ describe("shared-styles.css contents", () => {
   it("scans src/ (and the popup.html template) only", () => {
     // Auto-detection read the whole repo: .agents/, tests/, docs, *.md.
     expect(styleCss).toMatch(/@import\s+"tailwindcss"\s+source\(none\);/);
-    expect(styleCss).toMatch(/@source\s+"\.\.\/";/);
-    expect(styleCss).toMatch(/@source\s+"\.\.\/\.\.\/vite\.popup\.config\.ts";/);
+    // style.css lives in src/core/styles/: "../../" is src/, one more is the repo
+    expect(styleCss).toMatch(/@source\s+"\.\.\/\.\.\/";/);
+    expect(styleCss).toMatch(/@source\s+"\.\.\/\.\.\/\.\.\/vite\.popup\.config\.ts";/);
     expect(real.has(".p-4")).toBe(true); // popup.html's only class
   });
 
@@ -544,7 +545,7 @@ describe("shared-styles.css contents", () => {
   it("applies every hub preset through its own [data-theme] rule", async () => {
     const themes = Object.keys(
       JSON.parse(
-        fs.readFileSync(path.join(SRC, "features/profile/theme/themes.json"), "utf8"),
+        fs.readFileSync(path.join(SRC, "core/theme/themes.json"), "utf8"),
       ) as Record<string, unknown>,
     );
     expect(themes).toHaveLength(36);

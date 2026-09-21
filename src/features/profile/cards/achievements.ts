@@ -1,10 +1,10 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { getConfig } from "../../config.ts";
-import { getCloudLogin } from "../account/account.ts";
-import { getLoginFromPage } from "../../utils/profile-login.ts";
-import { INTRA_FONT } from "../logtime/constants.ts";
-import CHECK_CIRCLE_SVG from "../../assets/svg/check-circle.svg?raw";
+import { getConfig } from "../../../core/config.ts";
+import { getCloudLogin } from "../../account/account.ts";
+import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { INTRA_FONT } from "../../logtime/constants.ts";
+import CHECK_CIRCLE_SVG from "../../../assets/svg/check-circle.svg?raw";
 
 interface Achievement {
   name: string;

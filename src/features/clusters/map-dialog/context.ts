@@ -15,7 +15,7 @@ export interface ClusterInfo {
   svg?: string;
 }
 
-import { WORKER_URL as BASE_WORKER_URL } from "../../../utils/worker.ts";
+import { WORKER_URL as BASE_WORKER_URL } from "../../../core/worker.ts";
 export const WORKER_URL = BASE_WORKER_URL;
 export const CLUSTERS_JSON_URL = "https://meta.intra.42.fr/clusters.json";
 export const POLL_INTERVAL = 60_000;

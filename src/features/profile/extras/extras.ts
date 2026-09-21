@@ -23,7 +23,7 @@
  *   extras-effects.ts    particle effects on a canvas
  *   extras-apply.ts      orchestration (viewer settings, lifecycle)
  */
-import type { BetterIntraConfig } from "../../../config.ts";
+import type { BetterIntraConfig } from "../../../core/config.ts";
 
 /** Settings published to other users (all of them are PROFILE_PUB_*). */
 export const EXTRAS_KEYS = [

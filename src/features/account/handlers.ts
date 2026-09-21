@@ -9,7 +9,7 @@ import {
   wipeAllCloudData,
 } from "./account";
 import { AccountState, resetButtonState } from "./state";
-import { WORKER_ORIGIN_PATTERN } from "../../utils/worker.ts";
+import { WORKER_ORIGIN_PATTERN } from "../../core/worker.ts";
 
 /** Hosts the extension must be allowed on for the login flow to complete. */
 const REQUIRED_ORIGINS = [

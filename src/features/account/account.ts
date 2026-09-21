@@ -1,13 +1,13 @@
-import { BetterIntraConfig, getConfig, CLOUD_SYNC_KEYS } from "../../config.ts";
-import type { VisualUrls } from "../profile/visuals.ts";
-import { hashLogin } from "../../utils/crypto.ts";
-import { showConfirmDialog } from "../../utils/confirm-dialog.ts";
+import { BetterIntraConfig, getConfig, CLOUD_SYNC_KEYS } from "../../core/config.ts";
+import type { VisualUrls } from "../profile/header/visuals.ts";
+import { hashLogin } from "../../core/crypto.ts";
+import { showConfirmDialog } from "../../core/dom/confirm-dialog.ts";
 import { markAuthFlowPending } from "./auth-callback.ts";
-import { sanitizeVisualUrls } from "../profile/visuals-sanitize.ts";
+import { sanitizeVisualUrls } from "../profile/header/visuals-sanitize.ts";
 
 export { hashLogin };
 
-import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
+import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
 import {
   loginWithIntraSession,
   requestIntraLoginFromActiveTab,

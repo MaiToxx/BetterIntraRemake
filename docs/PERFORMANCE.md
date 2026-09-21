@@ -40,7 +40,7 @@ Chrome on nine roots: **54.4 ms** of style work, against **3.2 ms** when the
 same sheet is a single constructable `CSSStyleSheet` shared by all of them.
 
 It is now a real file (`shared-styles.css`) that the browser fetches once,
-parses once and caches. `src/assets/shared-styles.ts` hands it out two ways, and
+parses once and caches. `src/core/styles/shared-styles.ts` hands it out two ways, and
 the difference matters:
 
 - `adoptSharedStyles(root, extraCSS?)` — adopted sheets apply **after** a

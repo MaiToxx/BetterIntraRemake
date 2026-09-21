@@ -3,7 +3,7 @@ import {
   compareVersions,
   isNewerVersion,
   parseLatestRelease,
-} from "../src/utils/update-check";
+} from "../src/core/update-check";
 
 describe("compareVersions", () => {
   it("compares numerically, not lexically", () => {

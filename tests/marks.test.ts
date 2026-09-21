@@ -4,7 +4,7 @@ import {
   createChevronElement,
   createProjectLink,
   createTeamRow,
-} from "../src/features/profile/marks";
+} from "../src/features/profile/cards/marks";
 
 describe("renderStatusIcon", () => {
   it("sets green class and renders check SVG for validated", () => {

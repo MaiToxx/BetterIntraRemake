@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-vi.mock("../src/utils/crypto.ts", () => ({
+vi.mock("../src/core/crypto.ts", () => ({
   hashLogin: vi.fn(async (login: string) => `hashed-${login}`),
 }));
 

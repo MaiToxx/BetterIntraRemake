@@ -7,7 +7,7 @@ import ABOUT from "../../assets/svg/about.svg?raw";
 import ADVANCED_SVG from "../../assets/svg/advanced.svg?raw";
 import GRID_SVG from "../../assets/svg/grid.svg?raw";
 import CUSTOMIZE_SVG from "../../assets/svg/sun.svg?raw";
-import { CONFIG_DEFAULT, ConfigKey } from "../../config.ts";
+import { CONFIG_DEFAULT, ConfigKey } from "../../core/config.ts";
 import { CLUSTERS as CLUSTER_OPTIONS } from "../clusters/clusters.data.ts";
 import { RAINBOW_PALETTES } from "../logtime/rainbow-presets.ts";
 // Only the limits: an input of the public profile section stops where the

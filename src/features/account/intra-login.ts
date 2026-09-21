@@ -14,8 +14,8 @@ import {
   getStoredIntrapyToken,
   isJwtExpired,
   waitForIntrapyToken,
-} from "../../utils/intrapy.ts";
-import { WORKER_URL } from "../../utils/worker.ts";
+} from "../../core/intra/intrapy.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 
 export const INTRA_LOGIN_MESSAGE = "FT_INTRA_LOGIN";
 /**

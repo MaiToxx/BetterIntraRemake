@@ -1,4 +1,4 @@
-import { getConfigMany } from "../../config.ts";
+import { getConfigMany } from "../../core/config.ts";
 import {
   applyManualScreens,
   applyMarkersVisibility,
@@ -7,7 +7,7 @@ import {
 } from "./dom.ts";
 import { createShadowUI } from "./ui.ts";
 import { ensureCampusData } from "../campus/campus.ts";
-import { waitForElement, watchDom } from "../../utils/dom-wait.ts";
+import { waitForElement, watchDom } from "../../core/dom/dom-wait.ts";
 
 type Config = {
   show_markers: boolean;

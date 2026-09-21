@@ -1,8 +1,8 @@
-import { getConfig } from "../../config.ts";
-import { fetchCampusList } from "../campus/campus.ts";
-import { TITLE_BADGE_SELECTOR } from "./selectors.ts";
+import { getConfig } from "../../../core/config.ts";
+import { fetchCampusList } from "../../campus/campus.ts";
+import { TITLE_BADGE_SELECTOR } from "../../../core/intra/selectors.ts";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../../core/worker.ts";
 const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 
 interface CampusBadgeData {

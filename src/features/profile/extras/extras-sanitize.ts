@@ -16,8 +16,8 @@
  * Everything here is pure (no DOM, no storage) and idempotent: sanitising a
  * configuration rebuilt from a sanitised result gives the same result.
  */
-import { CONFIG_DEFAULT } from "../../../config.ts";
-import { sanitizeHexColor } from "../../../utils/css-sanitize.ts";
+import { CONFIG_DEFAULT } from "../../../core/config.ts";
+import { sanitizeHexColor } from "../../../core/security/css-sanitize.ts";
 import { BG_PRESETS } from "../../customize/customize.ts";
 import {
   EFFECTS,

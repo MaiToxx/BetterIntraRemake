@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../src/config.ts", () => ({
+vi.mock("../src/core/config.ts", () => ({
   getConfig: vi.fn(async (key: string) =>
     key === "PROFILE_SHOW_MARKS" ? true : "",
   ),
@@ -12,11 +12,11 @@ vi.mock("../src/config.ts", () => ({
 vi.mock("../src/features/account/account.ts", () => ({
   getCloudLogin: vi.fn(async () => "me"),
 }));
-vi.mock("../src/utils/crypto.ts", () => ({
+vi.mock("../src/core/crypto.ts", () => ({
   hashLogin: vi.fn(async () => "hashed"),
 }));
 
-import { initMarks } from "../src/features/profile/marks.ts";
+import { initMarks } from "../src/features/profile/cards/marks.ts";
 
 const projectsCard = () => `
   <div class="bg-white md:h-96">

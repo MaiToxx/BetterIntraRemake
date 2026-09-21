@@ -1,7 +1,7 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import { getStoredLinks, renderShortcutsDisplay } from "./shortcuts.ui.ts";
 import { render, html } from "lit-html";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 
 const CONTAINER_ID = "shortcuts-shadow-wrapper";
 

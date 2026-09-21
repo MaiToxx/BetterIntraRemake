@@ -43,14 +43,14 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
 - `src/background.ts` — background service worker for Discord sync and tab reloading.
 - `src/popup/popup.ts` — popup entrypoint (account/cloud sync UI).
 - `src/features/` — self-contained features: `logtime/`, `clusters/`, `profile/` (visuals, marks, freeze, milestones, layout, events, theme), `shortcuts/`, `account/`, `friends/`, `hub/`, `campus/`.
-- `src/config.ts` — single source of truth for all `chrome.storage` keys; typed `BetterIntraConfig` interface + defaults.
+- `src/core/config.ts` — single source of truth for all `chrome.storage` keys; typed `BetterIntraConfig` interface + defaults.
 - `manifests/` — per-browser manifest templates.
 - `better-intra-worker/` — separate Cloudflare Worker (wrangler) for cloud sync. Has its own `package.json`.
 
 ## Toolchain
 
 - **Vite 8** + `@tailwindcss/vite` plugin (Tailwind v4 CSS-driven config, no `tailwind.config.js`).
-- **daisyUI 5** — loaded via `@plugin "daisyui"` in `src/assets/style.css`. Scoped to shadow DOM roots. Only a subset of components included: button, toggle, input, select, radio, label, card, tabs, modal, divider, swap, fieldset, status, tooltip, badge, collapse, ring, avatar, indicator, list, loading, join, kbd, dropdown, menu.
+- **daisyUI 5** — loaded via `@plugin "daisyui"` in `src/core/styles/style.css`. Scoped to shadow DOM roots. Only a subset of components included: button, toggle, input, select, radio, label, card, tabs, modal, divider, swap, fieldset, status, tooltip, badge, collapse, ring, avatar, indicator, list, loading, join, kbd, dropdown, menu.
 - **TypeScript 6** — `strict: true`, `moduleResolution: bundler`, `types: ["chrome"]`.
 - **lit-html** — DOM templating for settings UI and popup.
 - **web-ext** — running and signing the extension.

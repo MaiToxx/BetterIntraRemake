@@ -1,7 +1,7 @@
-import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
-import { openClusterDialog } from "../clusters/map-dialog.ts";
-import { normalizeSeatId } from "../clusters/map-dialog/seats.ts";
-import { getConfig } from "../../config.ts";
+import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
+import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { normalizeSeatId } from "../../clusters/map-dialog/seats.ts";
+import { getConfig } from "../../../core/config.ts";
 
 /** The unique ID for the injected stylesheet. */
 const GLOW_STYLE_ID = "ft-glow-styles";

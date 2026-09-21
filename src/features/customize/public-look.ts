@@ -8,8 +8,8 @@
  * http(s) image URL. Fonts, font scale, scrollbars, density and above all
  * the free-form CSS stay with their author.
  */
-import { CONFIG_DEFAULT } from "../../config.ts";
-import { sanitizeCssUrl, sanitizeHexColor } from "../../utils/css-sanitize.ts";
+import { CONFIG_DEFAULT } from "../../core/config.ts";
+import { sanitizeCssUrl, sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import {
   AVATAR_RADIUS,
   BG_PRESETS,

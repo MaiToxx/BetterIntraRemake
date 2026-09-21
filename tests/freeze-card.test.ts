@@ -10,7 +10,7 @@ const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function loadFreeze() {
   vi.resetModules();
-  return (await import("../src/features/profile/freeze.ts")).initFreezeCard;
+  return (await import("../src/features/profile/cards/freeze.ts")).initFreezeCard;
 }
 
 describe("freeze card", () => {

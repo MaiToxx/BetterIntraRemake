@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getConfig, CONFIG_DEFAULT } from "../src/config";
+import { getConfig, CONFIG_DEFAULT } from "../src/core/config";
 
 beforeEach(() => {
   (chrome.storage.local.clear as any)();

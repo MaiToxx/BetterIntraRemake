@@ -11,8 +11,8 @@ import {
   EXTRAS_KEYS,
   EXTRAS_STYLE_ID,
 } from "../src/features/profile/extras/extras";
-import { CONFIG_DEFAULT, getConfigMany } from "../src/config";
-import { sanitizeVisualUrls } from "../src/features/profile/visuals-sanitize";
+import { CONFIG_DEFAULT, getConfigMany } from "../src/core/config";
+import { sanitizeVisualUrls } from "../src/features/profile/header/visuals-sanitize";
 
 function header(login = "someone") {
   const card = document.createElement("div");

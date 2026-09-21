@@ -1,4 +1,4 @@
-import { getConfig } from "../../../config.ts";
+import { getConfig } from "../config.ts";
 import themesJson from "./themes.json";
 
 type ThemeModeVars = {

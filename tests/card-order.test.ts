@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const ORDER = ["THURSDAY ROULETTE", "AGENDA", "PROJECTS"];
 
-vi.mock("../src/config.ts", () => ({
+vi.mock("../src/core/config.ts", () => ({
   getConfig: vi.fn(async (key: string) => {
     if (key === "PROFILE_CARD_ORDER") return ORDER;
     if (key === "PROFILE_SHOW_ROULETTE") return true;
@@ -17,7 +17,7 @@ vi.mock("../src/config.ts", () => ({
 vi.mock("../src/features/account/account.ts", () => ({
   getCloudLogin: vi.fn(async () => "me"),
 }));
-vi.mock("../src/utils/crypto.ts", () => ({
+vi.mock("../src/core/crypto.ts", () => ({
   hashLogin: vi.fn(async () => "hashed"),
 }));
 
@@ -40,9 +40,9 @@ async function loadModules() {
   vi.resetModules();
   return {
     initRouletteStats: (
-      await import("../src/features/profile/roulette-stats.ts")
+      await import("../src/features/profile/cards/roulette-stats.ts")
     ).initRouletteStats,
-    optimizeLayout: (await import("../src/features/profile/layout.ts"))
+    optimizeLayout: (await import("../src/features/profile/layout/layout.ts"))
       .optimizeLayout,
   };
 }

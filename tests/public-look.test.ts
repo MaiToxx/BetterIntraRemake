@@ -9,8 +9,8 @@ import {
   CUSTOMIZE_KEYS,
   defaultCustomization,
 } from "../src/features/customize/customize";
-import { sanitizeVisualUrls } from "../src/features/profile/visuals-sanitize";
-import { CONFIG_DEFAULT } from "../src/config";
+import { sanitizeVisualUrls } from "../src/features/profile/header/visuals-sanitize";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 describe("sanitizePublicLook", () => {
   it("keeps validated presentation values only", () => {

@@ -10,8 +10,8 @@ import { describe, it, expect } from "vitest";
 import {
   HUB_SETTING_DEFS,
   type HubSettingDef,
-} from "../src/features/hub/hubSettings.data";
-import { CONFIG_DEFAULT, type ConfigKey } from "../src/config";
+} from "../src/features/hub/hubSettings.data.ts";
+import { CONFIG_DEFAULT, type ConfigKey } from "../src/core/config";
 import { BG_PRESETS } from "../src/features/customize/customize";
 import {
   EXTRAS_KEYS,

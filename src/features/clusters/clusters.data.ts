@@ -1,4 +1,4 @@
-export { fetchEventTypes } from "../profile/events/events.ts";
+export { fetchEventTypes } from "../profile/cards/events/events.ts";
 export {
   ensureCampusData,
   fetchCampusList,

@@ -1,4 +1,4 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../../core/config.ts";
 
 const CARD_TITLE = "PENDING EVALUATIONS";
 

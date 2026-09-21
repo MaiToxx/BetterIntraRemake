@@ -1,9 +1,9 @@
 import { html } from "lit-html";
 import { until } from "lit-html/directives/until.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { HUB_INFO } from "../hub/hubSettings.data.ts";
-import { UPDATE_KEY, type UpdateInfo } from "../../utils/update-check.ts";
-import { WORKER_URL } from "../../utils/worker.ts";
+import { HUB_INFO } from "./hubSettings.data.ts";
+import { UPDATE_KEY, type UpdateInfo } from "../../core/update-check.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 import { EGG_IDS, listFoundEggs } from "../eggs/eggs.ts";
 
 import GITHUB_SVG from "../../assets/svg/github.svg?raw";

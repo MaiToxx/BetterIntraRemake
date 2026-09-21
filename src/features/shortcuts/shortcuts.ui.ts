@@ -1,5 +1,5 @@
 import { html, render } from "lit-html";
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import GLOBE from "../../assets/svg/globe.svg";
 
 export interface ShortcutLink {

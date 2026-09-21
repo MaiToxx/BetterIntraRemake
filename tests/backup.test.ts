@@ -4,7 +4,7 @@ import {
   exportableSettings,
   sanitizeBackup,
 } from "../src/features/hub/backup";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 describe("exportableSettings", () => {
   it("drops credentials and caches, keeps regular settings", () => {

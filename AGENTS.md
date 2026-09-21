@@ -14,7 +14,7 @@ npm run dev:firefox     # watch + web-ext hot-reload
 - **`src/main.ts`** — content script entrypoint. Feature init via `featureInitializers` map. Runs on `https://*.intra.42.fr/*` at `document_start`.
 - **`src/popup/popup.ts`** — popup entrypoint.
 - **`src/features/`** — self-contained features: `logtime/`, `clusters/`, `profile/`, `shortcuts/`, `account/`, `friends/`, `hub/`.
-- **`src/config.ts`** — single source of truth for all chrome.storage keys; typed `BetterIntraConfig` interface + defaults.
+- **`src/core/config.ts`** — single source of truth for all chrome.storage keys; typed `BetterIntraConfig` interface + defaults.
 - **`manifests/manifest.{chrome,firefox}.json`** — per-browser manifests (merged with version from package.json at build time via Vite plugin).
 - **`better-intra-worker/`** — separate Cloudflare Worker (wrangler) for cloud settings sync. Has its own `package.json`.
 
@@ -41,7 +41,7 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
 ## Framework & toolchain
 
 - **Vite 8** + `@tailwindcss/vite` plugin (no `tailwind.config.js` — Tailwind v4 CSS-driven config).
-- **daisyUI 5** — loaded via `@plugin "daisyui"` in `src/assets/style.css`; only a subset of components included.
+- **daisyUI 5** — loaded via `@plugin "daisyui"` in `src/core/styles/style.css`; only a subset of components included.
 - **TypeScript 6** — `strict: true`, `moduleResolution: bundler`, `types: ["chrome"]`.
 - **`lit-html`** — used for DOM templating in the settings UI (hub) and popup.
 - **`web-ext`** — for running and signing the extension.

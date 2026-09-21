@@ -9,7 +9,7 @@ import { readRepoInfo, readWorkerUrl, readAuthMode } from "./scripts/repo-info.j
 const target = (process.env.TARGET || "firefox") as "firefox" | "chrome";
 const outDir = process.env.BUILD_OUT_DIR || "dist";
 
-/** Same asset as the content script's; see src/assets/shared-styles.ts. */
+/** Same asset as the content script's; see src/core/styles/shared-styles.ts. */
 const SHARED_CSS_FILE = "shared-styles.css";
 const repo = readRepoInfo();
 const workerUrl = readWorkerUrl();

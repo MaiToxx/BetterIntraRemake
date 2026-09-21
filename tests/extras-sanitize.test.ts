@@ -11,7 +11,7 @@ import {
   LIMITS,
   type ProfileExtras,
 } from "../src/features/profile/extras/extras";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 const HEX = /^#[0-9a-f]{6}$/i;
 

@@ -9,7 +9,7 @@ import {
   savePreset,
 } from "../src/features/customize/presets";
 import { CUSTOMIZE_KEYS, buildCustomizeCss } from "../src/features/customize/customize";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 const defaults = () =>
   Object.fromEntries(CUSTOMIZE_KEYS.map((k) => [k, CONFIG_DEFAULT[k]])) as ReturnType<

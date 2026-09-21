@@ -3,8 +3,8 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import {
   adoptSharedStyles,
   sharedStylesLink,
-} from "../../assets/shared-styles.ts";
-import { getEffectiveTheme } from "../profile/theme/theme-manager.ts";
+} from "../../core/styles/shared-styles.ts";
+import { getEffectiveTheme } from "../../core/theme/theme-manager.ts";
 import {
   getTrackerState,
   computeWeekProgress,

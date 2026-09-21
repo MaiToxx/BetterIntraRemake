@@ -1,7 +1,7 @@
 import { html, render } from "lit-html";
-import { sanitizeHttpUrl } from "../../utils/safe-url.ts";
+import { sanitizeHttpUrl } from "../../core/security/safe-url.ts";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_KEY = "ft-announcement-cache";
 const DISMISS_PREFIX = "ft-announcement-dismissed:";

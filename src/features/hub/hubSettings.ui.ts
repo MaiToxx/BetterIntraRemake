@@ -1,7 +1,7 @@
 import { html, nothing, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { until } from "lit-html/directives/until.js";
-import { getConfig, CONFIG_DEFAULT, type ConfigKey } from "../../config.ts";
+import { getConfig, CONFIG_DEFAULT, type ConfigKey } from "../../core/config.ts";
 import {
   FEATURE_DEFS,
   HUB_INFO,
@@ -19,7 +19,7 @@ import {
 } from "../shortcuts/shortcuts.ui.ts";
 import { clearAuthFailed } from "../account/account.ts";
 import { loginWith42, syncToCloud } from "../account/account.ts";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import EYE_SVG from "../../assets/svg/eye.svg?raw";
 import EYE_SLASH_SVG from "../../assets/svg/eye-slash.svg?raw";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
@@ -44,8 +44,8 @@ import {
   THEMES,
   getEffectiveTheme,
   getIsLight,
-} from "../profile/theme/theme-manager.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
+} from "../../core/theme/theme-manager.ts";
+import { bindTooltips } from "../../core/dom/tooltip.ts";
 
 async function saveSetting(key: string, value: unknown): Promise<void> {
   await chrome.storage.local.set({ [key]: value });

@@ -13,8 +13,8 @@
  * identity mount runs each time (React may drop the block when it re-renders
  * the header).
  */
-import { getConfigMany } from "../../../config.ts";
-import { AVATAR_SELECTOR } from "../selectors.ts";
+import { getConfigMany } from "../../../core/config.ts";
+import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
 import {
   EXTRAS_KEYS,
   EXTRAS_STYLE_ID,

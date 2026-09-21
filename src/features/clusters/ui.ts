@@ -1,8 +1,8 @@
 import { html, render } from "lit-html";
 import { CLUSTERS } from "./clusters.data.ts";
-import { adoptSharedStyles } from "../../assets/shared-styles.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
-import { getIsLight } from "../profile/theme/theme-manager.ts";
+import { adoptSharedStyles } from "../../core/styles/shared-styles.ts";
+import { bindTooltips } from "../../core/dom/tooltip.ts";
+import { getIsLight } from "../../core/theme/theme-manager.ts";
 
 export function renderClusterPicker(
   currentId: string,

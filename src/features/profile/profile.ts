@@ -1,26 +1,26 @@
-import { updateEventFilters, injectEventsSelect } from "./events/events.ts";
+import { updateEventFilters, injectEventsSelect } from "./cards/events/events.ts";
 import { findSlotsButton, redirectDefenseLinks } from "./shortcuts.ts";
 import { replaceMoulinetteImage } from "./moulinette.ts";
-import { injectCustomStyles, updateVisuals } from "./visuals.ts";
-import { handleProfileRedirect } from "./highlight.ts";
-import { initLayoutManager } from "./layout.ts";
-import { initMilestones } from "./milestones.ts";
-import { initFreezeCard } from "./freeze.ts";
-import { findProfileCard, initProfileCardStyling } from "./profile-card.ts";
+import { injectCustomStyles, updateVisuals } from "./header/visuals.ts";
+import { handleProfileRedirect } from "./layout/highlight.ts";
+import { initLayoutManager } from "./layout/layout.ts";
+import { initMilestones } from "./cards/milestones.ts";
+import { initFreezeCard } from "./cards/freeze.ts";
+import { findProfileCard, initProfileCardStyling } from "./header/profile-card.ts";
 import { injectFriendsWidget } from "../friends/friends.ui.ts";
 import { colorTrackerBadge } from "../logtime/tracker-card.ts";
-import { initAchievements } from "./achievements.ts";
-import { initMarks } from "./marks.ts";
-import { initProjectBadges } from "./project-badges.ts";
-import { initProjectsSort } from "./projects-sort.ts";
-import { initRouletteStats } from "./roulette-stats.ts";
-import { initEvaluations } from "./evaluations.ts";
-import { initBadges, applyTitleBadgeWrap } from "./badges.ts";
-import { initTranscript } from "./transcript.ts";
-import { initPace } from "./pace.ts";
+import { initAchievements } from "./cards/achievements.ts";
+import { initMarks } from "./cards/marks.ts";
+import { initProjectBadges } from "./cards/project-badges.ts";
+import { initProjectsSort } from "./cards/projects-sort.ts";
+import { initRouletteStats } from "./cards/roulette-stats.ts";
+import { initEvaluations } from "./cards/evaluations.ts";
+import { initBadges, applyTitleBadgeWrap } from "./header/badges.ts";
+import { initTranscript } from "./cards/transcript.ts";
+import { initPace } from "./cards/pace.ts";
 import { ensureCampusData } from "../clusters/clusters.data.ts";
 import { tagDashboardCards } from "../customize/cards.ts";
-import { waitForElement } from "../../utils/dom-wait.ts";
+import { waitForElement } from "../../core/dom/dom-wait.ts";
 
 /**
  * Ids (or id prefixes) of the nodes Better Intra injects itself.

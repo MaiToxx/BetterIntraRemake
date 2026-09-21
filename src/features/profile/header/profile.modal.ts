@@ -1,22 +1,22 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { getConfig, VISUAL_CLOUD_KEYS } from "../../config.ts";
+import { getConfig, VISUAL_CLOUD_KEYS } from "../../../core/config.ts";
 import {
   fetchMySettings,
   loginWith42,
   clearAuthFailed,
   syncMyVisuals,
-} from "../account/account.ts";
+} from "../../account/account.ts";
 import { applyImgs, injectCustomStyles, VisualUrls } from "./visuals.ts";
 import { getTitleBadges, applyBadgeLayout } from "./badges.ts";
-import { getEffectiveTheme } from "./theme/theme-manager.ts";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
-import LINK_SVG from "../../assets/svg/link.svg?raw";
-import GRIP_VERTICAL_SVG from "../../assets/svg/grip-vertical.svg?raw";
-import EYE_SVG from "../../assets/svg/eye.svg?raw";
-import EYE_SLASH_SVG from "../../assets/svg/eye-slash.svg?raw";
+import { getEffectiveTheme } from "../../../core/theme/theme-manager.ts";
+import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
+import LINK_SVG from "../../../assets/svg/link.svg?raw";
+import GRIP_VERTICAL_SVG from "../../../assets/svg/grip-vertical.svg?raw";
+import EYE_SVG from "../../../assets/svg/eye.svg?raw";
+import EYE_SLASH_SVG from "../../../assets/svg/eye-slash.svg?raw";
 import { renderAvatarEditor } from "./avatar-editor.ts";
-import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
+import FORTY_TWO_SVG from "../../../assets/svg/42_Logo.svg?raw";
 
 interface FormState {
   avatar: string;

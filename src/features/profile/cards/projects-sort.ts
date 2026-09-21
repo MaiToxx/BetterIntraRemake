@@ -1,10 +1,10 @@
-import { getConfig } from "../../config.ts";
-import { adoptSharedStyles } from "../../assets/shared-styles.ts";
-import { THEMES, getEffectiveTheme } from "./theme/theme-manager.ts";
-import SORT_AZ_SVG from "../../assets/svg/sort-az.svg?raw";
-import SORT_ZA_SVG from "../../assets/svg/sort-za.svg?raw";
-import CAL_DOWN_SVG from "../../assets/svg/calendar-arrow-down.svg?raw";
-import CAL_UP_SVG from "../../assets/svg/calendar-arrow-up.svg?raw";
+import { getConfig } from "../../../core/config.ts";
+import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
+import { THEMES, getEffectiveTheme } from "../../../core/theme/theme-manager.ts";
+import SORT_AZ_SVG from "../../../assets/svg/sort-az.svg?raw";
+import SORT_ZA_SVG from "../../../assets/svg/sort-za.svg?raw";
+import CAL_DOWN_SVG from "../../../assets/svg/calendar-arrow-down.svg?raw";
+import CAL_UP_SVG from "../../../assets/svg/calendar-arrow-up.svg?raw";
 
 type SortField = "name" | "date";
 

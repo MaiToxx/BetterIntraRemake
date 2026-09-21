@@ -1,19 +1,19 @@
-import { getConfig, getConfigMany } from "../../config.ts";
-import { getCloudLogin, fetchUserVisuals } from "../account/account.ts";
+import { getConfig, getConfigMany } from "../../../core/config.ts";
+import { getCloudLogin, fetchUserVisuals } from "../../account/account.ts";
 import { createSettingsModal } from "./profile.modal.ts";
 import { applyThemeToProfileCard } from "./profile-card.ts";
-import { applyPublicLogtimeSettings, initLogtime } from "../logtime/logtime.ts";
+import { applyPublicLogtimeSettings, initLogtime } from "../../logtime/logtime.ts";
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
-import { applyVisitorLook } from "../customize/customize.ts";
-import type { PublicLook } from "../customize/public-look.ts";
+import { applyVisitorLook } from "../../customize/customize.ts";
+import type { PublicLook } from "../../customize/public-look.ts";
 import {
   applyOwnProfileExtras,
   applyProfileExtras,
   clearProfileExtras,
   extrasAreVisible,
-} from "./extras/extras-apply.ts";
+} from "../extras/extras-apply.ts";
 import { html, render } from "lit-html";
-import { waitForElement } from "../../utils/dom-wait.ts";
+import { waitForElement } from "../../../core/dom/dom-wait.ts";
 
 /** Logins known to have no cloud visuals, with the time we learned it. */
 const noVisualsCache = new Map<string, number>();
@@ -25,7 +25,7 @@ import {
   BANNER_SELECTOR,
   BACKGROUND_SELECTOR,
   TITLE_BADGE_SELECTOR,
-} from "./selectors.ts";
+} from "../../../core/intra/selectors.ts";
 
 export interface VisualUrls {
   avatar: string;

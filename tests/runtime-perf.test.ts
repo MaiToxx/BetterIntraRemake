@@ -7,11 +7,11 @@
  * be several times higher, and the point is that it stays where it is.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { waitForElement, watchDom } from "../src/utils/dom-wait.ts";
+import { waitForElement, watchDom } from "../src/core/dom/dom-wait.ts";
 import { hasIntraMutation } from "../src/features/profile/profile.ts";
 import { ensureCampusData } from "../src/features/campus/campus.ts";
 import { initHubSettings } from "../src/features/hub/hubSettings.ts";
-import { updateVisuals } from "../src/features/profile/visuals.ts";
+import { updateVisuals } from "../src/features/profile/header/visuals.ts";
 
 const getCalls = () => vi.mocked(chrome.storage.local.get).mock.calls.length;
 

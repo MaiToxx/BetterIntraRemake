@@ -4,7 +4,7 @@
  * per burst of changes), whatever the "auto sync" setting says. Without this
  * a visitor could see last week's colours.
  */
-import { getConfigMany } from "../../config.ts";
+import { getConfigMany } from "../../core/config.ts";
 import { syncToCloud } from "../account/account.ts";
 import { CUSTOMIZE_KEYS } from "./customize.ts";
 import { EXTRAS_KEYS } from "../profile/extras/extras.ts";

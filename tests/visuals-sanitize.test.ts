@@ -4,8 +4,8 @@ import {
   sanitizeCssUrl,
   sanitizeHexColor,
   sanitizeVisualUrls,
-} from "../src/features/profile/visuals-sanitize";
-import type { VisualUrls } from "../src/features/profile/visuals";
+} from "../src/features/profile/header/visuals-sanitize";
+import type { VisualUrls } from "../src/features/profile/header/visuals";
 
 const base: VisualUrls = {
   avatar: "",

@@ -1,4 +1,4 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 
 export interface TranscriptEntry {
   cursusLabel: string;
@@ -33,7 +33,7 @@ interface CampusManifest {
 
 export let CLUSTERS: { id: string; name: string; svg?: string }[] = [];
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 const CACHE_PREFIX = "CAMPUS_DATA_";
 const MANIFEST_CACHE_KEY = "CAMPUS_MANIFEST_V2";

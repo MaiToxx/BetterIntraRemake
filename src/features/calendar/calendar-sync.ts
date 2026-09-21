@@ -1,6 +1,6 @@
-import { hashLogin } from "../../utils/crypto.ts";
+import { hashLogin } from "../../core/crypto.ts";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 function escapeIcs(text: string): string {
   return text
     .replace(/\\/g, "\\\\")

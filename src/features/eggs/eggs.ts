@@ -16,7 +16,7 @@
  * in the About tab.
  */
 import { html, render } from "lit-html";
-import { getConfigMany } from "../../config.ts";
+import { getConfigMany } from "../../core/config.ts";
 import { savePreset } from "../customize/presets.ts";
 import { defaultCustomization } from "../customize/customize.ts";
 

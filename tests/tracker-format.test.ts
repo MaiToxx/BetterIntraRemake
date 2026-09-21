@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { formatHours } from "../src/features/logtime/tracker";
-import { sanitizeHttpUrl } from "../src/utils/safe-url";
-import { getActiveFeatures } from "../src/features/hub/hubSettings.storage";
+import { sanitizeHttpUrl } from "../src/core/security/safe-url";
+import { getActiveFeatures } from "../src/features/hub/hubSettings.storage.ts";
 
 describe("formatHours", () => {
   it("never renders 60 minutes", () => {

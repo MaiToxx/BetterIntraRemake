@@ -1,7 +1,7 @@
 import { render, html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import FREEZE_SVG from "../../assets/svg/freeze.svg?raw";
-import { createCountdown } from "../../utils/countdown.ts";
+import FREEZE_SVG from "../../../assets/svg/freeze.svg?raw";
+import { createCountdown } from "../../../core/dom/countdown.ts";
 
 const INJECTED_ID = "ft-freeze-card";
 

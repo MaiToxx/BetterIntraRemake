@@ -1,0 +1,50 @@
+[
+  ["src/config.ts", "src/core/config.ts"],
+  ["src/utils/worker.ts", "src/core/worker.ts"],
+  ["src/utils/crypto.ts", "src/core/crypto.ts"],
+  ["src/utils/update-check.ts", "src/core/update-check.ts"],
+
+  ["src/assets/shared-styles.ts", "src/core/styles/shared-styles.ts"],
+  ["src/assets/style.css", "src/core/styles/style.css"],
+  ["src/features/profile/theme", "src/core/theme"],
+
+  ["src/utils/css-sanitize.ts", "src/core/security/css-sanitize.ts"],
+  ["src/utils/safe-url.ts", "src/core/security/safe-url.ts"],
+
+  ["src/utils/dom-wait.ts", "src/core/dom/dom-wait.ts"],
+  ["src/utils/tooltip.ts", "src/core/dom/tooltip.ts"],
+  ["src/utils/skeleton.ts", "src/core/dom/skeleton.ts"],
+  ["src/utils/resizable-dialog.ts", "src/core/dom/resizable-dialog.ts"],
+  ["src/utils/confirm-dialog.ts", "src/core/dom/confirm-dialog.ts"],
+  ["src/utils/countdown.ts", "src/core/dom/countdown.ts"],
+
+  ["src/utils/intrapy.ts", "src/core/intra/intrapy.ts"],
+  ["src/utils/profile-login.ts", "src/core/intra/profile-login.ts"],
+  ["src/features/profile/selectors.ts", "src/core/intra/selectors.ts"],
+
+  ["src/features/profile/campus-flags.ts", "src/features/campus/campus-flags.ts"],
+
+  ["src/features/profile/profile-card.ts", "src/features/profile/header/profile-card.ts"],
+  ["src/features/profile/badges.ts", "src/features/profile/header/badges.ts"],
+  ["src/features/profile/personal-info.ts", "src/features/profile/header/personal-info.ts"],
+  ["src/features/profile/visuals.ts", "src/features/profile/header/visuals.ts"],
+  ["src/features/profile/visuals-sanitize.ts", "src/features/profile/header/visuals-sanitize.ts"],
+  ["src/features/profile/avatar-editor.ts", "src/features/profile/header/avatar-editor.ts"],
+  ["src/features/profile/profile.modal.ts", "src/features/profile/header/profile.modal.ts"],
+
+  ["src/features/profile/marks.ts", "src/features/profile/cards/marks.ts"],
+  ["src/features/profile/achievements.ts", "src/features/profile/cards/achievements.ts"],
+  ["src/features/profile/evaluations.ts", "src/features/profile/cards/evaluations.ts"],
+  ["src/features/profile/roulette-stats.ts", "src/features/profile/cards/roulette-stats.ts"],
+  ["src/features/profile/profile-stats-intra.ts", "src/features/profile/cards/profile-stats-intra.ts"],
+  ["src/features/profile/pace.ts", "src/features/profile/cards/pace.ts"],
+  ["src/features/profile/freeze.ts", "src/features/profile/cards/freeze.ts"],
+  ["src/features/profile/milestones.ts", "src/features/profile/cards/milestones.ts"],
+  ["src/features/profile/projects-sort.ts", "src/features/profile/cards/projects-sort.ts"],
+  ["src/features/profile/project-badges.ts", "src/features/profile/cards/project-badges.ts"],
+  ["src/features/profile/transcript.ts", "src/features/profile/cards/transcript.ts"],
+  ["src/features/profile/events", "src/features/profile/cards/events"],
+
+  ["src/features/profile/layout.ts", "src/features/profile/layout/layout.ts"],
+  ["src/features/profile/highlight.ts", "src/features/profile/layout/highlight.ts"]
+]

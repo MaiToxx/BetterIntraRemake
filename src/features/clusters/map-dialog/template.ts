@@ -1,7 +1,7 @@
 import { html, TemplateResult } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedStylesLink } from "../../../assets/shared-styles.ts";
-import { getCampusFlag } from "../../profile/campus-flags.ts";
+import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
+import { getCampusFlag } from "../../campus/campus-flags.ts";
 import { type DialogState } from "./context";
 import RELOAD_SVG from "../../../assets/svg/reload.svg?raw";
 import CLOCK_SVG from "../../../assets/svg/clock.svg?raw";

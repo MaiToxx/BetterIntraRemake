@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { isJwtExpired, waitForIntrapyToken } from "../src/utils/intrapy";
+import { isJwtExpired, waitForIntrapyToken } from "../src/core/intra/intrapy";
 
 const b64url = (s: string) =>
   Buffer.from(s).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

@@ -1,4 +1,4 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import { lastStats } from "./logtime.ts";
 
 export interface TrackerThresholds {

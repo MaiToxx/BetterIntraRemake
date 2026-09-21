@@ -1,7 +1,7 @@
 import { render } from "lit-html";
-import { getConfig, getConfigMany } from "../../config.ts";
+import { getConfig, getConfigMany } from "../../core/config.ts";
 import { resolveRainbowColors } from "./rainbow-presets.ts";
-import { hashLogin } from "../../utils/crypto.ts";
+import { hashLogin } from "../../core/crypto.ts";
 import {
   findLogtimeMount,
   hideOldLogtime,
@@ -22,8 +22,8 @@ import {
   getEffectiveTheme,
   getIsLight,
   THEMES,
-} from "../profile/theme/theme-manager.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
+} from "../../core/theme/theme-manager.ts";
+import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { syncCalendarIcs } from "../calendar/calendar-sync.ts";
 
 export interface CalendarEvent {
@@ -39,7 +39,7 @@ export interface CalendarEvent {
 export type EventsByDate = Record<string, CalendarEvent[]>;
 
 const INTRAPY_BASE = "https://intrapy.intra.42.fr";
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 const historyCache = new Map<string, Record<string, number>>();
 const fetchPromiseMap = new Map<string, Promise<void>>();
 

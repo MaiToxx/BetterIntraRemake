@@ -1,4 +1,4 @@
-import { getBadgeUrl } from "./badges.ts";
+import { getBadgeUrl } from "./header/badges.ts";
 
 export async function findSlotsButton() {
   const slotsUrl = await getBadgeUrl("SLOTS");

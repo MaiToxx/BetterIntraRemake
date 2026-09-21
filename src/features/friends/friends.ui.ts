@@ -1,6 +1,6 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
+import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import {
   FriendData,
   addFriend,
@@ -15,17 +15,17 @@ import {
   clearAuthFailed,
   syncToCloud,
 } from "../account/account.ts";
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import {
   THEMES,
   getEffectiveTheme,
   getIsLight,
-} from "../profile/theme/theme-manager.ts";
-import { bindTooltips } from "../../utils/tooltip.ts";
+} from "../../core/theme/theme-manager.ts";
+import { bindTooltips } from "../../core/dom/tooltip.ts";
 import {
   sanitizeCssColor,
   sanitizeCssUrl,
-} from "../profile/visuals-sanitize.ts";
+} from "../profile/header/visuals-sanitize.ts";
 import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
 import FRIENDS_SVG from "../../assets/svg/friends.svg?raw";
 import WARNING_SVG from "../../assets/svg/triangle-exclamation.svg?raw";

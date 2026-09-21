@@ -3,9 +3,9 @@ import {
   wrapTitleBadges,
   getTitleBadges,
   applyBadgeLayout,
-} from "../src/features/profile/badges";
-import { badgeColorCss } from "../src/features/profile/visuals";
-import { TITLE_BADGE_SELECTOR } from "../src/features/profile/selectors";
+} from "../src/features/profile/header/badges";
+import { badgeColorCss } from "../src/features/profile/header/visuals";
+import { TITLE_BADGE_SELECTOR } from "../src/core/intra/selectors";
 
 function badge(title: string): string {
   return `<div class="inline-flex items-center text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 bg-primary hover:bg-primary/80 border-transparent text-primary-foreground flex-shrink-0 mx-1 px-3.5 py-1.5 rounded border shadow-base">${title}</div>`;

@@ -1,4 +1,4 @@
-import { CONFIG_DEFAULT, type ConfigKey } from "../../config.ts";
+import { CONFIG_DEFAULT, type ConfigKey } from "../../core/config.ts";
 
 /**
  * Keys that must never leave the browser in a backup file, nor be written

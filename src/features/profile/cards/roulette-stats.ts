@@ -1,16 +1,16 @@
-import { getConfig } from "../../config.ts";
-import { getCloudLogin } from "../account/account.ts";
-import { hashLogin } from "../../utils/crypto.ts";
-import { createCountdown } from "../../utils/countdown.ts";
+import { getConfig } from "../../../core/config.ts";
+import { getCloudLogin } from "../../account/account.ts";
+import { hashLogin } from "../../../core/crypto.ts";
+import { createCountdown } from "../../../core/dom/countdown.ts";
 import {
   TOOLTIP_SHOW_DELAY,
   hideFloatingTooltip,
   showFloatingTooltip,
-} from "../../utils/tooltip.ts";
-import { getIsLight } from "./theme/theme-manager.ts";
-import { createSkeleton, createSkeletonLines } from "../../utils/skeleton.ts";
+} from "../../../core/dom/tooltip.ts";
+import { getIsLight } from "../../../core/theme/theme-manager.ts";
+import { createSkeleton, createSkeletonLines } from "../../../core/dom/skeleton.ts";
 
-import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
+import { WORKER_URL, AUTH_MODE } from "../../../core/worker.ts";
 import {
   fetchProfileStatsViaIntra,
   readProfileStatsCache,

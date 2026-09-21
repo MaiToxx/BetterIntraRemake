@@ -9,7 +9,7 @@ import {
 import { cardIdFromTitle, tagDashboardCards } from "../src/features/customize/cards";
 import { sanitizePublicLook } from "../src/features/customize/public-look";
 import { decodePresetCode, encodePresetCode } from "../src/features/customize/presets";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 const base = Object.fromEntries(
   CUSTOMIZE_KEYS.map((k) => [k, CONFIG_DEFAULT[k]]),

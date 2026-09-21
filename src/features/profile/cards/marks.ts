@@ -1,13 +1,13 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { getConfig } from "../../config.ts";
-import { getCloudLogin } from "../account/account.ts";
-import { getLoginFromPage } from "../../utils/profile-login.ts";
-import { INTRA_FONT } from "../logtime/constants.ts";
-import CHECK_SVG from "../../assets/svg/check.svg?raw";
-import X_SVG from "../../assets/svg/x.svg?raw";
-import CHEVRON_DOWN_SVG from "../../assets/svg/chevron-down.svg?raw";
-import { createSkeleton } from "../../utils/skeleton.ts";
+import { getConfig } from "../../../core/config.ts";
+import { getCloudLogin } from "../../account/account.ts";
+import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { INTRA_FONT } from "../../logtime/constants.ts";
+import CHECK_SVG from "../../../assets/svg/check.svg?raw";
+import X_SVG from "../../../assets/svg/x.svg?raw";
+import CHEVRON_DOWN_SVG from "../../../assets/svg/chevron-down.svg?raw";
+import { createSkeleton } from "../../../core/dom/skeleton.ts";
 
 const DATE_COLUMN_WIDTH = "150px";
 const SCORE_COLUMN_WIDTH = "24px";

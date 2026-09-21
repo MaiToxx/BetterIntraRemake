@@ -9,8 +9,8 @@ import {
 } from "./constants";
 import { fmtHours, hexToRgba, safeLabelsColor } from "./utils";
 import { LogtimeConfig, CalendarEvent, EventsByDate } from "./logtime";
-import { sharedStylesLink } from "../../assets/shared-styles.ts";
-import { escapeHtml } from "../../utils/tooltip.ts";
+import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
+import { escapeHtml } from "../../core/dom/tooltip.ts";
 import LOGTIME_CSS from "./logtime.css?inline";
 import VIEW_NORMAL_SVG from "../../assets/svg/view-normal.svg?raw";
 import VIEW_COMPACT_SVG from "../../assets/svg/view-compact.svg?raw";

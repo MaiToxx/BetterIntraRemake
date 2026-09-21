@@ -1,4 +1,4 @@
-import { adoptSharedStyles } from "../assets/shared-styles.ts";
+import { adoptSharedStyles } from "../styles/shared-styles.ts";
 
 export interface CountdownOptions {
   digits?: number;

@@ -1,5 +1,5 @@
 /**
- * The settings snapshot in src/config.ts: one storage read per context instead
+ * The settings snapshot in src/core/config.ts: one storage read per context instead
  * of one per getConfig(), and never a stale value.
  *
  * Each test builds its own chrome mock (with or without storage.onChanged) and
@@ -9,11 +9,11 @@
  * "fallback" block below pins that path too.
  */
 import { describe, it, expect, afterAll, vi } from "vitest";
-import type { ConfigKey } from "../src/config";
+import type { ConfigKey } from "../src/core/config";
 
 type Change = { oldValue?: unknown; newValue?: unknown };
 type Listener = (changes: Record<string, Change>, area: string) => void;
-type ConfigModule = typeof import("../src/config");
+type ConfigModule = typeof import("../src/core/config");
 
 const setupChrome = (globalThis as { chrome?: unknown }).chrome;
 afterAll(() => {
@@ -92,7 +92,7 @@ async function boot(opts: BootOptions = {}) {
   };
 
   vi.resetModules();
-  const cfg: ConfigModule = await import("../src/config");
+  const cfg: ConfigModule = await import("../src/core/config");
   return {
     cfg,
     store,

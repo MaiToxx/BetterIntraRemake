@@ -1,9 +1,9 @@
 import { html, render } from "lit-html";
-import { getConfig } from "../../../config.ts";
-import { adoptSharedStyles } from "../../../assets/shared-styles.ts";
-import { THEMES, getEffectiveTheme } from "../theme/theme-manager.ts";
+import { getConfig } from "../../../../core/config.ts";
+import { adoptSharedStyles } from "../../../../core/styles/shared-styles.ts";
+import { THEMES, getEffectiveTheme } from "../../../../core/theme/theme-manager.ts";
 
-import { WORKER_URL } from "../../../utils/worker.ts";
+import { WORKER_URL } from "../../../../core/worker.ts";
 const DATA_BASE = `${WORKER_URL}/gh/data`;
 const EVENT_TYPES_CACHE_KEY = "EVENT_TYPES_DATA";
 const EVENT_TYPES_CACHE_TTL = 60 * 60 * 1000;

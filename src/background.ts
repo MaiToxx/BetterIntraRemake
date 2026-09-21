@@ -1,12 +1,12 @@
-import { hashLogin } from "./utils/crypto";
+import { hashLogin } from "./core/crypto";
 import {
   UPDATE_KEY,
   isNewerVersion,
   parseLatestRelease,
   type UpdateInfo,
-} from "./utils/update-check";
+} from "./core/update-check";
 
-import { WORKER_URL } from "./utils/worker";
+import { WORKER_URL } from "./core/worker";
 // ---------------------------------------------------------------------------
 // Update check (GitHub Releases of __REPO_URL__)
 // ---------------------------------------------------------------------------

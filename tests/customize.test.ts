@@ -9,7 +9,7 @@ import {
   shiftLightness,
   type CustomizeConfig,
 } from "../src/features/customize/customize";
-import { CONFIG_DEFAULT } from "../src/config";
+import { CONFIG_DEFAULT } from "../src/core/config";
 
 const base = Object.fromEntries(
   CUSTOMIZE_KEYS.map((k) => [k, CONFIG_DEFAULT[k]]),

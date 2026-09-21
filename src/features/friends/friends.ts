@@ -1,7 +1,7 @@
-import { getConfig } from "../../config.ts";
+import { getConfig } from "../../core/config.ts";
 import { hashLogin } from "../account/account.ts";
 
-import { WORKER_URL, AUTH_MODE } from "../../utils/worker.ts";
+import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
 import { fetchFriendsDataViaIntra } from "./friends-intra.ts";
 export interface FriendData {
   login: string;

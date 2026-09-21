@@ -11,13 +11,13 @@
  * Custom avatars still come from the worker's public visuals endpoint.
  */
 import type { FriendData } from "./friends.ts";
-import { waitForIntrapyToken } from "../../utils/intrapy.ts";
-import { WORKER_URL } from "../../utils/worker.ts";
-import { hashLogin } from "../../utils/crypto.ts";
+import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
+import { WORKER_URL } from "../../core/worker.ts";
+import { hashLogin } from "../../core/crypto.ts";
 import {
   sanitizeCssColor,
   sanitizeCssUrl,
-} from "../profile/visuals-sanitize.ts";
+} from "../profile/header/visuals-sanitize.ts";
 
 const INTRAPY = "https://intrapy.intra.42.fr/api/v1";
 const LAST_ONLINE_KEY = "FRIENDS_LAST_ONLINE";

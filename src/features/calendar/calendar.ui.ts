@@ -1,12 +1,12 @@
 import { html, render } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { hashLogin } from "../../utils/crypto.ts";
+import { hashLogin } from "../../core/crypto.ts";
 import { generateQrDataUrl } from "./qr.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
-import { WORKER_URL } from "../../utils/worker.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
 
 function calUrl(token: string): string {
