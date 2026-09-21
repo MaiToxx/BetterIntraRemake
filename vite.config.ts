@@ -16,6 +16,17 @@ const authMode = readAuthMode();
 const SHARED_CSS_FILE = "shared-styles.css";
 
 /**
+ * THE CONTENT SCRIPT IS SPLIT (docs/CODE-SPLITTING.md). This build turns
+ * src/main.ts into the ES module content-main.js plus lazy chunks under
+ * chunks/; vite.loader.config.ts builds src/loader.ts into content.js, the
+ * classic content script the manifests declare, which imports this entry by
+ * this exact name. Both names, and the chunks folder, must match
+ * web_accessible_resources in both manifests (tests/split-build.test.ts).
+ */
+export const CONTENT_MAIN_FILE = "content-main.js";
+export const CHUNKS_DIR = "chunks";
+
+/**
  * The daisyUI themes that stay in shared-styles.css: the two a widget shows
  * when the hub preset is left alone (BETTER_INTRA_THEME). Must match
  * CORE_THEMES in src/core/styles/shared-styles.ts.
@@ -190,6 +201,71 @@ export function splitDaisyThemesPlugin(): Plugin {
   };
 }
 
+/** Vite's module id for the helper it wraps every dynamic import() in. */
+const PRELOAD_HELPER_ID = "\0vite/preload-helper.js";
+
+/**
+ * Replaces Vite's preload helper with a pass-through, and fails the build if
+ * any trace of it is left in a chunk.
+ *
+ * WHY. Vite wraps every import() in __vitePreload(). On a web page, that
+ * helper adds <link rel="modulepreload" href="/chunks/..."> for the imported
+ * chunk's own static imports, and dispatches `vite:preloadError` on window
+ * when a load fails. A content script's page is the Intra: such a link would
+ * point at the Intra's origin, and the event would announce the extension to
+ * the page. `build.modulePreload: false` already empties the lists of files to
+ * preload, but the helper and its link code still ship; here the helper is a
+ * function that just calls the import. Used by this build (content-main.js
+ * and its chunks) and by vite.loader.config.ts (content.js).
+ */
+export function noPreloadHelperPlugin(): Plugin {
+  return {
+    name: "no-preload-helper",
+    enforce: "pre",
+    resolveId(id) {
+      return id === PRELOAD_HELPER_ID ? id : null;
+    },
+    load(id) {
+      return id === PRELOAD_HELPER_ID
+        ? "export const __vitePreload = (load) => load();"
+        : null;
+    },
+    // After every generateBundle (Vite fills in the preload lists there).
+    writeBundle(_options, bundle) {
+      for (const file of Object.values(bundle)) {
+        if (file.type !== "chunk") continue;
+        for (const needle of ["modulepreload", "vite:preloadError"]) {
+          if (file.code.includes(needle)) {
+            this.error(
+              `${file.fileName} contains "${needle}": Vite's preload helper is in the bundle again, and it could add <link rel="modulepreload"> to the Intra page (see noPreloadHelperPlugin in vite.config.ts)`,
+            );
+          }
+        }
+      }
+    },
+  };
+}
+
+/**
+ * The chunk file names are hashed and the output folder is never emptied (four
+ * builds share it), so every rebuild would leave the previous chunks in the
+ * package. Deletes every file of chunks/ that this build did not write.
+ */
+function pruneStaleChunksPlugin(): Plugin {
+  return {
+    name: "prune-stale-chunks",
+    writeBundle(options, bundle) {
+      const dir = resolve(options.dir ?? resolve(import.meta.dirname, outDir), CHUNKS_DIR);
+      if (!fs.existsSync(dir)) return;
+      for (const name of fs.readdirSync(dir)) {
+        if (!(`${CHUNKS_DIR}/${name}` in bundle)) {
+          fs.rmSync(resolve(dir, name), { recursive: true, force: true });
+        }
+      }
+    },
+  };
+}
+
 /**
  * Theme sheets served as files rather than JS strings: theme-dark-v2.css alone
  * is 55 KB that profile-v3 never needs, and a <link> lets the browser cache and
@@ -209,6 +285,8 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     splitDaisyThemesPlugin(),
+    noPreloadHelperPlugin(),
+    pruneStaleChunksPlugin(),
     {
       name: "write-manifest",
       closeBundle() {
@@ -283,16 +361,31 @@ export default defineConfig({
     outDir: outDir,
     emptyOutDir: false,
     minify: true,
-    // Without this Vite injects the compiled Tailwind sheet back into the IIFE
-    // (there is no HTML entry to link it from). We want it on disk: out of
-    // content.js, parsed once by the browser instead of once per shadow root,
-    // and split in two by splitDaisyThemesPlugin() above.
+    // Without this Vite injects the compiled Tailwind sheet back into the
+    // bundle (there is no HTML entry to link it from), and gives each chunk a
+    // CSS file of its own to preload. We want one sheet on disk: out of the JS,
+    // parsed once by the browser instead of once per shadow root, and split in
+    // two by splitDaisyThemesPlugin() above.
     cssCodeSplit: false,
+    // No <link rel="modulepreload"> on the Intra page: see noPreloadHelperPlugin().
+    modulePreload: false,
     rollupOptions: {
-      input: { content: resolve(import.meta.dirname, "src/main.ts") },
+      input: { "content-main": resolve(import.meta.dirname, "src/main.ts") },
       output: {
-        format: "iife",
-        entryFileNames: "[name].js",
+        format: "es",
+        entryFileNames: CONTENT_MAIN_FILE,
+        // Hashed: a tab left open across an update that imports a chunk gets a
+        // clean 404 (caught at the call site) instead of a chunk of the new
+        // version bound to the old content-main.js.
+        chunkFileNames: `${CHUNKS_DIR}/[name]-[hash].js`,
+        // Everything the entry imports statically goes into content-main.js
+        // itself, lazy chunks included: without this group rolldown puts the
+        // modules the entry shares with a lazy chunk (lit-html, config, ...)
+        // into small extra chunks that every page would load anyway. One eager
+        // file also keeps the evaluation order of the old single bundle.
+        codeSplitting: {
+          groups: [{ name: "content-main", tags: ["$initial"] }],
+        },
         assetFileNames: (asset: { names?: string[]; name?: string }) => {
           const name = asset.names?.[0] ?? asset.name ?? "";
           // The one CSS asset of this build is src/core/styles/style.css compiled by

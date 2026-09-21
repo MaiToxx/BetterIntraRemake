@@ -1,8 +1,7 @@
-import { html, render } from "lit-html";
+import { html, nothing, render } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { hashLogin } from "../../core/crypto.ts";
-import { generateQrDataUrl } from "./qr.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
@@ -13,6 +12,23 @@ function calUrl(token: string): string {
   return `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`;
 }
 
+/**
+ * The QR code of the subscription link, as a data URL, or "" if it cannot be
+ * drawn. qr.ts (and qrcode-generator in it, 20 KB) is a chunk loaded the
+ * first time a token exists: the calendar panel itself comes with the hub,
+ * which renders every tab when it opens. A chunk that cannot be loaded (a tab
+ * left open across an extension update) only costs the picture.
+ */
+async function qrDataUrlFor(text: string): Promise<string> {
+  try {
+    const { generateQrDataUrl } = await import("./qr.ts");
+    return generateQrDataUrl(text, 200);
+  } catch (err) {
+    console.warn("Better Intra: the calendar QR code could not be drawn.", err);
+    return "";
+  }
+}
+
 export function renderCalendarPanel() {
   return html`<div ${ref(renderPanel)} class="col-span-full"></div>`;
 }
@@ -21,14 +37,19 @@ function renderPanel(el: Element | undefined) {
   if (!el) return;
   const container = el as HTMLElement;
 
+  // The first QR code waits for its chunk: a later update() must not be
+  // overwritten by an earlier one that was still waiting.
+  let latest = 0;
   const update = async () => {
+    const mine = ++latest;
     const store = await chrome.storage.local.get([TOKEN_KEY]);
     const token = store[TOKEN_KEY] as string | undefined;
 
     const qrUrl = token
       ? `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`
       : "";
-    const qrDataUrl = token ? generateQrDataUrl(qrUrl, 200) : "";
+    const qrDataUrl = token ? await qrDataUrlFor(qrUrl) : "";
+    if (mine !== latest) return;
 
     render(
       html`
@@ -91,15 +112,17 @@ function renderPanel(el: Element | undefined) {
                     </div>
                   </div>
 
-                  <div class="flex justify-center pt-1">
-                    <img
-                      src="${qrDataUrl}"
-                      alt="QR Code"
-                      class="rounded-lg"
-                      width="200"
-                      height="200"
-                    />
-                  </div>
+                  ${qrDataUrl
+                    ? html`<div class="flex justify-center pt-1">
+                        <img
+                          src="${qrDataUrl}"
+                          alt="QR Code"
+                          class="rounded-lg"
+                          width="200"
+                          height="200"
+                        />
+                      </div>`
+                    : nothing}
 
                   <div class="flex flex-wrap items-center gap-2">
                     <button

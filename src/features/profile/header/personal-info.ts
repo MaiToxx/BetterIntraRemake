@@ -1,5 +1,5 @@
 import { getConfig } from "../../../core/config.ts";
-import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { openClusterDialog } from "../../clusters/open-map.ts";
 import { addFriend, removeFriend, isFriend } from "../../friends/friends.ts";
 import { getCloudLogin, syncToCloud } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";

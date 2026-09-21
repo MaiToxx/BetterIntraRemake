@@ -11,7 +11,7 @@ import GLOBE_OUTLINE_SVG from "../../assets/svg/globe-outline.svg?raw";
 import { getIsLight } from "../../core/theme/theme-manager.ts";
 import { getActiveFeatures } from "./hubSettings.storage.ts";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { openClusterDialog } from "../clusters/map-dialog.ts";
+import { openClusterDialog } from "../clusters/open-map.ts";
 import { gearClicked } from "../eggs/eggs.ts";
 import { watchDom } from "../../core/dom/dom-wait.ts";
 
@@ -127,11 +127,16 @@ function isSidebarComplete(): boolean {
 export function mountGearButton(): void {
   const open = async () => {
     void gearClicked();
-    const { openHubModal } = await import("./hubSettings.ui.ts");
+    try {
+      const { openHubModal } = await import("./hubSettings.ui.ts");
 
-    const active = await getActiveFeatures();
+      const active = await getActiveFeatures();
 
-    await openHubModal(active);
+      await openHubModal(active);
+    } catch (err) {
+      // A tab left open across an extension update cannot load the chunk.
+      console.warn("Better Intra: the settings hub could not be opened.", err);
+    }
   };
 
   const sidebar = findSidebarMainGroup();

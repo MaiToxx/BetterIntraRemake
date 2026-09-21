@@ -1,6 +1,6 @@
 import { getConfig } from "../../../core/config.ts";
 import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
-import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { openClusterDialog } from "../../clusters/open-map.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../../core/dom/tooltip.ts";
 import { appendSvg } from "../../../core/dom/svg.ts";

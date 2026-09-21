@@ -29,7 +29,13 @@ function toKebab(str: string): string {
   return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
-const STYLESHEET_ID = "better-intra-theme-stylesheet";
+/**
+ * The id of the page theme sheet that is on. src/loader.ts, which applies the
+ * cached theme at document_start, uses the same id, the same sheet names and
+ * file names (THEME_SHEETS) and the same `data-better-intra-theme` attribute:
+ * tests/loader.test.ts holds the two copies together.
+ */
+export const STYLESHEET_ID = "better-intra-theme-stylesheet";
 const PRESET_ID = "better-intra-theme-preset";
 
 /**
@@ -39,10 +45,10 @@ const PRESET_ID = "better-intra-theme-preset";
  * actually wanted and then kept for good, switched on and off through `media`,
  * so changing theme costs no refetch and stays instant.
  *
- * Keep in sync with THEME_CSS_FILES in vite.config.ts and with
- * web_accessible_resources in both manifests.
+ * Keep in sync with THEME_CSS_FILES in vite.config.ts, with
+ * web_accessible_resources in both manifests and with src/loader.ts.
  */
-const THEME_SHEETS = {
+export const THEME_SHEETS = {
   darkV2: "theme-dark-v2.css",
   darkV3: "theme-dark-v3.css",
   lightV3: "theme-light-default-v3.css",
@@ -54,6 +60,30 @@ type ThemeSheet = keyof typeof THEME_SHEETS;
 type PageThemeSheet = Exclude<ThemeSheet, "lightPresetOverrides">;
 
 const themeLinks = new Map<ThemeSheet, HTMLLinkElement>();
+let loaderLinksAdopted = false;
+
+/**
+ * Take over the <link>s that src/loader.ts created at document_start for the
+ * cached theme, before this module creates or switches any sheet. Without
+ * this, the first theme applied here would add a second link for the same
+ * sheet, and a later switch would only turn off its own: the loader's would
+ * stay on (stuck dark). One link per sheet is kept; a duplicate (left by a
+ * previous instance of the content script) is removed.
+ */
+function adoptLoaderLinks(): void {
+  if (loaderLinksAdopted) return;
+  loaderLinksAdopted = true;
+  const links = document.querySelectorAll<HTMLLinkElement>("link[data-better-intra-theme]");
+  for (const link of links) {
+    const name = link.dataset.betterIntraTheme as ThemeSheet;
+    if (!Object.prototype.hasOwnProperty.call(THEME_SHEETS, name)) continue;
+    if (themeLinks.has(name)) {
+      link.remove();
+      continue;
+    }
+    themeLinks.set(name, link);
+  }
+}
 
 function themeSheetURL(name: ThemeSheet): string | null {
   try {
@@ -66,6 +96,7 @@ function themeSheetURL(name: ThemeSheet): string | null {
 }
 
 function themeLink(name: ThemeSheet): HTMLLinkElement | null {
+  adoptLoaderLinks();
   const existing = themeLinks.get(name);
   if (existing) return existing;
   const url = themeSheetURL(name);
@@ -89,6 +120,7 @@ function setSheetEnabled(link: HTMLLinkElement, on: boolean): void {
  * asked for is never created, which is what keeps the v2 sheet off profile-v3.
  */
 function usePageThemeSheet(name: PageThemeSheet | null): void {
+  adoptLoaderLinks();
   for (const [key, link] of themeLinks) {
     if (key === "lightPresetOverrides") continue;
     setSheetEnabled(link, key === name);
@@ -107,6 +139,7 @@ function usePageThemeSheet(name: PageThemeSheet | null): void {
  * winning the same ties.
  */
 function useLightPresetOverrides(on: boolean, after: HTMLElement): void {
+  adoptLoaderLinks();
   if (!on) {
     const existing = themeLinks.get("lightPresetOverrides");
     if (existing) setSheetEnabled(existing, false);

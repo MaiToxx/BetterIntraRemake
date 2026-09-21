@@ -17,16 +17,19 @@ import { getConfigMany } from "../../../core/config.ts";
 import { watchDom } from "../../../core/dom/dom-wait.ts";
 import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
 import {
+  EFFECTS,
+  EXTRAS_EFFECT_ID,
   EXTRAS_KEYS,
   EXTRAS_STYLE_ID,
   LEVEL_FILL_SELECTOR,
   NAME_SELECTOR,
+  type Effect,
+  type Intensity,
   type ProfileExtras,
 } from "./extras.ts";
 import { sanitizeProfileExtras } from "./extras-sanitize.ts";
 import { buildExtrasCss } from "./extras-style.ts";
 import { mountIdentity, showGreeting, unmountIdentity } from "./extras-identity.ts";
-import { startEffect, stopEffect } from "./extras-effects.ts";
 
 export interface ApplyExtrasOptions {
   /** Login of the profile being displayed. */
@@ -74,6 +77,75 @@ let stopNavWatch: (() => void) | null = null;
 let navWatchWanted = false;
 let pageShowInstalled = false;
 let listenersInstalled = false;
+
+// ---------------------------------------------------------------------------
+// The particle effect, loaded on demand
+// ---------------------------------------------------------------------------
+//
+// extras-effects.ts (the simulation, the canvas and its animation frame) is a
+// chunk of its own: only a profile whose owner picked an effect needs it, and
+// only for a viewer who does not prefer reduced motion. It is imported on the
+// first start. Every start and every stop takes a ticket, and a start that is
+// still waiting for the chunk only runs if it holds the last ticket: leaving
+// the profile (clearProfileExtras) during the load leaves no canvas behind. A
+// chunk that cannot be loaded (a tab left open across an extension update)
+// costs the effect, nothing else, and throws nothing into the page.
+
+type EffectsModule = typeof import("./extras-effects.ts");
+
+/** The chunk, once loaded: from then on starts and stops are synchronous. */
+let effects: EffectsModule | null = null;
+let effectsLoad: Promise<EffectsModule | null> | null = null;
+/** Bumped by every startEffect() and stopEffect(). */
+let effectTicket = 0;
+
+function loadEffects(): Promise<EffectsModule | null> {
+  effectsLoad ??= import("./extras-effects.ts").then(
+    (mod) => (effects = mod),
+    (err: unknown) => {
+      console.warn("Better Intra: the profile effect could not be loaded.", err);
+      effectsLoad = null;
+      return null;
+    },
+  );
+  return effectsLoad;
+}
+
+function prefersReducedMotion(): boolean {
+  try {
+    // jsdom (tests) has no matchMedia
+    return (
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  } catch {
+    return false;
+  }
+}
+
+function startEffect(effect: Effect, intensity: Intensity, tint: string): void {
+  const ticket = ++effectTicket;
+  if (effects) {
+    effects.startEffect(effect, intensity, tint);
+    return;
+  }
+  // What extras-effects.ts turns down anyway is not worth loading it for.
+  if (!EFFECTS.includes(effect) || effect === "none" || prefersReducedMotion()) {
+    stopEffect();
+    return;
+  }
+  void loadEffects().then((mod) => {
+    if (mod && ticket === effectTicket) mod.startEffect(effect, intensity, tint);
+  });
+}
+
+function stopEffect(): void {
+  effectTicket++;
+  if (effects) effects.stopEffect();
+  // Not loaded by this instance: only a canvas left by a previous instance of
+  // the content script (extension reloaded) can be there.
+  else document.getElementById(EXTRAS_EFFECT_ID)?.remove();
+}
 
 function setStyle(css: string): void {
   let el = document.getElementById(EXTRAS_STYLE_ID) as HTMLStyleElement | null;

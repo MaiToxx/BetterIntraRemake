@@ -1,5 +1,5 @@
 import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
-import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { openClusterDialog } from "../../clusters/open-map.ts";
 import { normalizeSeatId } from "../../clusters/map-dialog/seats.ts";
 import { getConfig } from "../../../core/config.ts";
 import { watchDom } from "../../../core/dom/dom-wait.ts";

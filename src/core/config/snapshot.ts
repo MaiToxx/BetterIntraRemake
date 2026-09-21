@@ -69,7 +69,8 @@ import { CONFIG_DEFAULT } from "./defaults.ts";
 // chrome.runtime.id is gone) goes back to direct reads, which fail as before.
 //
 // FALLBACK. Without onChanged (the unit-test mock in tests/setup.ts has none),
-// or if the storage methods cannot be wrapped, there is no snapshot at all and
+// if the storage methods cannot be wrapped, or if another copy of this module
+// already wrapped them (WRITE_WRAPPER_MARK), there is no snapshot at all and
 // every read is the direct get it always was. A cache that nothing repairs
 // would serve stale values, so it is off rather than half on.
 
@@ -274,6 +275,24 @@ type WriteMethod = "set" | "remove" | "clear";
 type AnyFn = (...args: unknown[]) => unknown;
 
 /**
+ * Set on each of the three wrappers. Symbol.for() gives every copy of this
+ * module in the realm the same key, so a second copy sees that the methods
+ * are already wrapped and stays on direct reads (no snapshot, no listener)
+ * instead of wrapping them again, which would record every write twice into
+ * two snapshots. The content script is split into ES module chunks that must
+ * share ONE instance of this module (docs/CODE-SPLITTING.md, rule 5): this is
+ * the belt to those braces.
+ */
+export const WRITE_WRAPPER_MARK: unique symbol = Symbol.for("better-intra.config.wrapper");
+
+function isMarkedWrapper(fn: unknown): boolean {
+  return (
+    typeof fn === "function" &&
+    (fn as unknown as Record<symbol, unknown>)[WRITE_WRAPPER_MARK] === true
+  );
+}
+
+/**
  * Wrap storage.local.set / remove / clear so this context's writes reach the
  * snapshot at once. All or nothing: false (and the originals back in place) if
  * any of the three cannot be replaced.
@@ -297,6 +316,10 @@ function installWriteObserver(area: chrome.storage.StorageArea): boolean {
   };
 
   try {
+    // Another copy of this module got here first (see WRITE_WRAPPER_MARK).
+    if ((["set", "remove", "clear"] as const).some((m) => isMarkedWrapper(target[m]))) {
+      return false;
+    }
     for (const method of ["set", "remove", "clear"] as const) {
       const original = target[method];
       if (typeof original !== "function") {
@@ -332,6 +355,7 @@ function installWriteObserver(area: chrome.storage.StorageArea): boolean {
         }
         return out;
       };
+      Object.defineProperty(wrapper, WRITE_WRAPPER_MARK, { value: true });
       target[method] = wrapper;
       if (target[method] !== wrapper) {
         restore();

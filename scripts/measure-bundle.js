@@ -3,10 +3,13 @@
  *
  *   node scripts/measure-bundle.js           # print the report, always exit 0
  *   node scripts/measure-bundle.js --check   # same report, exit 1 if over budget
+ *   node scripts/measure-bundle.js dist-x    # other folders than dist-firefox / dist-chrome
  *
  * WHY raw bytes and not gzip decide pass/fail: an extension file is read from
  * disk, not downloaded, so nothing ever un-gzips it. What the browser pays on
- * every Intra page load is parsing the raw bytes of content.js. gzip is
+ * every Intra page load is parsing the raw bytes of content.js (the loader)
+ * and content-main.js (the app); the chunks only when their feature is first
+ * used (docs/CODE-SPLITTING.md). gzip is
  * reported anyway because it is the number the stores show and it tells you
  * whether a file grew by real logic or by repetitive text (CSS compresses ~8x).
  */
@@ -33,7 +36,23 @@ const root = resolve(here, "..");
  * the sheet to creep back into the JavaScript.
  */
 const BUDGETS_KB = {
-  "content.js": 590, // v1.11.0: 556 KB
+  // The content script, split (docs/CODE-SPLITTING.md). content.js is the
+  // classic loader and must stay a few KB with no state; content-main.js is
+  // what every Intra page parses; the chunks load on first use. Chunk names
+  // carry a content hash, hence the patterns (* = the hash). Set from the
+  // sizes of the first split build (v1.11.0 + split; the IIFE was 557 KB).
+  "content.js": 4, // 1.6 KB
+  "content-main.js": 400, // 379 KB
+  "chunks/hubSettings.ui-*.js": 72, // 65 KB, the settings hub
+  "chunks/map-dialog-*.js": 54, // 48 KB, the cluster map dialog
+  "chunks/profile.modal-*.js": 26, // 23 KB, the profile editor
+  "chunks/qr-*.js": 23, // 21 KB, qrcode-generator (calendar tab with a sync token)
+  "chunks/extras-effects-*.js": 9, // 7 KB, profile particle effects
+  "chunks/eggs-effects-*.js": 8, // 6 KB, easter egg effects
+  // Anything else under chunks/: the small modules two lazy chunks share
+  // (presets, reset, grip-vertical, 1 to 3 KB today). A new big one means an
+  // import moved, and deserves a look and a name above.
+  "chunks/*.js": 8,
   "popup.js": 44, // v1.11.0: 37 KB
   "auth-callback.js": 16, // v1.10.0: 10 KB
   "background.js": 12, // v1.10.0: 5 KB
@@ -46,8 +65,29 @@ const BUDGETS_KB = {
   "theme-dark-v2.css": 72, // v1.10.0: 62 KB (fetched on the v2 Intra only)
 };
 
-/** Built output we know about. A folder that is not there is simply skipped. */
-const DIST_DIRS = ["dist-firefox", "dist-chrome"];
+/**
+ * The budget of a file: an exact key first, then the first pattern that
+ * matches (a `*` stands for one path segment's worth of name characters).
+ */
+function budgetFor(rel) {
+  if (Object.prototype.hasOwnProperty.call(BUDGETS_KB, rel)) return BUDGETS_KB[rel];
+  for (const [key, kb] of Object.entries(BUDGETS_KB)) {
+    if (!key.includes("*")) continue;
+    // Keys are plain paths (letters, digits, "-", ".", "/"): only "." needs escaping.
+    const re = new RegExp(
+      `^${key.split("*").map((s) => s.split(".").join("[.]")).join("[^/]+")}$`,
+    );
+    if (re.test(rel)) return kb;
+  }
+  return undefined;
+}
+
+/**
+ * Built output we know about, or the folders named on the command line. A
+ * folder that is not there is simply skipped.
+ */
+const DIR_ARGS = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+const DIST_DIRS = DIR_ARGS.length > 0 ? DIR_ARGS : ["dist-firefox", "dist-chrome"];
 
 /** Only literals at least this long are worth naming in the report. */
 const LITERAL_MIN_BYTES = 1500;
@@ -139,7 +179,7 @@ function measure(dirName) {
 
   const files = walk(dir).map((rel) => {
     const buf = fs.readFileSync(join(dir, rel));
-    const budgetKb = BUDGETS_KB[rel];
+    const budgetKb = budgetFor(rel);
     return {
       rel,
       raw: buf.length,

@@ -782,6 +782,9 @@ describe("easter eggs", () => {
     text.data = "42h00"; // characterData only, no childList record
     await flush(10);
     expect(localStorage.getItem("ft-egg-42")).toBe("2026-09");
+    // The confetti come from the effects chunk: let it load while the mock
+    // above still stands.
+    await vi.dynamicImportSettled();
   });
 
   it("tags the roulette title on a Thursday", async () => {
@@ -811,7 +814,8 @@ describe("easter eggs", () => {
       vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
         ctx as unknown as CanvasRenderingContext2D,
       );
-      const { matrixRain } = await import("../src/features/eggs/eggs.ts");
+      // The effect itself, from its chunk (eggs.ts only has a loader for it).
+      const { matrixRain } = await import("../src/features/eggs/eggs-effects.ts");
       matrixRain(7);
     });
     report("eggs: matrix rain (7 s)", before, after);

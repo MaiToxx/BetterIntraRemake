@@ -1,3 +1,17 @@
+/**
+ * The content script's app: content-main.js, an ES module. It is not the
+ * content script the manifests declare: that is src/loader.ts (content.js),
+ * which runs at document_start, injects hook.js, applies the cached theme,
+ * hides the Intra avatar until ours is painted, and then imports this module
+ * with import(chrome.runtime.getURL("content-main.js")). Everything with state
+ * lives from here down, evaluated once per page; the features that are not
+ * needed on every page (the hub, the cluster map, the profile editor, the
+ * particle and easter egg effects, the calendar QR code) are chunks loaded on
+ * first use. See docs/CODE-SPLITTING.md.
+ *
+ * This module is evaluated after document_start, by the import latency, so
+ * nothing below may assume document.readyState is still "loading".
+ */
 import { initLogtime } from "./features/logtime/logtime.ts";
 import { initClusters } from "./features/clusters/clusters.ts";
 import { initProfile } from "./features/profile/profile.ts";
@@ -56,36 +70,8 @@ void initEasterEggs();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);
 
-{
-  const s = document.createElement("script");
-  s.src = chrome.runtime.getURL("hook.js");
-  (document.head || document.documentElement).appendChild(s);
-  s.remove();
-}
-
-{
-  const obs = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        if (!(node instanceof HTMLElement)) continue;
-        let target: HTMLElement | null = null;
-        if (node.matches?.(AVATAR_SELECTOR)) target = node;
-        else target = node.querySelector?.(AVATAR_SELECTOR);
-        if (target) {
-          target.style.setProperty("opacity", "0", "important");
-          obs.disconnect();
-          return;
-        }
-      }
-    }
-  });
-  obs.observe(document.documentElement, { childList: true, subtree: true });
-}
-
-setTimeout(() => {
-  const el = document.querySelector<HTMLElement>(AVATAR_SELECTOR);
-  if (el) el.style.setProperty("opacity", "1", "important");
-}, 5000);
+// hook.js, the avatar pre-hide and its 5 s fail-safe are in src/loader.ts:
+// they have to run at document_start, before the page's own scripts.
 
 /**
  * A map that links feature ID strings to their initialization functions.

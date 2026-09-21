@@ -11,6 +11,8 @@
     {
       "resources": [
         "hook.js",
+        "content-main.js",
+        "chunks/*.js",
         "shared-styles.css",
         "shared-themes.css",
         "theme-dark-v2.css",

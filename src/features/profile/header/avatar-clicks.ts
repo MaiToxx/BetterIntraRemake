@@ -6,11 +6,34 @@
  * WHY a module of its own: it is the only part of the visuals that opens the
  * editor. Keeping it out of the apply step is what lets profile.modal.ts use
  * that step without importing its own opener back.
+ *
+ * The editor (profile.modal.ts and its tabs) is a chunk loaded on the first
+ * click: only the owner of the page ever opens it.
  */
 import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
-import { createSettingsModal } from "./profile.modal.ts";
 import { pageState } from "./visuals-apply.ts";
 import type { VisualUrls } from "./visuals-types.ts";
+
+/**
+ * The editor being loaded and built. createSettingsModal() only appends its
+ * dialog after the chunk has loaded and a few settings reads: a second click
+ * meanwhile would open a second editor, so it joins this one instead.
+ */
+let opening: Promise<void> | null = null;
+
+function openEditor(onSave: (updatedVisuals: VisualUrls) => void): Promise<void> {
+  if (opening) return opening;
+  opening = import("./profile.modal.ts")
+    .then((mod) => mod.createSettingsModal(onSave))
+    .catch((err: unknown) => {
+      // A tab left open across an extension update cannot load the chunk.
+      console.warn("Better Intra: the profile editor could not be opened.", err);
+    })
+    .finally(() => {
+      opening = null;
+    });
+  return opening;
+}
 
 /**
  * My own page: clicking the avatar opens the editor, and `onSave` receives
@@ -26,7 +49,7 @@ export function attachEditorListener(
   avatarEl.addEventListener("click", (e) => {
     e.stopPropagation();
     pageState.showingOriginalAvatar = false;
-    createSettingsModal(onSave);
+    void openEditor(onSave);
   });
 }
 
