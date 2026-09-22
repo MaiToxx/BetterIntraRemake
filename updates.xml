@@ -1,6 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <gupdate xmlns='http://www.google.com/update2/response' protocol='2.0'>
   <app appid='obccimnclbkkjbnjmmjkhoecbggamnmi'>
-    <updatecheck codebase='https://github.com/MaiToxx/BetterIntraRemake/releases/download/v1.12.1/better-intra.crx' version='1.12.1' />
+    <updatecheck codebase='https://github.com/MaiToxx/BetterIntraRemake/releases/download/v1.13.0/better-intra.crx' version='1.13.0' />
   </app>
 </gupdate>
