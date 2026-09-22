@@ -145,7 +145,7 @@ From the extension popup: connect with 42 (Intra session, no password), push/pul
 
 Four switches in the Advanced tab that make the **Intra page itself** cheaper, all on by default:
 
-* **Skip off-screen blocks** — the browser stops laying out and painting the rows you have scrolled past in the long cards (projects, achievements, evaluations, logtime).
+* **Skip off-screen blocks** — the browser stops laying out and painting the rows you have scrolled past in the long cards (projects, achievements, logtime).
 * **Load images when needed** — images the page mounts after the first paint are fetched lazily and decoded off the main thread.
 * **Pause when the tab is hidden** — the page's animations and transitions stop while you are in another tab.
 * **Connect early to the image server** — saves the connection setup on the first avatar, usually 100 to 300 ms.

@@ -5,7 +5,8 @@
  * is the opposite: it makes the Intra's own pages cheaper for the browser.
  *
  *   1. PERF_DEFER_OFFSCREEN - the long repeated lists (project rows,
- *      achievement tiles, evaluation rows, logtime month cards) get
+ *      achievement tiles, logtime month cards; never the evaluation rows,
+ *      see PERF_NEVER_TARGETS) get
  *      `content-visibility: auto`, so the browser skips layout, style and
  *      paint for the ones that are off screen.
  *   2. PERF_LAZY_IMAGES - the page's own <img> elements that sit outside the
@@ -95,11 +96,24 @@ export const PERF_TARGETS: readonly PerfTarget[] = [
     size: 96,
     why: "The Intra's own achievement grid, addressed through our data-ft-card tag.",
   },
+];
+
+/**
+ * Blocks that must NEVER be deferred, and why. Kept as data so a test can
+ * make sure they stay out of PERF_TARGETS.
+ *
+ * The pending-evaluation rows were a target until 1.12.1. The Intra renders
+ * the date-and-time tooltip of each row's clock button INSIDE the row (no
+ * portal to <body>), as a position:fixed box. content-visibility: auto
+ * implies layout and paint containment, which makes the row the containing
+ * block of that box (it lands 200 px below the row) and clips it to the
+ * row's bounds: the tooltip never showed. Checked in Chrome on the live
+ * dashboard; the same holds for any Intra tooltip rendered inline.
+ */
+export const PERF_NEVER_TARGETS: readonly { selector: string; why: string }[] = [
   {
-    // src/features/profile/cards/evaluations.ts sortRows()
     selector: '[data-ft-card="evaluations"] .flex.justify-between.w-full.items-center',
-    size: 40,
-    why: "Pending-evaluation rows; the exact selector evaluations.ts sorts.",
+    why: "Each row hosts its own inline position:fixed tooltip; containment clips it.",
   },
 ];
 

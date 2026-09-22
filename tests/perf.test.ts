@@ -9,6 +9,7 @@ import {
   PERF_SHADOW_TARGETS,
   PERF_STYLE_ID,
   PERF_TARGETS,
+  PERF_NEVER_TARGETS,
   PRECONNECT_ORIGINS,
   applyPreconnect,
   buildPerfCss,
@@ -94,6 +95,18 @@ describe("buildPerfCss", () => {
       expect(css).toContain(`contain-intrinsic-size: auto ${target.size}px;`);
     }
     expect(css).not.toContain(HIDDEN_CLASS);
+  });
+
+  it("never defers a block that hosts an inline position:fixed tooltip", () => {
+    // The pending-evaluation rows render their date-and-time tooltip inside
+    // the row; content-visibility would make the row its containing block
+    // and clip it (1.12.0 regression, seen on the live dashboard).
+    const css = buildPerfCss({ ...ALL_OFF, PERF_DEFER_OFFSCREEN: true });
+    for (const never of PERF_NEVER_TARGETS) {
+      expect(css).not.toContain(never.selector);
+      expect(PERF_TARGETS.some((t) => t.selector === never.selector)).toBe(false);
+    }
+    expect(css).not.toContain("evaluations");
   });
 
   it("emits the hidden-tab rule only for PERF_PAUSE_HIDDEN", () => {
@@ -479,7 +492,8 @@ describe("benchmark on an Intra-sized page", () => {
     expect(lazified).toBe(IMAGES - ON_SCREEN);
     expect(passes).toBe(Math.ceil((IMAGES - ON_SCREEN) / LAZY_BUDGET));
     expect(ourHost.querySelectorAll("img:not([loading])").length).toBe(8);
-    expect(covered).toBe(400);
+    // 150 + 100 + 100: the 50 evaluation rows are on purpose left out
+    expect(covered).toBe(350);
     // the rows are the bulk of the page: that is the point of the feature
     expect(coveredNodes / totalNodes).toBeGreaterThan(0.6);
   });
