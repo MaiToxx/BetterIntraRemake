@@ -141,9 +141,11 @@ describe("cloud account entry", () => {
     const now = new Date(2026, 8, 22, 15, 0);
     expect(formatSyncStatus(null, now)).toBe("Never synced");
     expect(formatSyncStatus("garbage", now)).toBe("Never synced");
-    expect(formatSyncStatus(new Date(2026, 8, 22, 14, 3).getTime(), now)).toMatch(
-      /^Synced at \d{2}:\d{2}$/,
-    );
+    // the time is in the viewer's locale: 14:03 here, 02:03 PM on a US runner
+    const today = formatSyncStatus(new Date(2026, 8, 22, 14, 3).getTime(), now);
+    expect(today).toMatch(/^Synced at /);
+    expect(today).toContain("03");
+    expect(today).not.toContain("22");
     const older = formatSyncStatus(new Date(2026, 8, 12, 14, 3).getTime(), now);
     expect(older).toMatch(/^Synced /);
     expect(older).toContain("12");
