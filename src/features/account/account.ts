@@ -4,20 +4,46 @@ import { hashLogin } from "../../core/crypto.ts";
 import { showConfirmDialog } from "../../core/dom/confirm-dialog.ts";
 import { AUTH_FLOW_TTL_MS, markAuthFlowPending } from "./auth-callback.ts";
 import { sanitizeVisualUrls } from "../profile/header/visuals-sanitize.ts";
+import { isValidStoredValue } from "../../core/config/access.ts";
 
 export { hashLogin };
 
-import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
+import {
+  WORKER_URL,
+  AUTH_MODE,
+  markAuthFailed,
+  workerFetch,
+  type WorkerCredentials,
+  type WorkerResult,
+} from "../../core/worker.ts";
 import {
   loginWithIntraSession,
   requestIntraLoginFromActiveTab,
 } from "./intra-login.ts";
-async function handleAuthResponse(response: Response): Promise<boolean> {
-  if (response.status === 401) {
-    await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
-    return false;
-  }
-  return response.ok;
+
+const PRIVATE_SETTINGS = "/api/v1/private/settings";
+
+/** Where the popup keeps the session count it last saw, for its first paint. */
+const LAST_SESSIONS_KEY = "CLOUD_LAST_SESSIONS";
+
+async function cloudCredentials(): Promise<WorkerCredentials | null> {
+  const login = await getCloudLogin();
+  const token = await getConfig("CLOUD_TOKEN");
+  if (!login || !token) return null;
+  return { login, token };
+}
+
+/**
+ * Why a call to a private route failed. "auth" covers the 401 (flagged by
+ * workerFetch) and the 404 the worker answers once the record is gone (Wipe
+ * from another device): the token pair is kept, since a KV read right after
+ * a sign-in can transiently miss the record too, but the popup, the hub and
+ * the friends widget must offer "Reconnect" rather than call it "Offline".
+ */
+async function privateFailure(res: WorkerResult): Promise<CloudFailure> {
+  if (res.status === 404) await markAuthFailed();
+  if (res.status === 401 || res.status === 404) return "auth";
+  return res.status === 0 ? "network" : "rejected";
 }
 
 export async function clearAuthFailed(): Promise<void> {
@@ -178,30 +204,122 @@ export async function getCloudLogin(): Promise<string | null> {
   return (await getConfig("CLOUD_LOGIN")) || null;
 }
 
+export type PrivateSettingsResult =
+  | {
+      ok: true;
+      settings: Partial<BetterIntraConfig>;
+      activeSessions: number;
+    }
+  | { ok: false; reason: CloudFailure };
+
+/**
+ * GET the private settings document. With `meta`, only its metadata
+ * (activeSessions, discordId...), without the settings blob: the popup opens
+ * on it, and a user's custom CSS, presets and image histories are several KB
+ * it has no use for. An older worker knows no `fields` and answers the whole
+ * document, which serves just as well; a 404 there is retried without the
+ * filter before it is taken for a missing record.
+ */
+export async function fetchPrivateSettings(
+  options: { meta?: boolean } = {},
+): Promise<PrivateSettingsResult> {
+  const auth = await cloudCredentials();
+  if (!auth) return { ok: false, reason: "auth" };
+
+  let res = await workerFetch(
+    options.meta ? `${PRIVATE_SETTINGS}?fields=meta` : PRIVATE_SETTINGS,
+    { auth },
+  );
+  if (options.meta && res.status === 404) {
+    res = await workerFetch(PRIVATE_SETTINGS, { auth });
+  }
+  if (!res.ok) {
+    const reason = await privateFailure(res);
+    if (reason !== "auth") {
+      console.error(
+        "[fetchPrivateSettings] failed:",
+        res.status,
+        res.message ?? res.text,
+      );
+    }
+    return { ok: false, reason };
+  }
+  const data = (res.json ?? {}) as Record<string, unknown>;
+  const settings =
+    data.settings && typeof data.settings === "object"
+      ? (data.settings as Partial<BetterIntraConfig>)
+      : {};
+  return {
+    ok: true,
+    settings,
+    activeSessions: Number(data.activeSessions ?? 0),
+  };
+}
+
+/** The session count the popup last saw, or null when it never did. */
+export async function getLastKnownSessions(): Promise<number | null> {
+  try {
+    const store = await chrome.storage.local.get(LAST_SESSIONS_KEY);
+    const value = store[LAST_SESSIONS_KEY];
+    return typeof value === "number" ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Asks the worker how many sessions the account has and remembers the answer
+ * for the popup's next first paint.
+ * @returns The count, or null when the worker did not answer (or refused).
+ */
+export async function refreshSessionCount(): Promise<number | null> {
+  const result = await fetchPrivateSettings({ meta: true });
+  if (!result.ok) return null;
+  await chrome.storage.local.set({
+    [LAST_SESSIONS_KEY]: result.activeSessions,
+  });
+  return result.activeSessions;
+}
+
 /**
  * Tests the connection to the worker by fetching the number of active sessions.
  * @returns A promise that resolves to the number of active sessions, or 0 on failure.
  */
 export async function testCloudConnection(): Promise<number> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return 0;
+  return (await refreshSessionCount()) ?? 0;
+}
 
-  try {
-    const hashedLogin = await hashLogin(login);
-    const response = await fetch(
-      `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!(await handleAuthResponse(response))) return 0;
-    const data = (await response.json()) as any;
-    return data.activeSessions ?? 0;
-  } catch (error) {
-    console.error("Cloud connection test failed:", error);
-    return 0;
+export type CloudFailure = "auth" | "network" | "rejected";
+export type PushResult = "ok" | CloudFailure;
+
+/**
+ * Gathers all local settings (except cloud credentials) and pushes them to the cloud.
+ * "network": no answer in time; "auth": the session is gone (CLOUD_AUTH_FAILED
+ * is set, the popup offers Reconnect); "rejected": any other worker error.
+ */
+export async function pushSettings(): Promise<PushResult> {
+  const auth = await cloudCredentials();
+  if (!auth) return "auth";
+
+  const settings: Partial<BetterIntraConfig> = {};
+  for (const key of CLOUD_SYNC_KEYS) {
+    (settings as Record<string, unknown>)[key] = await getConfig(key);
   }
+
+  const res = await workerFetch(PRIVATE_SETTINGS, {
+    method: "POST",
+    body: { settings },
+    auth,
+  });
+  if (res.ok) {
+    await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
+    return "ok";
+  }
+  const reason = await privateFailure(res);
+  if (reason === "rejected") {
+    console.error("Cloud sync failed:", res.status, res.message ?? res.text);
+  }
+  return reason;
 }
 
 /**
@@ -209,38 +327,7 @@ export async function testCloudConnection(): Promise<number> {
  * @returns A promise that resolves to true on success, false on failure.
  */
 export async function syncToCloud(): Promise<boolean> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return false;
-
-  try {
-    const settings: Partial<BetterIntraConfig> = {};
-
-    for (const key of CLOUD_SYNC_KEYS) {
-      (settings as Record<string, unknown>)[key] = await getConfig(key);
-    }
-
-    const hashedLogin = await hashLogin(login);
-    const response = await fetch(
-      `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ settings }),
-      },
-    );
-    const success = await handleAuthResponse(response);
-    if (success) {
-      await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
-    }
-    return success;
-  } catch (error) {
-    console.error("Cloud sync failed:", error);
-    return false;
-  }
+  return (await pushSettings()) === "ok";
 }
 
 /**
@@ -262,47 +349,38 @@ export async function syncMyVisuals(visuals: {
   avatarScale?: number;
   badgeBg?: string;
 }): Promise<void> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return;
+  const auth = await cloudCredentials();
+  if (!auth) return;
 
-  try {
-    const hashedLogin = await hashLogin(login);
-    const res = await fetch(
-      `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          settings: {
-            PROFILE_IMAGE_URL: visuals.avatar,
-            PROFILE_BANNER_URL: visuals.banner,
-            PROFILE_BANNER_MODE: visuals.bannerMode || "fill",
-            PROFILE_BANNER_COLOR: visuals.bannerColor || "",
-            PROFILE_BACKGROUND_URL: visuals.background,
-            PROFILE_BACKGROUND_MODE: visuals.backgroundMode || "fill",
-            PROFILE_BACKGROUND_COLOR: visuals.backgroundColor || "",
-            PROFILE_AVATAR_BG: visuals.avatarBg || "transparent",
-            PROFILE_DECORATION: visuals.decoration || "none",
-            PROFILE_AVATAR_POSITION_X: visuals.avatarPosX ?? 50,
-            PROFILE_AVATAR_POSITION_Y: visuals.avatarPosY ?? 50,
-            PROFILE_AVATAR_SCALE: visuals.avatarScale ?? 100,
-            PROFILE_BADGE_BG: visuals.badgeBg || "",
-            PROFILE_IMAGE_HISTORY: await getConfig("PROFILE_IMAGE_HISTORY"),
-            PROFILE_BANNER_HISTORY: await getConfig("PROFILE_BANNER_HISTORY"),
-            PROFILE_BACKGROUND_HISTORY: await getConfig(
-              "PROFILE_BACKGROUND_HISTORY",
-            ),
-          },
-        }),
+  const res = await workerFetch(PRIVATE_SETTINGS, {
+    method: "POST",
+    auth,
+    body: {
+      settings: {
+        PROFILE_IMAGE_URL: visuals.avatar,
+        PROFILE_BANNER_URL: visuals.banner,
+        PROFILE_BANNER_MODE: visuals.bannerMode || "fill",
+        PROFILE_BANNER_COLOR: visuals.bannerColor || "",
+        PROFILE_BACKGROUND_URL: visuals.background,
+        PROFILE_BACKGROUND_MODE: visuals.backgroundMode || "fill",
+        PROFILE_BACKGROUND_COLOR: visuals.backgroundColor || "",
+        PROFILE_AVATAR_BG: visuals.avatarBg || "transparent",
+        PROFILE_DECORATION: visuals.decoration || "none",
+        PROFILE_AVATAR_POSITION_X: visuals.avatarPosX ?? 50,
+        PROFILE_AVATAR_POSITION_Y: visuals.avatarPosY ?? 50,
+        PROFILE_AVATAR_SCALE: visuals.avatarScale ?? 100,
+        PROFILE_BADGE_BG: visuals.badgeBg || "",
+        PROFILE_IMAGE_HISTORY: await getConfig("PROFILE_IMAGE_HISTORY"),
+        PROFILE_BANNER_HISTORY: await getConfig("PROFILE_BANNER_HISTORY"),
+        PROFILE_BACKGROUND_HISTORY: await getConfig(
+          "PROFILE_BACKGROUND_HISTORY",
+        ),
       },
-    );
-    await handleAuthResponse(res);
-  } catch (e) {
-    console.error("Cloud Quick Sync Error:", e);
+    },
+  });
+  if (!res.ok) {
+    await privateFailure(res);
+    console.error("Cloud Quick Sync Error:", res.status, res.message ?? res.text);
   }
 }
 
@@ -316,14 +394,16 @@ export async function fetchUserVisuals(
 ): Promise<VisualUrls | null> {
   try {
     const hashedTarget = await hashLogin(login);
-    const response = await fetch(
-      `${WORKER_URL}/api/v1/public/visuals?login=${encodeURIComponent(hashedTarget)}`,
+    const response = await workerFetch(
+      `/api/v1/public/visuals?login=${encodeURIComponent(hashedTarget)}`,
+      { timeoutMs: 8_000 },
     );
-    if (!response.ok) return null;
-    const data = (await response.json()) as Record<string, unknown>;
+    if (!response.ok || !response.json) return null;
+    const data = response.json as Record<string, unknown>;
 
     // Another user's values: validate them once here so that every consumer
-    // (cache, comparisons, applyImgs) sees the same sanitised object.
+    // (cache, comparisons, applyImgs) sees the same sanitised object. Their
+    // images are only shown from the allowlisted hosts (image-hosts.ts).
     return sanitizeVisualUrls({
       avatar: String(data.avatar || ""),
       banner: String(data.banner || ""),
@@ -342,7 +422,7 @@ export async function fetchUserVisuals(
       logtime: (data.logtime as Record<string, unknown>) || null,
       look: (data.look as Record<string, unknown>) || null,
       extras: (data.extras as Record<string, unknown>) || null,
-    });
+    }, { images: "allowlist" });
   } catch (error) {
     console.error(error);
     return null;
@@ -354,26 +434,16 @@ export async function fetchUserVisuals(
  * @returns A promise that resolves to a partial config object, or null on failure.
  */
 export async function fetchMySettings(): Promise<Partial<BetterIntraConfig> | null> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return null;
+  const result = await fetchPrivateSettings();
+  return result.ok ? result.settings : null;
+}
 
-  try {
-    const hashedLogin = await hashLogin(login);
-    const response = await fetch(
-      `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-    if (!(await handleAuthResponse(response))) return null;
-    const data = (await response.json()) as any;
-    const settings = data.settings || {};
-    return settings as Partial<BetterIntraConfig>;
-  } catch (error) {
-    console.error("[fetchMySettings] error:", error);
-    return null;
-  }
+/** Whether a cloud document holds anything worth restoring. */
+export function hasCloudData(settings: Partial<BetterIntraConfig>): boolean {
+  return Object.entries(settings).some(
+    ([k, v]) =>
+      k !== "CLOUD_TOKEN" && k !== "CLOUD_LOGIN" && v != null && v !== "",
+  );
 }
 
 /**
@@ -381,21 +451,11 @@ export async function fetchMySettings(): Promise<Partial<BetterIntraConfig> | nu
  * @returns A promise that resolves to true on success.
  */
 export async function logoutCloud(): Promise<boolean> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-
-  if (login && token) {
-    try {
-      const hashedLogin = await hashLogin(login);
-      await fetch(
-        `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      );
-    } catch (e) {
-      console.error("Failed to notify worker of logout", e);
+  const auth = await cloudCredentials();
+  if (auth) {
+    const res = await workerFetch(PRIVATE_SETTINGS, { method: "DELETE", auth });
+    if (!res.ok) {
+      console.error("Failed to notify worker of logout", res.status, res.text);
     }
   }
 
@@ -403,6 +463,7 @@ export async function logoutCloud(): Promise<boolean> {
     "CLOUD_TOKEN",
     "CLOUD_LOGIN",
     "CLOUD_AUTH_FAILED",
+    LAST_SESSIONS_KEY,
   ]);
   return true;
 }
@@ -412,37 +473,29 @@ export async function logoutCloud(): Promise<boolean> {
  * @returns A promise that resolves to true on success, false on failure.
  */
 export async function wipeAllCloudData(): Promise<boolean> {
-  const login = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return false;
+  const auth = await cloudCredentials();
+  if (!auth) return false;
 
-  try {
-    const hashedLogin = await hashLogin(login);
-    const response = await fetch(
-      `${WORKER_URL}/api/v1/private/settings?login=${encodeURIComponent(hashedLogin)}&all=true`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      },
-    );
-
-    if (response.ok) {
-      // The worker revoked every calendar link: forget ours too, or the
-      // panel keeps showing (and the next push re-uploads) a dead one.
-      await chrome.storage.local.remove([
-        "CLOUD_TOKEN",
-        "CLOUD_LOGIN",
-        "CLOUD_AUTH_FAILED",
-        "CALENDAR_SYNC_TOKEN",
-        "CALENDAR_EVENTS_HASH",
-      ]);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error("Wipe cloud data failed:", error);
-    return false;
+  const response = await workerFetch(`${PRIVATE_SETTINGS}?all=true`, {
+    method: "DELETE",
+    auth,
+    timeoutMs: 20_000,
+  });
+  if (response.ok) {
+    // The worker revoked every calendar link: forget ours too, or the
+    // panel keeps showing (and the next push re-uploads) a dead one.
+    await chrome.storage.local.remove([
+      "CLOUD_TOKEN",
+      "CLOUD_LOGIN",
+      "CLOUD_AUTH_FAILED",
+      LAST_SESSIONS_KEY,
+      "CALENDAR_SYNC_TOKEN",
+      "CALENDAR_EVENTS_HASH",
+    ]);
+    return true;
   }
+  console.error("Wipe cloud data failed:", response.status, response.text);
+  return false;
 }
 
 /**
@@ -455,11 +508,12 @@ export async function applyCloudSettings(
   const dataToSave: Partial<BetterIntraConfig> = {};
 
   for (const key of CLOUD_SYNC_KEYS) {
-    if (key in cloudData) {
-      (dataToSave as Record<string, unknown>)[key] = (
-        cloudData as Record<string, unknown>
-      )[key];
-    }
+    if (!(key in cloudData)) continue;
+    const value = (cloudData as Record<string, unknown>)[key];
+    // A malformed cloud copy (another build, a hand-edited push) must not
+    // store what a backup import refuses: getConfig would throw on it.
+    if (!isValidStoredValue(key, value)) continue;
+    (dataToSave as Record<string, unknown>)[key] = value;
   }
 
   if (Object.keys(dataToSave).length > 0) {
@@ -485,12 +539,8 @@ export async function maybePromptRestore(): Promise<void> {
   const settings = await fetchMySettings();
   if (!settings) return;
 
-  const hasData = Object.entries(settings).some(
-    ([k, v]) =>
-      k !== "CLOUD_TOKEN" && k !== "CLOUD_LOGIN" && v != null && v !== "",
-  );
   if (
-    hasData &&
+    hasCloudData(settings) &&
     (await showConfirmDialog({
       message: "Cloud backup found. Restore your settings?",
       confirmLabel: "Restore",

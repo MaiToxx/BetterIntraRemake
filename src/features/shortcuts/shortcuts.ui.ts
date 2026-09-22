@@ -1,5 +1,6 @@
 import { html, render } from "lit-html";
 import { getConfig } from "../../core/config.ts";
+import { sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import GLOBE from "../../assets/svg/globe.svg";
 
 export interface ShortcutLink {
@@ -9,12 +10,8 @@ export interface ShortcutLink {
   emoji?: string;
 }
 
-const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
-
-export const sanitizeColor = (color: unknown): string => {
-  const colorStr = String(color || "").trim();
-  return HEX_COLOR_RE.test(colorStr) ? colorStr : "#7dd3fc";
-};
+export const sanitizeColor = (color: unknown): string =>
+  sanitizeHexColor(color) || "#7dd3fc";
 
 export const sanitizeUrl = (url: unknown): string => {
   if (!url) return "";

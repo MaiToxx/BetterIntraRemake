@@ -16,6 +16,7 @@ import {
   ensureClusterData,
   loadCluster,
   loadCampus,
+  renderNoClusterData,
   updateZoom,
 } from "./map-dialog/map-load.ts";
 import {
@@ -119,16 +120,18 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
       a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
     );
   } catch {}
-  let activeCampusId = detectedCampus;
-  if (activeCampusId && !campusOptions.some((c) => c.id === activeCampusId)) {
-    activeCampusId = "";
-  }
-  if (!activeCampusId && campusOptions.length > 0) {
-    activeCampusId = campusOptions[0].id;
-  }
+  // The detected campus as it is, even when the manifest does not list it
+  // (meta.intra.42.fr still answers for it by id), or none: meta.intra.42.fr
+  // then serves the viewer's own campus. It used to fall back to the first
+  // option of the sorted list, which sent every undetected student to Abu
+  // Dhabi. No id also means no campus file: getCampusExits("") would resolve
+  // to whichever campus has a file first.
+  const activeCampusId = detectedCampus;
 
   let clusters = await buildClusters(activeCampusId);
-  const campusExits = (await getCampusExits(activeCampusId)) ?? null;
+  const campusExits = activeCampusId
+    ? ((await getCampusExits(activeCampusId)) ?? null)
+    : null;
 
   const currentTheme =
     presetKey !== "dark" && presetKey !== "light"
@@ -148,6 +151,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
     id: "cluster-map-dialog",
     className: "bg-transparent backdrop:bg-black/60",
   });
+  dialog.setAttribute("aria-label", "Cluster map");
   Object.assign(dialog.style, {
     margin: "1.5rem auto auto auto",
     width: "min(1200px, calc(100dvw - 2rem))",
@@ -220,6 +224,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
         if (btn) {
           applyMaximizeIcon(false);
           btn.dataset.tip = "Maximize";
+          btn.setAttribute("aria-label", "Maximize");
         }
       }
     },
@@ -340,6 +345,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
       chrome.storage.local.set({ CLUSTERS_SHOW_MARKERS: state.showMarkers });
       const mBtn = shadow.getElementById("markers-btn");
       if (mBtn) {
+        mBtn.setAttribute("aria-pressed", String(state.showMarkers));
         mBtn.classList.toggle("btn-accent", state.showMarkers);
         mBtn.classList.toggle("btn-ghost", !state.showMarkers);
         mBtn.style.borderColor = state.showMarkers ? "var(--color-accent)" : "";
@@ -417,6 +423,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
         dialog.style.margin = dialog.dataset.prevMargin || "";
       }
       maximizeBtn.dataset.tip = isMaximized ? "Restore size" : "Maximize";
+      maximizeBtn.setAttribute("aria-label", maximizeBtn.dataset.tip);
       applyMaximizeIcon(isMaximized);
       return;
     }
@@ -461,6 +468,12 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
   }
   document.body.appendChild(dialog);
   dialog.showModal();
+  // Nothing to load: say so (with the campus' name) instead of leaving the
+  // spinner, and let the campus menu do the rest.
+  if (!clusters.some((c) => c.svg)) {
+    renderNoClusterData(state, activeCampusId);
+    return;
+  }
   await Promise.all([
     ensureClusterData(
       state,

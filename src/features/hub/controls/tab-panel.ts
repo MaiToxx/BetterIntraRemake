@@ -1,19 +1,17 @@
 /**
  * The tabs of the hub, one per feature: the tab button and its panel, with a
- * sticky header (feature switch, Reset), the "connect your 42 account" gate
- * for cloud features, and the grid of settings. Also what the header's switch
- * and Reset button do once the modal is on the page.
+ * sticky header (feature switch, Reset) and the grid of settings. Also what
+ * the header's switch and Reset button do once the modal is on the page.
  */
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import FORTY_TWO_SVG from "../../../assets/svg/42_Logo.svg?raw";
 import RESET_SVG from "../../../assets/svg/reset.svg?raw";
 import { getConfig, type ConfigKey } from "../../../core/config.ts";
-import { clearAuthFailed, loginWith42 } from "../../account/account.ts";
 import { EXTRAS_KEYS } from "../../profile/extras/extras.ts";
 import { CLOUD_GATE, type SettingGates } from "../dependents.ts";
 import {
   FEATURE_DEFS,
+  FEATURE_IDS,
   HUB_SETTING_DEFS,
   type FeatureId,
 } from "../hubSettings.data.ts";
@@ -21,6 +19,25 @@ import { removeSettings, type LiveOptions } from "./context.ts";
 import { renderSetting } from "./setting.ts";
 
 const GRID_COLS_CLASSES = ["", "", "md:grid-cols-2", "md:grid-cols-3"] as const;
+
+/**
+ * Where the last selected tab is kept: most settings take effect after the
+ * Reload the footer asks for, and the hub used to reopen on Profile every
+ * time, so iterating on Logtime meant a click per try. Session storage: the
+ * tab is a place in a conversation, not a setting.
+ */
+export const TAB_MEMORY_KEY = "bi-hub-tab";
+
+/** The tab to open on: the remembered one when it is still a tab, else the first. */
+export function rememberedTab(): FeatureId {
+  try {
+    const stored = sessionStorage.getItem(TAB_MEMORY_KEY);
+    if (stored && FEATURE_IDS.has(stored as FeatureId)) return stored as FeatureId;
+  } catch {
+    /* no session storage here */
+  }
+  return FEATURE_DEFS[0].id;
+}
 
 /**
  * Every tab, in FEATURE_DEFS order. A tab that is not always on is dimmed
@@ -38,32 +55,27 @@ export function renderTabsContent(
   active: FeatureId[],
   gates: SettingGates,
   live: LiveOptions,
+  initialTab: FeatureId = FEATURE_DEFS[0].id,
 ) {
   const { disabled: disabledDeps, hidden: hiddenDeps } = gates;
-  return FEATURE_DEFS.map((f, idx) => {
-    const isAlwaysEnabled =
-      f.id === "about" ||
-      f.id === "calendar" ||
-      f.id === "advanced" ||
-      f.id === "customize" ||
-      f.id === "extras";
+  return FEATURE_DEFS.map((f) => {
+    const isAlwaysEnabled = !f.toggleable;
     const enabled = active.includes(f.id) || isAlwaysEnabled;
-    const cloudDisabled =
-      "requiresCloud" in f &&
-      (f as { requiresCloud?: boolean }).requiresCloud &&
-      disabledDeps.has(CLOUD_GATE);
-    const settings = (HUB_SETTING_DEFS[f.id] || []).map((def) => {
-      const hidden = !!(def.key && hiddenDeps.has(def.key));
-      return renderSetting(
-        def,
-        isAlwaysEnabled ||
-          (enabled &&
-            !(def.key && disabledDeps.has(def.key)) &&
-            !(def.requiresCloud && disabledDeps.has(CLOUD_GATE))),
-        hidden,
-        live,
-      );
-    });
+    const settings = (HUB_SETTING_DEFS[f.id] || [])
+      // a switch for chair markers the campus does not have is a dead switch
+      .filter((def) => !def.requiresChairMarkers || live.chairMarkers)
+      .map((def) => {
+        const hidden = !!(def.key && hiddenDeps.has(def.key));
+        return renderSetting(
+          def,
+          isAlwaysEnabled ||
+            (enabled &&
+              !(def.key && disabledDeps.has(def.key)) &&
+              !(def.requiresCloud && disabledDeps.has(CLOUD_GATE))),
+          hidden,
+          live,
+        );
+      });
     const gridColsClass =
       "cols" in f && f.cols != null
         ? (GRID_COLS_CLASSES[f.cols] ?? "md:grid-cols-3")
@@ -71,20 +83,24 @@ export function renderTabsContent(
 
     const tabId = `hub-tab-${f.id}`;
     const panelId = `hub-panel-${f.id}`;
+    const selected = f.id === initialTab;
     return html`<label class="tab flex items-center gap-2">
         <input
           type="radio"
           name="hub_tabs"
           role="tab"
+          value="${f.id}"
           aria-labelledby="${tabId}"
           aria-controls="${panelId}"
-          aria-selected="${idx === 0 ? "true" : "false"}"
-          ?checked="${idx === 0}"
+          aria-selected="${selected ? "true" : "false"}"
+          ?checked="${selected}"
         />
         <span class="size-4 flex items-center justify-center" aria-hidden="true">
           ${unsafeHTML(f.icon)}
         </span>
         <span id="${tabId}">${f.name}</span>
+        <!-- how many settings of this tab match the search, empty otherwise -->
+        <span class="badge badge-xs badge-primary hidden" data-tab-count></span>
       </label>
       <div
         role="tabpanel"
@@ -94,9 +110,7 @@ export function renderTabsContent(
       >
         <div
           class="flex flex-col ${enabled || isAlwaysEnabled
-            ? cloudDisabled
-              ? "opacity-40 grayscale"
-              : ""
+            ? ""
             : "opacity-40 grayscale"}"
           data-feature-panel="${f.id}"
         >
@@ -130,52 +144,19 @@ export function renderTabsContent(
                       aria-label="Enable ${f.name}"
                       aria-describedby="hub-feature-desc-${f.id}"
                       data-id="${f.id}"
-                      ?checked="${enabled && !cloudDisabled}"
-                      ?disabled="${cloudDisabled}"
+                      ?checked="${enabled}"
                     />
                   </div>
                 </div>
               `
             : ""}
-          ${cloudDisabled
-            ? html`<div
-                class="flex flex-col items-center justify-center gap-4 py-16 px-6 text-center"
-              >
-                <span
-                  class="size-14 opacity-40 flex items-center justify-center [&_path]:fill-current"
-                  aria-hidden="true"
-                  >${unsafeHTML(FORTY_TWO_SVG)}</span
-                >
-                <p class="opacity-50 max-w-72 text-sm">
-                  Connect your 42 account to unlock this feature.
-                </p>
-                <button
-                  type="button"
-                  class="btn bg-[#00babc] text-white border-none hover:bg-[#1fd2d4] h-12 text-base flex items-center justify-center gap-3 transition-colors duration-200"
-                  aria-label="Connect with 42"
-                  @click="${async () => {
-                    loginWith42(async () => {
-                      await clearAuthFailed();
-                      window.location.reload();
-                    });
-                  }}"
-                >
-                  <span class="font-bold tracking-wide">Connect with</span>
-                  <span
-                    class="size-8 flex items-center justify-center [&_path]:fill-current"
-                    aria-hidden="true"
-                  >
-                    ${unsafeHTML(FORTY_TWO_SVG)}
-                  </span>
-                </button>
-              </div>`
-            : html`<div
-                class="${f.id === "about"
-                  ? "p-6 w-full"
-                  : `grid grid-cols-1 ${gridColsClass} gap-4 p-6`}"
-              >
-                ${settings}
-              </div>`}
+          <div
+            class="${f.id === "about"
+              ? "p-6 w-full"
+              : `grid grid-cols-1 ${gridColsClass} gap-4 p-6`}"
+          >
+            ${settings}
+          </div>
         </div>
       </div>`;
   });
@@ -183,15 +164,21 @@ export function renderTabsContent(
 
 /**
  * Wires the tabs (aria-selected follows the checked radio, whichever way it
- * got checked: click, arrow key) and the feature switch and the Reset button
- * of every tab header.
+ * got checked: click, arrow key; the checked tab is remembered for the next
+ * open) and the feature switch and the Reset button of every tab header.
  */
 export function bindTabPanels(shadow: ShadowRoot): void {
   const tabs = shadow.querySelectorAll<HTMLInputElement>('input[name="hub_tabs"]');
   tabs.forEach((tab) =>
-    tab.addEventListener("change", () =>
-      tabs.forEach((t) => t.setAttribute("aria-selected", String(t.checked))),
-    ),
+    tab.addEventListener("change", () => {
+      tabs.forEach((t) => t.setAttribute("aria-selected", String(t.checked)));
+      if (!tab.checked) return;
+      try {
+        sessionStorage.setItem(TAB_MEMORY_KEY, tab.value);
+      } catch {
+        /* no session storage here */
+      }
+    }),
   );
 
   shadow.querySelectorAll("input.hub-feature-toggle").forEach((toggle: any) => {
@@ -247,7 +234,7 @@ async function hasPublicProfileContent(): Promise<boolean> {
 }
 
 /** Puts a tab back to its defaults: in storage, then on its controls. */
-async function resetFeatureSettings(
+export async function resetFeatureSettings(
   root: ShadowRoot | HTMLElement,
   featureId: FeatureId,
 ): Promise<void> {
@@ -272,4 +259,9 @@ async function resetFeatureSettings(
       }
     });
   });
+  // The controls were rewritten without a "change": the dependants (a colour
+  // picker under a style now back to "default") are re-gated on this.
+  root.dispatchEvent(
+    new CustomEvent("bi-settings-synced", { bubbles: true, composed: true }),
+  );
 }

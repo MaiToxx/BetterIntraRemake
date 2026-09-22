@@ -31,8 +31,7 @@
   "incognito": "not_allowed",
   "host_permissions": [
     "https://api.betterintra.com/*",
-    "https://*.intra.42.fr/*",
-    "https://api.github.com/*"
+    "https://*.intra.42.fr/*"
   ],
   "content_scripts": [
     {

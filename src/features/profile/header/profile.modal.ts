@@ -11,6 +11,7 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig, VISUAL_CLOUD_KEYS } from "../../../core/config.ts";
+import { isValidStoredValue } from "../../../core/config/access.ts";
 import {
   fetchMySettings,
   loginWith42,
@@ -229,9 +230,11 @@ export const createSettingsModal = async (
     if (cloudSettings) {
       const visualData: Record<string, unknown> = {};
       for (const key of VISUAL_CLOUD_KEYS) {
-        if (key in cloudSettings) {
-          visualData[key] = (cloudSettings as Record<string, unknown>)[key];
-        }
+        if (!(key in cloudSettings)) continue;
+        const value = (cloudSettings as Record<string, unknown>)[key];
+        // a malformed cloud copy (a history holding numbers) must not be
+        // written where every later read would choke on it
+        if (isValidStoredValue(key, value)) visualData[key] = value;
       }
       if (Object.keys(visualData).length > 0) {
         await chrome.storage.local.set(visualData);

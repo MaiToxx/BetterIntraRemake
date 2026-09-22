@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { collapseLitTemplatesPlugin } from "./scripts/collapse-lit-templates.ts";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import fs from "fs";
@@ -205,8 +206,70 @@ const THEME_CSS_FILES = [
   "theme-light-v3.css",
 ];
 
+/** The content script file that only the OAuth login flow uses. */
+const AUTH_CALLBACK_SCRIPT = "auth-callback.js";
+
+type ManifestContentScript = { matches?: string[]; js?: string[] };
+type Manifest = {
+  version?: string;
+  host_permissions?: string[];
+  content_scripts?: ManifestContentScript[];
+  browser_specific_settings?: { gecko?: { id?: string; update_url?: string } };
+  update_url?: string;
+};
+
+export type ManifestBuild = {
+  target: "firefox" | "chrome";
+  authMode: "oauth" | "intra";
+  workerUrl: string;
+  version: string;
+  repo: { geckoId: string; updatesJsonUrl: string; updatesXmlUrl: string };
+  chromeStore: boolean;
+};
+
+/**
+ * The manifest template turned into the one a build ships. Pure, so that
+ * tests/manifests.test.ts can check every mode without running a build.
+ */
+export function finalizeManifest(template: Manifest, build: ManifestBuild): Manifest {
+  const manifest: Manifest = JSON.parse(JSON.stringify(template));
+  manifest.version = build.version;
+  // Self-hosted worker: rewrite the upstream origin in host permissions
+  // and content script matches (package.json config.workerUrl).
+  if (build.workerUrl !== DEFAULT_WORKER_URL) {
+    const swap = (s: string) => s.replace(DEFAULT_WORKER_URL, build.workerUrl);
+    manifest.host_permissions = (manifest.host_permissions ?? []).map(swap);
+    for (const cs of manifest.content_scripts ?? []) {
+      cs.matches = (cs.matches ?? []).map(swap);
+    }
+  }
+  // In intra mode the login is a POST from the Intra page and the worker's
+  // /callback page is never opened (account.ts only marks a pending OAuth
+  // flow in the oauth branch), so a content script that reads credentials
+  // out of that page's <script> text would only ever run for nothing.
+  if (build.authMode === "intra") {
+    manifest.content_scripts = (manifest.content_scripts ?? []).filter(
+      (cs) => !(cs.js ?? []).includes(AUTH_CALLBACK_SCRIPT),
+    );
+  }
+  if (build.target === "firefox") {
+    // Firefox auto-update: id and update manifest derived from the
+    // repository this fork lives in (package.json "repository").
+    const gecko = (manifest.browser_specific_settings ??= {}).gecko ??= {};
+    gecko.id = build.repo.geckoId;
+    gecko.update_url = build.repo.updatesJsonUrl;
+  } else if (!build.chromeStore) {
+    // Chrome self-hosted updates (.crx + updates.xml). Ignored for
+    // unpacked installs and on Windows/macOS, harmless there. The Chrome
+    // Web Store build (CHROME_STORE=1) must not carry an update_url.
+    manifest.update_url = build.repo.updatesXmlUrl;
+  }
+  return manifest;
+}
+
 export default defineConfig({
   plugins: [
+    collapseLitTemplatesPlugin(),
     tailwindcss(),
     splitDaisyThemesPlugin(),
     {
@@ -223,29 +286,14 @@ export default defineConfig({
           return;
         }
 
-        const manifest = JSON.parse(fs.readFileSync(manifestSrc, "utf-8"));
-        manifest.version = pkg.version;
-        // Self-hosted worker: rewrite the upstream origin in host permissions
-        // and content script matches (package.json config.workerUrl).
-        if (workerUrl !== DEFAULT_WORKER_URL) {
-          const swap = (s: string) => s.replace(DEFAULT_WORKER_URL, workerUrl);
-          manifest.host_permissions = (manifest.host_permissions ?? []).map(swap);
-          for (const cs of manifest.content_scripts ?? []) {
-            cs.matches = (cs.matches ?? []).map(swap);
-          }
-        }
-        if (target === "firefox") {
-          // Firefox auto-update: id and update manifest derived from the
-          // repository this fork lives in (package.json "repository").
-          const gecko = (manifest.browser_specific_settings ??= {}).gecko ??= {};
-          gecko.id = repo.geckoId;
-          gecko.update_url = repo.updatesJsonUrl;
-        } else if (process.env.CHROME_STORE !== "1") {
-          // Chrome self-hosted updates (.crx + updates.xml). Ignored for
-          // unpacked installs and on Windows/macOS, harmless there. The Chrome
-          // Web Store build (CHROME_STORE=1) must not carry an update_url.
-          manifest.update_url = repo.updatesXmlUrl;
-        }
+        const manifest = finalizeManifest(JSON.parse(fs.readFileSync(manifestSrc, "utf-8")), {
+          target,
+          authMode,
+          workerUrl,
+          version: pkg.version,
+          repo,
+          chromeStore: process.env.CHROME_STORE === "1",
+        });
         fs.writeFileSync(
           manifestDst,
           JSON.stringify(manifest, null, 2),

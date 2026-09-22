@@ -443,6 +443,59 @@ describe("tickWhileVisible", () => {
 /* Countdowns and clocks                                               */
 /* ------------------------------------------------------------------ */
 
+describe("milestone ring", () => {
+  /** milestones.ts: --angle written on every animation frame while connected. */
+  function oldRing(current: HTMLElement) {
+    let angle = 0;
+    function animate() {
+      if (!current.isConnected) return;
+      angle = (angle + 2.4) % 360;
+      current.style.setProperty("--angle", `${angle}deg`);
+      requestAnimationFrame(animate);
+    }
+    animate();
+  }
+
+  const mountMilestone = () => {
+    const el = document.createElement("div");
+    el.className = "bg-legacy-main-muted h-10";
+    el.dataset.state = "current";
+    document.body.appendChild(el);
+    return el;
+  };
+
+  it("turns in CSS, without a script wake-up per frame", async () => {
+    const before = await measureOld(() => oldRing(mountMilestone()));
+    const after = await measure(async () => {
+      const el = mountMilestone();
+      const { initMilestones } = await import("../src/features/profile/cards/milestones.ts");
+      initMilestones();
+      expect(el.classList.contains("fire-animated")).toBe(true);
+      const css = document.getElementById("fire-milestone-style")!.textContent!;
+      // the ring is a keyframe on a registered property, stoppable by the
+      // motion settings, not an inline --angle
+      expect(el.style.getPropertyValue("--angle")).toBe("");
+      expect(css).toMatch(/@property --angle \{[^}]*syntax: "<angle>"/);
+      expect(css).toMatch(/\.fire-animated::before \{[^}]*animation: ft-fire-spin 2\.5s linear infinite/);
+      expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{\s*\.fire-animated::before \{ animation: none; \}/);
+      expect(css).toContain("html.ft-fire-still .fire-animated::before { animation: none; }");
+    });
+    report("milestones: ring angle", before, after);
+    // one callback per frame at the fake clock's 16 ms: 3750 over 60 s
+    expect(before.visible).toBeGreaterThanOrEqual(3600);
+    expect(after).toEqual({ visible: 0, hidden: 0, throttled: 0 });
+  });
+
+  it("also polls no more when the dashboard has no milestone", async () => {
+    const after = await measure(async () => {
+      const { initMilestones } = await import("../src/features/profile/cards/milestones.ts");
+      initMilestones();
+    });
+    // the 300-frame retry is gone: the profile pass re-runs initMilestones
+    expect(after).toEqual({ visible: 0, hidden: 0, throttled: 0 });
+  });
+});
+
 describe("freeze card", () => {
   const mountRow = () => {
     const row = document.createElement("div");

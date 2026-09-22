@@ -24,6 +24,7 @@ import {
   BACKGROUND_SELECTOR,
   BANNER_SELECTOR,
 } from "../../../core/intra/selectors.ts";
+import { sanitizeHexColor } from "../../../core/security/css-sanitize.ts";
 import {
   LEVEL_FILL_SELECTOR,
   LIMITS,
@@ -40,8 +41,6 @@ export interface ExtrasCssOptions {
    */
   hasBackgroundImage?: boolean;
 }
-
-const HEX6 = /^#[0-9a-f]{6}$/i;
 
 /**
  * Rainbow colour stops. First and last are identical so that the gradient
@@ -80,9 +79,12 @@ interface Sheet {
   animated: string[];
 }
 
-/** The value itself when it is a strict #rrggbb, "" otherwise. */
+/**
+ * The value itself when it is a strict #rrggbb, "" otherwise. Not trimmed:
+ * extras-sanitize.ts already normalised it, so padding means a hostile value.
+ */
 function hex(value: unknown): string {
-  return typeof value === "string" && HEX6.test(value) ? value : "";
+  return sanitizeHexColor(value) === value ? (value as string) : "";
 }
 
 /** Integer within [min, max]; anything that is not a finite number is `min`. */

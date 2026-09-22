@@ -82,11 +82,17 @@ describe("loadCampusData", () => {
     await expect(loadCampusData("7", true)).rejects.toThrow();
   });
 
-  it("replaces an expired campus file when the worker answers", async () => {
+  it("serves an expired campus file at once and refreshes it behind", async () => {
     await seedData(2 * HOUR);
     worker = "up";
+    // stale-while-revalidate: the page gets the copy it has, the worker's
+    // answer lands in storage for the next load
     const data = await loadCampusData("7");
-    expect(data.clusters[0].id).toBe("k1");
+    expect(data.clusters[0].id).toBe("k0");
+    await vi.waitFor(async () => {
+      const store = await chrome.storage.local.get("CAMPUS_DATA_7");
+      expect(store.CAMPUS_DATA_7.data.clusters[0].id).toBe("k1");
+    });
   });
 });
 

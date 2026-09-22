@@ -2,6 +2,7 @@ import { html, render } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { hashLogin } from "../../core/crypto.ts";
+import { clearAuthFailed, loginWith42 } from "../account/account.ts";
 import { generateQrDataUrl } from "./qr.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
@@ -17,13 +18,30 @@ export function renderCalendarPanel() {
   return html`<div ${ref(renderPanel)} class="col-span-full"></div>`;
 }
 
+/**
+ * The panel is always the whole card: an outcome (a failed request, the
+ * sign-in it needs) is a line inside it. Rendering the message alone used to
+ * replace the card, its button included, with no way back but a page reload.
+ */
 function renderPanel(el: Element | undefined) {
   if (!el) return;
   const container = el as HTMLElement;
+  let error: string | null = null;
+
+  const connect = () =>
+    loginWith42(async () => {
+      await clearAuthFailed();
+      window.location.reload();
+    });
 
   const update = async () => {
-    const store = await chrome.storage.local.get([TOKEN_KEY]);
+    const store = await chrome.storage.local.get([
+      TOKEN_KEY,
+      "CLOUD_TOKEN",
+      "CLOUD_LOGIN",
+    ]);
     const token = store[TOKEN_KEY] as string | undefined;
+    const signedIn = !!store.CLOUD_TOKEN && !!store.CLOUD_LOGIN;
 
     const qrUrl = token
       ? `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`
@@ -43,7 +61,23 @@ function renderPanel(el: Element | undefined) {
               calendar auto-syncs every time you visit your profile.
             </p>
 
-            ${token
+            ${error
+              ? html`<p class="text-sm text-error" role="alert">${error}</p>`
+              : ""}
+            ${!signedIn && !token
+              ? html`
+                  <p class="text-sm opacity-70">
+                    Connect your 42 account to generate a calendar link.
+                  </p>
+                  <button
+                    type="button"
+                    class="btn btn-primary btn-sm self-start"
+                    @click="${connect}"
+                  >
+                    Connect with 42
+                  </button>
+                `
+              : token
               ? html`
                   <div
                     class="bg-base-100 rounded-lg p-3 flex items-center gap-2"
@@ -143,12 +177,8 @@ function renderPanel(el: Element | undefined) {
     const sessionToken = String(store.CLOUD_TOKEN || "");
     const cloudLogin = String(store.CLOUD_LOGIN || "");
     if (!sessionToken || !cloudLogin) {
-      render(
-        html`<div class="text-sm text-error">
-          You need to be logged in to cloud sync first.
-        </div>`,
-        container,
-      );
+      error = "Sign in to Better Intra first (Connect with 42 in the footer).";
+      await update();
       return;
     }
 
@@ -169,14 +199,12 @@ function renderPanel(el: Element | undefined) {
       );
       if (!res.ok) throw new Error("Failed to register token");
       await chrome.storage.local.set({ [TOKEN_KEY]: uuid });
-      update();
+      error = null;
+      await update();
     } catch {
-      render(
-        html`<div class="text-sm text-error">
-          Failed to generate calendar link. Try again.
-        </div>`,
-        container,
-      );
+      // the existing link, QR and button stay: the message sits above them
+      error = "Could not reach the server. Try again.";
+      await update();
     }
   };
 

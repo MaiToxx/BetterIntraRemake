@@ -88,3 +88,104 @@ describe("sanitizeBackup", () => {
     expect(sanitizeBackup(exported)).toEqual(exported);
   });
 });
+
+describe("sanitizeBackup, beyond the shape", () => {
+  it("drops lists whose items have the wrong type (they used to make getConfig throw)", () => {
+    const out = sanitizeBackup({
+      PROFILE_CARD_ORDER: [1, 2],
+      SHORTCUTS_LINKS: [1],
+      FRIENDS_LIST: [42],
+      LOGTIME_GOAL_HOURS: 120,
+      PROFILE_IMAGE_HISTORY: ["https://a/b.png"],
+    });
+    expect(out).toEqual({ LOGTIME_GOAL_HOURS: 120, PROFILE_IMAGE_HISTORY: ["https://a/b.png"] });
+  });
+
+  it("keeps a select to its options, but not the lists only known at run time", () => {
+    const out = sanitizeBackup({
+      PROFILE_THEME_PRESET: "nope",
+      LOGTIME_SHOW_DAYS_MODE: "date",
+      CLUSTERS_DEFAULT_ID: "abc",
+      PROFILE_EVENT_TYPE_FILTER: "x",
+      CLUSTERS_CAMPUS: "62",
+    });
+    expect(out).toEqual({
+      LOGTIME_SHOW_DAYS_MODE: "date",
+      CLUSTERS_DEFAULT_ID: "abc",
+      PROFILE_EVENT_TYPE_FILTER: "x",
+      CLUSTERS_CAMPUS: "62",
+    });
+  });
+
+  it("keeps a number within the bounds of its setting", () => {
+    const out = sanitizeBackup({
+      CUSTOM_FONT_SCALE: -3,
+      CUSTOM_CARD_OPACITY: 60,
+      LOGTIME_GOAL_HOURS: Number.POSITIVE_INFINITY,
+    });
+    expect(out).toEqual({ CUSTOM_CARD_OPACITY: 60 });
+  });
+
+  it("drops an image link that is not a plain http(s) URL, keeps 'no image'", () => {
+    const out = sanitizeBackup({
+      PROFILE_IMAGE_URL: "javascript:alert(1)",
+      PROFILE_BANNER_URL: "data:image/png;base64,AAAA",
+      PROFILE_BACKGROUND_URL: "",
+      CUSTOM_PAGE_BG_URL: "https://images.example/bg.png",
+    });
+    expect(out).toEqual({
+      PROFILE_BACKGROUND_URL: "",
+      CUSTOM_PAGE_BG_URL: "https://images.example/bg.png",
+    });
+  });
+
+  it("coerces the Customize keys present like a theme code, without filling the absent ones", () => {
+    const out = sanitizeBackup({ CUSTOM_PAGE_BG_DIM: 40, CUSTOM_CARDS: { bogus: 1 } });
+    expect(out.CUSTOM_PAGE_BG_DIM).toBe(40);
+    expect(out.CUSTOM_CARDS).toEqual({});
+    expect(out).not.toHaveProperty("CUSTOM_ACCENT_COLOR");
+  });
+});
+
+describe("backup file shape", () => {
+  it("wraps the settings with the version and the date, and reads both shapes back", async () => {
+    const { unwrapBackup, wrapBackup } = await import("../src/features/hub/backup");
+    const settings = exportableSettings({ LOGTIME_GOAL_HOURS: 120 });
+    const file = wrapBackup(settings, "1.13.0", new Date("2026-09-22T10:00:00.000Z"));
+    expect(file).toEqual({
+      version: "1.13.0",
+      exportedAt: "2026-09-22T10:00:00.000Z",
+      settings: { LOGTIME_GOAL_HOURS: 120 },
+    });
+    expect(unwrapBackup(JSON.parse(JSON.stringify(file)))).toEqual(file);
+    // the bare key -> value files of the earlier versions
+    expect(unwrapBackup({ LOGTIME_GOAL_HOURS: 120 })).toEqual({
+      settings: { LOGTIME_GOAL_HOURS: 120 },
+    });
+    expect(() => unwrapBackup([])).toThrow();
+  });
+
+  it("round-trips a wrapped export of the defaults", async () => {
+    const { unwrapBackup, wrapBackup } = await import("../src/features/hub/backup");
+    const exported = exportableSettings({ ...CONFIG_DEFAULT });
+    const back = unwrapBackup(wrapBackup(exported, "x"));
+    expect(sanitizeBackup(back.settings)).toEqual(exported);
+  });
+});
+
+describe("backupSensitiveKeys", () => {
+  it("lists custom CSS and the public profile fields that hold something", async () => {
+    const { backupSensitiveKeys } = await import("../src/features/hub/backup");
+    expect(
+      backupSensitiveKeys({
+        CUSTOM_CSS: "body{}",
+        PROFILE_PUB_BIO: "hi",
+        PROFILE_PUB_STATUS_TEXT: "  ",
+        PROFILE_PUB_ENABLED: true,
+        PROFILE_PUB_CARD_GLOW: true,
+        LOGTIME_GOAL_HOURS: 1,
+      }).sort(),
+    ).toEqual(["CUSTOM_CSS", "PROFILE_PUB_BIO", "PROFILE_PUB_CARD_GLOW"]);
+    expect(backupSensitiveKeys({ CUSTOM_CSS: "", PROFILE_PUB_BIO: "" })).toEqual([]);
+  });
+});

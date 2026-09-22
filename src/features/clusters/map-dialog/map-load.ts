@@ -18,18 +18,35 @@ import { updateActiveSortControls } from "./active-sort";
 import { clearSeatGlow } from "./glow";
 import { rebuildHeader, updateCampusTime, updateDefaultSelect } from "./header";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
+import { campusDisplayName } from "./helpers";
 
 // occupancy.ts switches to another tab when the Active one disappears: it
 // gets loadCluster() from here instead of importing it (no import cycle).
 registerClusterLoader(loadCluster);
 
+export function renderNoClusterData(state: DialogState, campusId: string) {
+  const mapArea = state.shadow.getElementById("map-area");
+  if (!mapArea) return;
+  const div = document.createElement("div");
+  div.className =
+    "flex items-center justify-center p-12 text-center text-base-content/50";
+  div.id = "no-cluster-data";
+  div.textContent = `No cluster map for ${campusDisplayName(state.campusOptions, campusId)}`;
+  mapArea.replaceChildren(div);
+}
+
 export async function buildClusters(campusId: string): Promise<ClusterInfo[]> {
   let repoClusters: { id: string; name: string }[] = [];
-  try {
-    const data = await getClusterData(campusId);
-    repoClusters = data.clusters;
-  } catch {
-    repoClusters = [];
+  // No id means "the viewer's campus" to meta.intra.42.fr, but the campus
+  // files are fetched by id: an empty one would resolve to whichever campus
+  // has a file first and mix its cluster names into this one's maps.
+  if (campusId) {
+    try {
+      const data = await getClusterData(campusId);
+      repoClusters = data.clusters;
+    } catch {
+      repoClusters = [];
+    }
   }
   const svgs = await scrapeCampusSVGUrls(campusId);
   const list: ClusterInfo[] = [];
@@ -92,12 +109,56 @@ export async function ensureClusterData(
         seats: [...seatMap],
         viewBox: state.svgViewBoxes.get(key)!,
         cachedAt: 0,
-      }).catch(() => {});
+      }).catch(warnOnQuota);
     }
     return svgText;
   } catch {
     return null;
   }
+}
+
+let quotaWarned = false;
+
+/**
+ * A map that cannot be cached is not an error for the user, but a full
+ * chrome.storage.local (Chrome caps it at 10 MB) also makes every later
+ * settings write fail: say so once, instead of nothing at all.
+ */
+export function warnOnQuota(err: unknown): void {
+  if (quotaWarned) return;
+  const msg = err instanceof Error ? err.message : String(err);
+  if (!/quota/i.test(msg)) return;
+  quotaWarned = true;
+  console.warn("[Better Intra] cluster map not cached: storage is full", msg);
+}
+
+/**
+ * "Failed to load map" with a Retry button. Shown when the worker and the
+ * stale cache both had nothing: an empty pane looked like a blank map.
+ */
+export function renderMapError(
+  state: DialogState,
+  cluster: ClusterInfo,
+  signal?: AbortSignal,
+) {
+  const mapArea = state.shadow.getElementById("map-area");
+  if (!mapArea) return;
+  const errorDiv = document.createElement("div");
+  errorDiv.className =
+    "flex flex-col items-center justify-center gap-3 p-12 text-base-content/50";
+  errorDiv.id = "map-error";
+  const text = document.createElement("span");
+  text.textContent = "Failed to load map";
+  const retry = document.createElement("button");
+  retry.type = "button";
+  retry.className = "btn btn-sm";
+  retry.id = "map-retry";
+  retry.textContent = "Retry";
+  retry.addEventListener("click", () => {
+    void loadCluster(state, cluster, signal);
+  });
+  errorDiv.append(text, retry);
+  mapArea.replaceChildren(errorDiv);
 }
 
 export function trimSvgToContent(state: DialogState) {
@@ -139,6 +200,7 @@ export async function loadCluster(
   state: DialogState,
   cluster: ClusterInfo,
   signal?: AbortSignal,
+  retry = false,
 ) {
   state.activeCluster = cluster;
   state.zoomLevel = 1.0;
@@ -154,7 +216,9 @@ export async function loadCluster(
   const topBadges = state.shadow.getElementById("top-left-badges");
   topBadges?.classList.toggle("active-tab", cluster.id === "active");
   const id = ++state.loadId;
-  state.retryCount = 0;
+  // A retry keeps its count: resetting it here made a load that failed every
+  // time (a map the browser cannot lay out) retry itself forever.
+  if (!retry) state.retryCount = 0;
 
   state.shadow.querySelectorAll("[data-cluster-id]").forEach((el) => {
     const active = (el as HTMLElement).dataset.clusterId === cluster.id;
@@ -200,7 +264,7 @@ export async function loadCluster(
     );
     if (!svgText) {
       if (id !== state.loadId) return;
-      mapArea.replaceChildren();
+      renderMapError(state, cluster, signal);
       return;
     }
     if (id !== state.loadId) return;
@@ -265,14 +329,10 @@ export async function loadCluster(
     if (id !== state.loadId) return;
     state.retryCount++;
     if (state.retryCount <= 1) {
-      loadCluster(state, state.activeCluster, signal);
+      loadCluster(state, state.activeCluster, signal, true);
     } else {
       state.retryCount = 0;
-      const errorDiv = document.createElement("div");
-      errorDiv.className =
-        "flex items-center justify-center p-12 text-base-content/50";
-      errorDiv.textContent = "Failed to load map";
-      mapArea.replaceChildren(errorDiv);
+      renderMapError(state, cluster, signal);
     }
   }
 }
@@ -298,15 +358,16 @@ export async function loadCampus(
   const clusters = await buildClusters(campusId);
   if (stale()) return;
   state.clusters = clusters;
+  const trigger = shadow.getElementById("campus-trigger");
+  if (trigger) {
+    const name = campusDisplayName(state.campusOptions, campusId);
+    const flagEl = shadow.getElementById("campus-trigger-flag");
+    if (flagEl) flagEl.textContent = getCampusFlag(name);
+    const nameEl = shadow.getElementById("campus-trigger-name");
+    if (nameEl) nameEl.textContent = name.toUpperCase();
+  }
   if (!state.clusters.some((c) => c.svg)) {
-    const mapArea = shadow.getElementById("map-area");
-    if (mapArea) {
-      const div = document.createElement("div");
-      div.className =
-        "flex items-center justify-center p-12 text-base-content/50";
-      div.textContent = "No cluster data for this campus";
-      mapArea.replaceChildren(div);
-    }
+    renderNoClusterData(state, campusId);
     // keep the header in sync, otherwise the previous campus' tabs stay clickable
     rebuildHeader(state);
     return;
@@ -316,15 +377,6 @@ export async function loadCampus(
       ? { id: "active", name: "Active" }
       : state.clusters.find((c) => c.id === state.defaultId) ||
         state.clusters[0] || { id: "active", name: "Active" };
-  const trigger = shadow.getElementById("campus-trigger");
-  if (trigger) {
-    const name =
-      state.campusOptions.find((o) => o.id === campusId)?.name || campusId;
-    const flagEl = shadow.getElementById("campus-trigger-flag");
-    if (flagEl) flagEl.textContent = getCampusFlag(name);
-    const nameEl = shadow.getElementById("campus-trigger-name");
-    if (nameEl) nameEl.textContent = name.toUpperCase();
-  }
   rebuildHeader(state);
   updateDefaultSelect(state);
   updateCampusTime(state);

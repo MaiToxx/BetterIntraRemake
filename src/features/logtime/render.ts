@@ -200,8 +200,10 @@ export function renderMonthCard(
   const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(
     new Date(year, mon - 1),
   );
+  // getConfigs() heals a stored 0 or "", but a config built elsewhere (the
+  // published look, a test) must not print "Infinity%" or "NaN%" either.
   const goalSecs = config.goal_hours * 3600;
-  const goalPercent = Math.round((total / goalSecs) * 100);
+  const goalPercent = goalSecs > 0 ? Math.round((total / goalSecs) * 100) : 0;
   const isGoalMet = goalPercent >= 100;
   const isPast = !isCurrent;
   const fillClass = isGoalMet ? "liquid-fill-full" : "liquid-fill";
@@ -213,7 +215,8 @@ export function renderMonthCard(
     config.max_earnings > 0 && monthEarnings > config.max_earnings
       ? config.max_earnings
       : monthEarnings;
-  const monthTacos = Math.round(cappedMonthEarnings / config.divisor);
+  const monthTacos =
+    config.divisor > 0 ? Math.round(cappedMonthEarnings / config.divisor) : 0;
 
   return html`<div
     class="month-card ${isCurrent ? "current-month" : ""}"
@@ -373,7 +376,8 @@ export function renderHeaderContent(
     totalCappedEarnings += cappedMonthEarnings;
   }
 
-  const totalTacos = Math.floor(totalCappedEarnings / config.divisor);
+  const totalTacos =
+    config.divisor > 0 ? Math.floor(totalCappedEarnings / config.divisor) : 0;
 
   const views = CALENDAR_VIEWS;
 

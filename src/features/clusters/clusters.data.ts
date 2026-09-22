@@ -99,6 +99,16 @@ const buildScreens = (
 
 export let SCREENS: Record<string, ScreenDirection> = {};
 
+/**
+ * Whether the loaded campus file places any chair markers. Only Belgium's
+ * does today: the "Show chair markers" controls are dead switches everywhere
+ * else, so they are only drawn when this is true. Valid once getClusterData()
+ * has run for the campus.
+ */
+export function hasMarkerDefinitions(): boolean {
+  return Object.keys(SCREENS).length > 0;
+}
+
 export function clearClusterData(): void {
   SCREENS = {};
   CAMPUS_CLUSTERS.length = 0;

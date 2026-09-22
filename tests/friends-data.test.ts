@@ -200,6 +200,7 @@ describe("loadFriendsData when the Intra does not answer", () => {
       friends: [],
       ok: false,
       fetchedAt: null,
+      detail: "full",
     });
   });
 

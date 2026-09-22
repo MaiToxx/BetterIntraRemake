@@ -17,6 +17,11 @@ import { maybePromptRestore } from "./features/account/account.ts";
 import { initGlobalTooltips } from "./core/dom/tooltip.ts";
 import { ensureCampusData } from "./features/campus/campus.ts";
 import { updateNavAvatar } from "./features/profile/header/visuals.ts";
+import {
+  holdAvatar,
+  injectAvatarPendingRule,
+  releaseAvatar,
+} from "./features/profile/header/visuals-apply.ts";
 import { AVATAR_SELECTOR } from "./core/intra/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
@@ -67,29 +72,17 @@ initGlobalTooltips(getIsLight);
 // which loads asynchronously and, measured in Firefox 156, was in place
 // before the Intra's cached bundle on only 5 of 30 warm reloads.
 
-{
-  const obs = new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        if (!(node instanceof HTMLElement)) continue;
-        let target: HTMLElement | null = null;
-        if (node.matches?.(AVATAR_SELECTOR)) target = node;
-        else target = node.querySelector?.(AVATAR_SELECTOR);
-        if (target) {
-          target.style.setProperty("opacity", "0", "important");
-          obs.disconnect();
-          return;
-        }
-      }
-    }
-  });
-  obs.observe(document.documentElement, { childList: true, subtree: true });
+// The custom avatar must not be preceded by a flash of the Intra picture, so
+// the avatar is held (hidden by a class rule) from document_start on the
+// profile origin, where initProfile() paints it and releases the hold when its
+// watcher stops. A document-wide observer used to do this with an inline
+// `opacity: 0` and a 5 s timer: it never disconnected on the other Intra
+// hosts, and with the Profile feature off nothing but that timer revealed the
+// avatar (see the release below).
+if (location.hostname === "profile-v3.intra.42.fr") {
+  injectAvatarPendingRule();
+  holdAvatar();
 }
-
-setTimeout(() => {
-  const el = document.querySelector<HTMLElement>(AVATAR_SELECTOR);
-  if (el) el.style.setProperty("opacity", "1", "important");
-}, 5000);
 
 /**
  * A map that links feature ID strings to their initialization functions.
@@ -230,8 +223,14 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
         // Hub settings are always initialized for the settings page.
         // initHubSettings returns the active feature list.
         const activeScripts = await initHubSettings();
+        // Only the profile watcher paints and reveals the held avatar.
+        if (!activeScripts.includes("profile")) releaseAvatar();
 
-        await ensureCampusData();
+        // Not awaited: the features that need CLUSTERS (clusters, the hub's
+        // context, the profile card, the seat highlight) await their own load,
+        // and the others must not wait on the worker. Once an hour, when the
+        // cache had lapsed, every Intra page stalled here for two round trips.
+        ensureCampusData().catch(() => {});
         updateNavAvatar();
 
         // Loop through the user's active scripts and initialize them if they exist in our map.
@@ -249,6 +248,8 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
         await maybePromptRestore();
       } catch (error) {
         console.error("Error during init of Better Intra :", error);
+        // A failed start-up must not leave the avatar hidden.
+        releaseAvatar();
       }
     } else {
       setTimeout(() => {

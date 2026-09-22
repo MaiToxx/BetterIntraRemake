@@ -8,21 +8,40 @@
  *   GET /api/v1/users/{login}          wallet, evaluation points, location, names
  *   GET /api/v1/users/{login}/summary  profile picture
  *   GET /api/v1/users/{login}/cursus   level and grade (main cursus first)
- * Custom avatars still come from the worker's public visuals endpoint.
+ * Custom avatars still come from the worker's public visuals endpoint, one
+ * batch request for the whole list, cached per login for ten minutes.
  */
 import type { FriendData } from "./friends-types.ts";
+import { getConfig } from "../../core/config.ts";
 import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import { hashLogin } from "../../core/crypto.ts";
+import { MAX_REMOTE_URL_LENGTH } from "../../core/security/safe-url.ts";
+import { allowedImageUrl } from "../../core/security/css-sanitize.ts";
 import {
   sanitizeCssColor,
-  sanitizeCssUrl,
+  sanitizeVisualUrls,
 } from "../profile/header/visuals-sanitize.ts";
+import type { VisualUrls } from "../profile/header/visuals-types.ts";
+import {
+  getCachedVisualsMany,
+  setCachedVisualsMany,
+  visualsAreFresh,
+} from "../profile/header/visuals-cache.ts";
 
 const INTRAPY = "https://intrapy.intra.42.fr/api/v1";
 const LAST_ONLINE_KEY = "FRIENDS_LAST_ONLINE";
 const CONCURRENCY = 6;
 const AVATAR_BG_KEYWORDS = new Set(["transparent"]);
+/**
+ * Six intrapy requests share the page's own traffic on cluster Wi-Fi, so the
+ * deadline is the one the background already gives Intra pages. Without one,
+ * a stalled connection kept the skeleton up for as long as the browser waits.
+ */
+export const INTRAPY_TIMEOUT_MS = 15_000;
+export const VISUALS_TIMEOUT_MS = 8_000;
+/** The worker's cap on one `logins=` batch. */
+export const VISUALS_BATCH_MAX = 50;
 
 type Raw = Record<string, unknown>;
 
@@ -32,6 +51,9 @@ const num = (v: unknown, fallback = 0): number => {
   const n = typeof v === "number" ? v : Number(v);
   return Number.isFinite(n) ? n : fallback;
 };
+/** Another user's string: refused, not truncated, past the shared URL bound. */
+const bounded = (v: unknown): unknown =>
+  typeof v === "string" && v.length > MAX_REMOTE_URL_LENGTH ? "" : v;
 
 /** Pick the cursus entry to display: main "42cursus" first, then highest level. */
 export function pickMainCursus(cursus: unknown): Raw | null {
@@ -66,13 +88,19 @@ export function hasProfilePicture(user: Raw | null): boolean {
 /**
  * Apply the worker's public visuals (another user's settings) to a friend.
  * The values end up in an inline style, so anything that is not a plain
- * http(s) URL or a plain colour is dropped, like the profile page does.
+ * colour or an https image on an allowlisted host is dropped, like the
+ * profile page does (this widget loads the avatars on every Intra page).
  */
-export function applyIntraVisuals(friend: FriendData, visuals: Raw | null): FriendData {
-  if (!visuals) return friend;
-  friend.customAvatar = sanitizeCssUrl(visuals.avatar) || null;
+export function applyIntraVisuals(
+  friend: FriendData,
+  input: Raw | VisualUrls | null,
+): FriendData {
+  if (!input) return friend;
+  const visuals = input as Raw;
+  friend.customAvatar = allowedImageUrl(bounded(visuals.avatar)) || null;
   friend.avatarBg =
-    sanitizeCssColor(visuals.avatarBg, AVATAR_BG_KEYWORDS) || "transparent";
+    sanitizeCssColor(bounded(visuals.avatarBg), AVATAR_BG_KEYWORDS) ||
+    "transparent";
   friend.avatarPosX = num(visuals.avatarPosX, 50);
   friend.avatarPosY = num(visuals.avatarPosY, 50);
   friend.avatarScale = num(visuals.avatarScale, 100);
@@ -130,7 +158,10 @@ interface JsonReply {
 
 async function getJson(url: string, token: string): Promise<JsonReply> {
   try {
-    const res = await fetch(url, { headers: { Authorization: token } });
+    const res = await fetch(url, {
+      headers: { Authorization: token },
+      signal: AbortSignal.timeout(INTRAPY_TIMEOUT_MS),
+    });
     if (!res.ok) return { body: null, status: res.status };
     return { body: (await res.json()) as Raw | Raw[], status: res.status };
   } catch {
@@ -138,16 +169,138 @@ async function getJson(url: string, token: string): Promise<JsonReply> {
   }
 }
 
-async function fetchVisuals(login: string): Promise<Raw | null> {
+/**
+ * The worker's answer for one login, turned into the stored VisualUrls shape
+ * with every string bounded first: the sanitisers accept a URL of any length,
+ * and a bloated record would otherwise be cached and styled for every viewer.
+ */
+function toVisualUrls(data: Raw): VisualUrls {
+  const b = (v: unknown, fallback: string) => {
+    const x = bounded(v);
+    return typeof x === "string" && x ? x : fallback;
+  };
+  // The worker answers for OTHER logins: images off the host allowlist are dropped.
+  return sanitizeVisualUrls(
+    {
+      avatar: b(data.avatar, ""),
+      banner: b(data.banner, ""),
+      bannerMode: b(data.bannerMode, "fill"),
+      bannerColor: b(data.bannerColor, ""),
+      background: b(data.background, ""),
+      backgroundMode: b(data.backgroundMode, "fill"),
+      backgroundColor: b(data.backgroundColor, ""),
+      avatarBg: b(data.avatarBg, "transparent"),
+      decoration: b(data.decoration, "none"),
+      avatarPosX: num(data.avatarPosX, 50),
+      avatarPosY: num(data.avatarPosY, 50),
+      avatarScale: num(data.avatarScale, 100),
+      badgeBg: b(data.badgeBg, ""),
+      theme: (data.theme as { profileColor?: string }) || null,
+      logtime: (data.logtime as Record<string, unknown>) || null,
+      look: (data.look as Record<string, unknown>) || null,
+      extras: (data.extras as Record<string, unknown>) || null,
+    },
+    { images: "allowlist" },
+  );
+}
+
+const isRaw = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v);
+
+/** One `?login=` request: what every worker answers. null when it failed. */
+async function fetchVisualsSingle(hashed: string): Promise<Raw | null> {
   try {
-    const hashed = await hashLogin(login);
     const res = await fetch(
       `${WORKER_URL}/api/v1/public/visuals?login=${encodeURIComponent(hashed)}`,
+      { signal: AbortSignal.timeout(VISUALS_TIMEOUT_MS) },
     );
-    return res.ok ? ((await res.json()) as Raw) : null;
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    return isRaw(body) ? body : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * One `?logins=` request for up to VISUALS_BATCH_MAX hashes. Only the hashes
+ * asked for are kept from the answer. undefined when the worker is too old
+ * for the route (404), null when the request failed.
+ */
+async function fetchVisualsBatch(
+  hashes: string[],
+): Promise<Map<string, Raw | null> | null | undefined> {
+  try {
+    const res = await fetch(
+      `${WORKER_URL}/api/v1/public/visuals?logins=${encodeURIComponent(hashes.join(","))}`,
+      { signal: AbortSignal.timeout(VISUALS_TIMEOUT_MS) },
+    );
+    if (res.status === 404) return undefined;
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    const visuals = isRaw(body) && isRaw(body.visuals) ? body.visuals : null;
+    if (!visuals) return null;
+    const out = new Map<string, Raw | null>();
+    for (const h of hashes) {
+      const v = visuals[h];
+      out.set(h, isRaw(v) ? v : null);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The public visuals of `logins`: from the per-login storage cache when it is
+ * less than ten minutes old (a friend without visuals is remembered too), the
+ * rest in batches of VISUALS_BATCH_MAX with one worker request each, or one
+ * request per login when the worker predates the batch route. Logins the
+ * worker could not be asked about are left out, so nothing is cached for them.
+ */
+export async function fetchFriendsVisuals(
+  logins: string[],
+): Promise<Map<string, VisualUrls>> {
+  const out = new Map<string, VisualUrls>();
+  if (logins.length === 0) return out;
+  const cached = await getCachedVisualsMany(logins);
+  const missing: string[] = [];
+  for (const login of logins) {
+    const c = cached.get(login);
+    if (c && visualsAreFresh(c)) out.set(login, c);
+    else missing.push(login);
+  }
+  if (missing.length === 0) return out;
+
+  const hashes = new Map<string, string>();
+  for (const login of missing) hashes.set(await hashLogin(login), login);
+  const hashList = [...hashes.keys()];
+  const fetched = new Map<string, Raw | null>();
+  let batchSupported = true;
+  for (let i = 0; i < hashList.length && batchSupported; i += VISUALS_BATCH_MAX) {
+    const chunk = hashList.slice(i, i + VISUALS_BATCH_MAX);
+    const answer = await fetchVisualsBatch(chunk);
+    if (answer === undefined) batchSupported = false;
+    else if (answer) for (const [h, v] of answer) fetched.set(h, v);
+  }
+  if (!batchSupported) {
+    const singles = await mapLimit(hashList, CONCURRENCY, fetchVisualsSingle);
+    // null is a failed request (the single route answers an empty object
+    // for a user without a record): not cached, so it is asked again.
+    hashList.forEach((h, i) => {
+      if (singles[i]) fetched.set(h, singles[i]);
+    });
+  }
+
+  const toStore: Record<string, VisualUrls> = {};
+  for (const [h, raw] of fetched) {
+    const login = hashes.get(h);
+    if (!login) continue;
+    const urls = toVisualUrls(raw ?? {});
+    out.set(login, urls);
+    toStore[login] = urls;
+  }
+  setCachedVisualsMany(toStore);
+  return out;
 }
 
 async function mapLimit<T, R>(
@@ -182,30 +335,78 @@ export interface IntraFriendsResult {
   failed: string[];
 }
 
+/** How much of a friend to fetch. */
+export interface IntraFetchOptions {
+  /**
+   * "online": only /users (names, location, wallet, points), what the closed
+   * widget's badge needs; level, picture and custom avatar are taken from
+   * `known` when it has the row. "full": everything (the default).
+   */
+  detail?: "online" | "full";
+  /**
+   * Ask the worker for custom avatars. Left out, the setting decides
+   * (SHOW_CUSTOM_AVATARS_IN_FRIENDS); off, the worker is never contacted.
+   */
+  visuals?: boolean;
+  /** The last known rows, for the fields an "online" fetch leaves out. */
+  known?: FriendData[];
+}
+
+/** Carry over what an "online" fetch did not ask for from the last known row. */
+function inheritDetails(fresh: FriendData, old: FriendData | undefined): FriendData {
+  if (!old) return fresh;
+  return {
+    ...fresh,
+    avatar: fresh.avatar ?? old.avatar,
+    level: old.level,
+    grade: old.grade,
+    customAvatar: old.customAvatar,
+    avatarBg: old.avatarBg,
+    avatarPosX: old.avatarPosX,
+    avatarPosY: old.avatarPosY,
+    avatarScale: old.avatarScale,
+  };
+}
+
 export async function fetchFriendsIntraResult(
   logins: string[],
+  opts: IntraFetchOptions = {},
 ): Promise<IntraFriendsResult> {
+  const full = opts.detail !== "online";
   const token = await waitForIntrapyToken(6000);
   if (!token) return { friends: [], notFound: [], failed: [...logins] };
 
-  const store = await chrome.storage.local.get(LAST_ONLINE_KEY);
-  const lastOnline: Record<string, number> =
-    (store[LAST_ONLINE_KEY] as Record<string, number> | undefined) ?? {};
+  let lastOnline: Record<string, number> = {};
+  try {
+    const store = await chrome.storage.local.get(LAST_ONLINE_KEY);
+    lastOnline = (store[LAST_ONLINE_KEY] as Record<string, number> | undefined) ?? {};
+  } catch {
+    // Unreadable "last seen" stamps only lose the relative times for a load.
+  }
   const now = Date.now();
+  const known = new Map((opts.known ?? []).map((f) => [f.login, f]));
+  // One worker request for the whole list, alongside the intrapy calls.
+  const wantVisuals =
+    opts.visuals ?? !!(await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"));
+  const visualsPromise = full && wantVisuals ? fetchFriendsVisuals(logins) : null;
 
   const results = await mapLimit(logins, CONCURRENCY, async (login) => {
     const base = `${INTRAPY}/users/${encodeURIComponent(login)}`;
-    const [userReply, cursusReply, visuals] = await Promise.all([
+    const [userReply, cursusReply] = await Promise.all([
       getJson(base, token),
-      getJson(`${base}/cursus`, token),
-      fetchVisuals(login),
+      full ? getJson(`${base}/cursus`, token) : { body: null, status: 0 },
     ]);
     const user = Array.isArray(userReply.body) ? null : userReply.body;
     // /summary only adds the profile picture: skip it when /users already has
-    // one (it is still consulted for an unknown login, see below)
-    const summaryRaw = hasProfilePicture(user)
-      ? null
-      : (await getJson(`${base}/summary`, token)).body;
+    // one or was not asked for it (it is still consulted for an unknown login,
+    // see below), and when /users itself could not be reached, since the
+    // retry would fail the same way and double the worst case.
+    const wantSummary = user
+      ? full && !hasProfilePicture(user)
+      : userReply.status !== 0;
+    const summaryRaw = wantSummary
+      ? (await getJson(`${base}/summary`, token)).body
+      : null;
     const summary = Array.isArray(summaryRaw) ? null : summaryRaw;
     if (!user && !summary) {
       // Adding a friend deletes the login on "not-found": only a real 404
@@ -225,14 +426,26 @@ export async function fetchFriendsIntraResult(
     );
     if (friend.isOnline) lastOnline[login] = now;
 
-    return { login, status: "ok", friend: applyIntraVisuals(friend, visuals) } as const;
+    return {
+      login,
+      status: "ok",
+      friend: full ? friend : inheritDetails(friend, known.get(login)),
+    } as const;
   });
 
-  await chrome.storage.local.set({ [LAST_ONLINE_KEY]: lastOnline });
+  try {
+    await chrome.storage.local.set({ [LAST_ONLINE_KEY]: lastOnline });
+  } catch {
+    // A lost "last seen" stamp is harmless; failing the whole load is not.
+  }
+  const visuals = visualsPromise ? await visualsPromise : null;
   const out: IntraFriendsResult = { friends: [], notFound: [], failed: [] };
   for (const r of results) {
-    if (r.status === "ok") out.friends.push(r.friend);
-    else if (r.status === "not-found") out.notFound.push(r.login);
+    if (r.status === "ok") {
+      out.friends.push(
+        visuals ? applyIntraVisuals(r.friend, visuals.get(r.login) ?? null) : r.friend,
+      );
+    } else if (r.status === "not-found") out.notFound.push(r.login);
     else out.failed.push(r.login);
   }
   return out;

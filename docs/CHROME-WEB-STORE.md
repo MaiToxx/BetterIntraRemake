@@ -18,13 +18,28 @@ It needs a developer account and four repository secrets, once.
 3. Fill the listing: name, description (`npm run generate:description` prints
    one from the README), category *Productivity*, language, screenshots
    (`npm run generate:store-images` renders them from `images/`), privacy
-   policy URL (the README's *Privacy* section is enough), and the
-   permissions justification:
-   - `storage`: settings
-   - `alarms`: periodic update check and cloud sync
-   - `activeTab`: login from the toolbar popup
-   - host permissions on `*.intra.42.fr` and the worker: the extension only
-     works on the 42 intranet and talks to its own cloud worker
+   policy URL (`https://github.com/MaiToxx/BetterIntraRemake/blob/main/PRIVACY.md`,
+   the file the manifests are checked against in tests/privacy-doc.test.ts),
+   and the permissions justification, one line per manifest entry:
+   - `storage`: settings and caches
+   - `alarms`: the 6-hour release check timer (background service worker)
+   - `activeTab`: sign-in from the toolbar popup on the open Intra tab
+   - host permission `https://*.intra.42.fr/*`: the extension only runs on the
+     42 intranet; the background also reads Intra pages there with the user's
+     cookies (correction stats, roulette history)
+   - host permission on the worker (`betterintra-remake.maitox.workers.dev`):
+     the extension's own cloud worker (settings sync, public visuals,
+     calendar feed). Also what the popup asks for with `chrome.permissions`
+     on Firefox.
+   - no host permission for `api.github.com`: the release check and the
+     About tab reach it as plain CORS requests
+   - `minimum_chrome_version` 111: the first Chrome that runs the MAIN-world
+     `hook.js` content script and the Tailwind 4 stylesheet; older Chromiums
+     refuse the install with a clear message instead of running a broken
+     extension
+   - in `config.authMode: "intra"` (this deployment) the manifest carries no
+     content script on the worker's `/callback` page: that script only
+     serves the OAuth flow (docs/SELF-HOSTING.md)
 4. Submit for review. The first review takes from a few hours to a few
    days. Note the **extension id** shown in the dashboard (32 letters).
 

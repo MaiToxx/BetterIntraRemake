@@ -12,6 +12,7 @@ import { hasIntraMutation } from "../src/features/profile/profile.ts";
 import { ensureCampusData } from "../src/features/campus/campus.ts";
 import { initHubSettings } from "../src/features/hub/hubSettings.ts";
 import { updateVisuals } from "../src/features/profile/header/visuals.ts";
+import { initProfileCardStyling } from "../src/features/profile/header/profile-card.ts";
 
 const getCalls = () => vi.mocked(chrome.storage.local.get).mock.calls.length;
 
@@ -363,5 +364,34 @@ describe("initHubSettings", () => {
 
     window.dispatchEvent(new Event("pagehide"));
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("profile card styling pass", () => {
+  const mountProfileCard = () => {
+    const card = document.createElement("div");
+    const row = document.createElement("div");
+    row.className = "flex flex-col lg:flex-row";
+    const login = document.createElement("p");
+    login.className = "text-sm";
+    login.textContent = "bob";
+    row.appendChild(login);
+    card.appendChild(row);
+    document.body.appendChild(card);
+    return card;
+  };
+
+  it("keeps its stylesheet across passes instead of re-inserting it", async () => {
+    mountProfileCard();
+    await initProfileCardStyling();
+    const first = document.getElementById("ft-profile-card-styles");
+    expect(first).not.toBeNull();
+
+    // Every pass used to remove and re-append the <style>: a full document
+    // restyle per burst of Intra mutations, for identical text.
+    await initProfileCardStyling();
+    await initProfileCardStyling();
+    expect(document.getElementById("ft-profile-card-styles")).toBe(first);
+    expect(document.querySelectorAll("#ft-profile-card-styles")).toHaveLength(1);
   });
 });

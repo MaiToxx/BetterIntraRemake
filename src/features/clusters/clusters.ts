@@ -7,6 +7,7 @@ import {
 } from "./dom.ts";
 import { createShadowUI } from "./ui.ts";
 import { ensureCampusData } from "../campus/campus.ts";
+import { getClusterData } from "./clusters.data.ts";
 import { waitForElement, watchDom } from "../../core/dom/dom-wait.ts";
 
 type Config = {
@@ -96,7 +97,18 @@ export async function initClusters() {
       "CLUSTERS_SHOW_MARKERS",
       "CLUSTERS_DEFAULT_ID",
       "CLUSTERS_OPEN_NEW_TAB",
+      "CLUSTERS_CAMPUS",
     ] as const);
+    // ensureCampusData() fills the cluster list only; the chair markers come
+    // from SCREENS, which getClusterData() builds. Without this the markers
+    // never drew on meta.intra and the toggle showed for every campus. Only
+    // the cluster pages (meta.intra.42.fr) need it: the file is already in
+    // the storage cache from the call above, so this costs one read there.
+    if (c.CLUSTERS_CAMPUS && location.hostname === "meta.intra.42.fr") {
+      try {
+        await getClusterData(c.CLUSTERS_CAMPUS);
+      } catch {}
+    }
     CONFIG = {
       show_markers: c.CLUSTERS_SHOW_MARKERS,
       default_id: c.CLUSTERS_DEFAULT_ID,

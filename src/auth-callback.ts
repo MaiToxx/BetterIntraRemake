@@ -1,6 +1,8 @@
 /**
  * Content script for https://api.betterintra.com/callback* (the worker's
- * "Login Successful! Transferring credentials..." page).
+ * "Login Successful! Transferring credentials..." page). Registered only in
+ * builds with config.authMode "oauth" (vite.config.ts finalizeManifest): the
+ * intra-mode login never opens that page.
  *
  * That page relies entirely on `window.opener.postMessage(...)`. When the
  * login was started from the toolbar popup, Chrome/Firefox close the popup as

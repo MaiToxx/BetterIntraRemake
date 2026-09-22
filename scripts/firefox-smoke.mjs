@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 /**
- * Firefox smoke test and timing harness for a Better Intra build.
+ * Smoke test and timing harness for a Better Intra build.
  *
  *   node scripts/firefox-smoke.mjs <build-folder> [options]
  *   node scripts/firefox-smoke.mjs --compare <folderA> <folderB> [options]
+ *   node scripts/firefox-smoke.mjs dist-chrome --browser chrome [options]
  *
  * Loads the build as a temporary add-on in a real Firefox (puppeteer-core over
- * WebDriver BiDi), opens a synthetic Intra v3 page served locally but under
+ * WebDriver BiDi) or, with --browser chrome, as an unpacked extension in a
+ * real Chrome (CDP), opens a synthetic Intra v3 page served locally but under
  * its real origin (https://profile-v3.intra.42.fr/), checks that the
  * extension works there, and times it. Exit code 1 when a check fails.
  * docs/FIREFOX-TESTING.md explains what is covered and how the DNS and
- * certificate trick works.
+ * certificate trick works. Timings are only comparable within one browser.
  *
  * Options:
  *   --runs N        warm loads (reloads) in total, default 10
@@ -27,11 +29,14 @@
  *                   profile-v3 sends none)
  *   --proxy         use the CONNECT-proxy fallback instead of port 443
  *   --firefox PATH  Firefox binary (default: FIREFOX_BIN, then .browsers/)
+ *   --browser B     firefox (default) or chrome
+ *   --chrome PATH   Chrome binary (default: CHROME_BIN, then the platform's
+ *                   usual install path)
+ *   --no-sandbox    pass --no-sandbox to Chrome (needed as root, e.g. in CI)
  *   --verbose       also list every request and console message
  *
- * Needs puppeteer-core (a devDependency, or `npm install --no-save
- * puppeteer-core`). Never writes into the build folder: the add-on is
- * installed from a temporary copy.
+ * Needs puppeteer-core (a devDependency). Never writes into the build folder:
+ * the add-on is installed from a temporary copy.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -42,10 +47,12 @@ import {
   CAMPUS,
   INTRA_HOSTS,
   PROFILE_HOST,
+  harnessHosts,
   instrumentSource,
   startConnectProxy,
   startServer,
 } from "./firefox-smoke/server.mjs";
+import { readWorkerUrl } from "./repo-info.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PAGE_URL = `https://${PROFILE_HOST}/`;
@@ -60,7 +67,8 @@ function usage(message) {
     "usage: node scripts/firefox-smoke.mjs <build-folder> [--runs N] [--cold N] [--json]\n" +
       "       node scripts/firefox-smoke.mjs --compare <folderA> <folderB> [options]\n" +
       "options: --runs N --cold N --json --headful --settle MS --app-delay MS\n" +
-      "         --auth-latency MS --csp POLICY --proxy --firefox PATH --verbose\n",
+      "         --auth-latency MS --csp POLICY --proxy --firefox PATH --verbose\n" +
+      "         --browser firefox|chrome --chrome PATH --no-sandbox\n",
   );
   process.exit(2);
 }
@@ -79,6 +87,9 @@ function parseArgs(argv) {
     csp: null,
     proxy: false,
     firefox: process.env.FIREFOX_BIN || null,
+    browser: "firefox",
+    chrome: process.env.CHROME_BIN || null,
+    noSandbox: false,
     verbose: false,
   };
   const num = (v, name) => {
@@ -103,6 +114,9 @@ function parseArgs(argv) {
     else if (a === "--csp") o.csp = next();
     else if (a === "--proxy") o.proxy = true;
     else if (a === "--firefox") o.firefox = next();
+    else if (a === "--browser") o.browser = next();
+    else if (a === "--chrome") o.chrome = next();
+    else if (a === "--no-sandbox") o.noSandbox = true;
     else if (a === "--verbose") o.verbose = true;
     else if (a === "-h" || a === "--help") usage();
     else if (a.startsWith("--")) usage(`unknown option ${a}`);
@@ -111,6 +125,7 @@ function parseArgs(argv) {
   if (o.compare && o.builds.length !== 2) usage("--compare needs exactly two build folders");
   if (!o.compare && o.builds.length !== 1) usage("give one build folder (or --compare A B)");
   if (o.cold < 1) usage("--cold must be at least 1");
+  if (o.browser !== "firefox" && o.browser !== "chrome") usage("--browser must be firefox or chrome");
   return o;
 }
 
@@ -124,20 +139,14 @@ function readBuild(dir) {
   const intraScripts = (manifest.content_scripts || []).filter((c) =>
     (c.matches || []).some((m) => m.includes("intra.42.fr")),
   );
-  const hosts = new Set();
-  for (const p of manifest.host_permissions || []) {
-    const m = /^https?:\/\/([^/]+)\//.exec(p);
-    if (m && !m[1].includes("*")) hosts.add(m[1].toLowerCase());
-  }
-  // The Better Intra worker: every non-Intra, non-GitHub host permission.
-  const workerHosts = [...hosts].filter((h) => !h.endsWith("intra.42.fr") && !h.endsWith("github.com"));
+  const { hosts, workerHosts } = harnessHosts(manifest, readWorkerUrl());
   return {
     dir: abs,
     label: path.basename(abs),
     name: manifest.name,
     version: manifest.version,
     contentScripts: intraScripts.flatMap((c) => c.js || []),
-    hosts: [...hosts],
+    hosts,
     workerHosts,
   };
 }
@@ -175,6 +184,25 @@ function resolveFirefox(explicit) {
   return candidates[0];
 }
 
+const CHROME_DEFAULTS = {
+  win32: [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  ],
+  darwin: ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
+  linux: ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium-browser", "/usr/bin/chromium"],
+};
+
+function resolveChrome(explicit) {
+  if (explicit) {
+    if (!fs.existsSync(explicit)) usage(`Chrome not found at ${explicit}`);
+    return explicit;
+  }
+  const found = (CHROME_DEFAULTS[process.platform] || []).find((p) => fs.existsSync(p));
+  if (!found) usage("no Chrome found; pass --chrome PATH or set CHROME_BIN");
+  return found;
+}
+
 async function loadPuppeteer() {
   try {
     return (await import("puppeteer-core")).default;
@@ -201,6 +229,17 @@ async function startNetwork(opts, builds, log) {
   };
 
   let server = null;
+  if (opts.browser === "chrome") {
+    // Chrome resolves the hosts itself (--host-resolver-rules, port included),
+    // so no port 443, no proxy and no prefs.
+    server = await startServer({ ...common, port: 0 });
+    return {
+      server,
+      mode: `--host-resolver-rules -> 127.0.0.1:${server.port}`,
+      prefs: {},
+      close: () => server.close(),
+    };
+  }
   if (!opts.proxy) {
     try {
       server = await startServer({ ...common, port: 443 });
@@ -402,20 +441,38 @@ async function runSession(puppeteer, opts, net, build, sessionIndex, loadsInSess
   const events = { current: null };
   let browser = null;
   try {
-    browser = await puppeteer.launch({
-      browser: "firefox",
-      protocol: "webDriverBiDi",
-      executablePath: opts.firefoxPath,
-      headless: !opts.headful,
-      acceptInsecureCerts: true,
-      defaultViewport: { width: 1280, height: 900 },
-      extraPrefsFirefox: {
-        ...net.prefs,
-        "network.trr.mode": 5, // no DNS over HTTPS: localDomains must win
-        "extensions.update.enabled": false,
-      },
-    });
-    session.firefox = await browser.version();
+    browser = await puppeteer.launch(
+      opts.browser === "chrome"
+        ? {
+            browser: "chrome",
+            // installExtension needs the pipe transport and enableExtensions.
+            pipe: true,
+            enableExtensions: true,
+            executablePath: opts.chromePath,
+            headless: !opts.headful,
+            acceptInsecureCerts: true,
+            defaultViewport: { width: 1280, height: 900 },
+            args: [
+              `--host-resolver-rules=${net.server.hosts.map((h) => `MAP ${h} 127.0.0.1:${net.server.port}`).join(", ")}`,
+              "--ignore-certificate-errors",
+              ...(opts.noSandbox ? ["--no-sandbox"] : []),
+            ],
+          }
+        : {
+            browser: "firefox",
+            protocol: "webDriverBiDi",
+            executablePath: opts.firefoxPath,
+            headless: !opts.headful,
+            acceptInsecureCerts: true,
+            defaultViewport: { width: 1280, height: 900 },
+            extraPrefsFirefox: {
+              ...net.prefs,
+              "network.trr.mode": 5, // no DNS over HTTPS: localDomains must win
+              "extensions.update.enabled": false,
+            },
+          },
+    );
+    session.browser = await browser.version();
     session.extensionId = await browser.installExtension(copy);
     await sleep(INSTALL_SETTLE_MS);
     const page = (await browser.pages())[0] || (await browser.newPage());
@@ -436,9 +493,10 @@ async function runSession(puppeteer, opts, net, build, sessionIndex, loadsInSess
       (events.current ? events.current.pageErrors : session.orphanConsole).push({ type: "pageerror", ...entry });
     });
 
-    // BiDi reports the page's and the content script's http(s) requests (not
-    // the moz-extension:// loads). One to a host the harness does not serve
-    // went to the real network (port 443 mode) or was refused (proxy mode).
+    // BiDi and CDP report the page's and the content script's http(s)
+    // requests (not the extension's own file loads). One to a host the
+    // harness does not serve went to the real network (port 443 and Chrome
+    // modes) or was refused (proxy mode).
     const served = new Set(net.server.hosts);
     page.on("request", (r) => {
       let host = "";
@@ -733,7 +791,7 @@ function summarise(build, sessions) {
 
   return {
     build: { label: build.label, dir: build.dir, name: build.name, version: build.version, contentScripts: build.contentScripts },
-    firefox: sessions.find((s) => s.firefox)?.firefox || null,
+    browser: sessions.find((s) => s.browser)?.browser || null,
     loads: { cold: loads.filter((l) => l.kind === "cold").length, warm: loads.filter((l) => l.kind === "warm").length },
     ok: checks.every((c) => c.ok) && loads.length > 0,
     checks,
@@ -765,8 +823,8 @@ const pad = (s, n) => String(s).padEnd(n);
 
 function printReport(summary, opts, net, out) {
   const b = summary.build;
-  out(`\nBetter Intra Firefox smoke test: ${b.label} (${b.name} ${b.version}, content scripts: ${b.contentScripts.join(", ")})`);
-  out(`${summary.firefox || "Firefox ?"} ${opts.headful ? "headful" : "headless"}; ${net.mode}; ${summary.loads.cold} cold + ${summary.loads.warm} warm loads\n`);
+  out(`\nBetter Intra smoke test: ${b.label} (${b.name} ${b.version}, content scripts: ${b.contentScripts.join(", ")})`);
+  out(`${summary.browser || `${opts.browser} ?`} ${opts.headful ? "headful" : "headless"}; ${net.mode}; ${summary.loads.cold} cold + ${summary.loads.warm} warm loads\n`);
   out("Checks");
   for (const c of summary.checks) {
     out(`  ${c.ok ? "PASS" : "FAIL"}  ${pad(c.id, 22)} ${c.pass}/${c.pass + c.fail} loads${c.ok ? (c.sample ? `  (${c.sample})` : "") : ""}`);
@@ -832,10 +890,12 @@ async function main() {
   const log = (m) => process.stderr.write(`${m}\n`);
   const out = opts.json ? log : (m) => process.stdout.write(`${m}\n`);
   const builds = opts.builds.map(readBuild);
-  opts.firefoxPath = resolveFirefox(opts.firefox);
+  if (opts.browser === "chrome") opts.chromePath = resolveChrome(opts.chrome);
+  else opts.firefoxPath = resolveFirefox(opts.firefox);
+  const binary = opts.chromePath || opts.firefoxPath;
   const puppeteer = await loadPuppeteer();
   const net = await startNetwork(opts, builds, log);
-  log(`firefox-smoke: ${path.relative(ROOT, opts.firefoxPath) || opts.firefoxPath}; ${net.mode}`);
+  log(`firefox-smoke: ${path.relative(ROOT, binary) || binary}; ${net.mode}`);
 
   // Every session starts with one cold load; the warm loads are spread over
   // the sessions (10 over 3 sessions: 4, 3, 3).
@@ -863,6 +923,7 @@ async function main() {
       tool: "firefox-smoke",
       date: new Date().toISOString(),
       network: net.mode,
+      browser: opts.browser,
       options: {
         cold: opts.cold,
         warm: opts.warm,

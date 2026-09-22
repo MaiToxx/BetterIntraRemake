@@ -90,6 +90,18 @@ describe("sanitizeVisualUrls with a look", () => {
   });
 });
 
+describe("sanitizePublicLook image policy", () => {
+  it("a visitor look keeps only an allowlisted https background, the author's own any http(s) one", () => {
+    const raw = { CUSTOM_PAGE_BG_URL: "https://my-site.example/bg.png", CUSTOM_PAGE_BG_DIM: 20 };
+    expect(sanitizePublicLook(raw, "allowlist")?.CUSTOM_PAGE_BG_URL).toBe("");
+    expect(sanitizePublicLook(raw)?.CUSTOM_PAGE_BG_URL).toBe("https://my-site.example/bg.png");
+    expect(
+      sanitizePublicLook({ CUSTOM_PAGE_BG_URL: "https://i.imgur.com/bg.png" }, "allowlist")
+        ?.CUSTOM_PAGE_BG_URL,
+    ).toBe("https://i.imgur.com/bg.png");
+  });
+});
+
 describe("share flags", () => {
   it("default to private, and to showing other people's looks", () => {
     expect(CONFIG_DEFAULT.CUSTOM_SHARE_LOOK).toBe(false);

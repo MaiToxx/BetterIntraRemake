@@ -38,7 +38,17 @@ export interface CorrectorFeedback {
 }
 
 export const FETCH_INTRA_PAGE_MESSAGE = "FT_FETCH_INTRA_PAGE";
-const MAX_FEEDBACK_PAGES = 15;
+/**
+ * Feedback pages read at most. Past it the stats are reported as unknown
+ * rather than as a total too low (see fetchProfileStatsViaIntra).
+ */
+export const MAX_FEEDBACK_PAGES = 40;
+/**
+ * Feedback pages in flight at once after the first. Every page is a full v2
+ * Intra document; three at a time cuts a long history from tens of serial
+ * round trips to a few, without hammering the slow v2.
+ */
+export const FEEDBACK_PAGE_CONCURRENCY = 3;
 
 const MONTHS: Record<string, number> = {
   january: 0, february: 1, march: 2, april: 3, may: 4, june: 5, july: 6,
@@ -132,6 +142,15 @@ export function nextFeedbackPage(html: string, current: number): number | null {
   return max > current ? current + 1 : null;
 }
 
+/** Highest page number the pagination links advertise; 1 without any. */
+export function lastFeedbackPage(html: string): number {
+  const re = /feedbacks\?as=corrector(?:&amp;|&)page=(\d+)/g;
+  let max = 1;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) max = Math.max(max, Number(m[1]));
+  return max;
+}
+
 export function parseRouletteHistorics(html: string): RouletteEntryLike[] {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const out: RouletteEntryLike[] = [];
@@ -166,15 +185,6 @@ export type ProfileStatsCache = Record<string, { at: number; data: ProfileStatsD
 export const PROFILE_STATS_CACHE_KEY = "FT_PROFILE_STATS_CACHE";
 export const PROFILE_STATS_TTL_MS = 60 * 60 * 1000;
 export const PROFILE_STATS_CACHE_MAX = 40;
-/** Older builds stored one `FT_PROFILE_STATS_<login>` key per visited profile. */
-const LEGACY_PROFILE_STATS_PREFIX = "FT_PROFILE_STATS_";
-
-let legacyStatsKeysCleaned = false;
-
-/** Test hook: run the legacy key cleanup again on the next write. */
-export function resetProfileStatsCacheState(): void {
-  legacyStatsKeysCleaned = false;
-}
 
 function isCacheEntry(v: unknown): v is { at: number; data: ProfileStatsData } {
   if (!v || typeof v !== "object") return false;
@@ -226,26 +236,12 @@ export async function writeProfileStatsCache(
 ): Promise<void> {
   const cache = await readCacheMap();
   cache[login] = { at: now, data };
+  // Only this key is ever read or written here: the per-login keys of older
+  // builds are removed by the background on update (see background.ts), not
+  // by a get(null) of the whole storage area from every profile tab.
   await chrome.storage.local.set({
     [PROFILE_STATS_CACHE_KEY]: pruneProfileStatsCache(cache, now),
   });
-  if (!legacyStatsKeysCleaned) {
-    legacyStatsKeysCleaned = true;
-    await removeLegacyProfileStatsKeys();
-  }
-}
-
-async function removeLegacyProfileStatsKeys(): Promise<void> {
-  try {
-    const all = await chrome.storage.local.get(null);
-    const legacy = Object.keys(all).filter(
-      (k) =>
-        k.startsWith(LEGACY_PROFILE_STATS_PREFIX) && k !== PROFILE_STATS_CACHE_KEY,
-    );
-    if (legacy.length > 0) await chrome.storage.local.remove(legacy);
-  } catch {
-    /* best effort */
-  }
 }
 
 async function fetchIntraPage(url: string): Promise<string | null> {
@@ -281,25 +277,67 @@ export async function fetchProfileStatsViaIntra(
   login: string,
 ): Promise<ProfileStatsFetchResult> {
   const safeLogin = encodeURIComponent(login);
+  const feedbackPageUrl = (page: number) =>
+    `https://projects.intra.42.fr/users/${safeLogin}/feedbacks?as=corrector&page=${page}`;
 
-  const feedbacks: CorrectorFeedback[] = [];
-  let page: number | null = 1;
-  let feedbacksComplete = true;
-  while (page !== null && page <= MAX_FEEDBACK_PAGES) {
-    const html = await fetchIntraPage(
-      `https://projects.intra.42.fr/users/${safeLogin}/feedbacks?as=corrector&page=${page}`,
-    );
-    if (!html) {
-      feedbacksComplete = false;
-      break;
-    }
-    feedbacks.push(...parseCorrectorFeedbacks(html));
-    page = nextFeedbackPage(html, page);
-  }
-
-  const historicsHtml = await fetchIntraPage(
+  // Another host and an independent answer: the history is requested with
+  // the first feedback page, not after the last one.
+  const historicsPromise = fetchIntraPage(
     `https://profile.intra.42.fr/users/${safeLogin}/correction_point_historics`,
   );
+
+  const pages = new Map<number, CorrectorFeedback[]>();
+  let feedbacksComplete = true;
+  const first = await fetchIntraPage(feedbackPageUrl(1));
+  if (first) {
+    pages.set(1, parseCorrectorFeedbacks(first));
+    // The links of a page may only reach a few pages ahead (windowed
+    // pagination): every page read can push the goal further.
+    let advertised = lastFeedbackPage(first);
+    let next = 2;
+    // An empty page means the list ended before its links said: the pages
+    // after it are not wanted, the ones before it are. A failed page ends the
+    // walk too; the result is then discarded (see below), so the pages still
+    // in flight are simply ignored.
+    let endedAt = Infinity;
+    let failed = false;
+    const worker = async (goal: number) => {
+      while (!failed && next <= Math.min(goal, endedAt - 1)) {
+        const page = next++;
+        const html = await fetchIntraPage(feedbackPageUrl(page));
+        if (!html) {
+          failed = true;
+          return;
+        }
+        const parsed = parseCorrectorFeedbacks(html);
+        if (parsed.length === 0) {
+          endedAt = Math.min(endedAt, page);
+          return;
+        }
+        pages.set(page, parsed);
+        advertised = Math.max(advertised, lastFeedbackPage(html));
+      }
+    };
+    const goal = () => Math.min(advertised, MAX_FEEDBACK_PAGES, endedAt - 1);
+    while (!failed && next <= goal()) {
+      const end = goal();
+      const workers = Math.min(FEEDBACK_PAGE_CONCURRENCY, end - next + 1);
+      await Promise.all(Array.from({ length: workers }, () => worker(end)));
+    }
+    if (failed) feedbacksComplete = false;
+    // Stopped by the cap with pages left: an undercount must not be cached
+    // as the real total for an hour.
+    if (endedAt === Infinity && advertised > MAX_FEEDBACK_PAGES) {
+      feedbacksComplete = false;
+    }
+  } else {
+    feedbacksComplete = false;
+  }
+  const feedbacks = [...pages.keys()]
+    .sort((a, b) => a - b)
+    .flatMap((page) => pages.get(page) ?? []);
+
+  const historicsHtml = await historicsPromise;
   const rouletteLoaded = historicsHtml !== null;
   const roulette = historicsHtml ? parseRouletteHistorics(historicsHtml) : [];
 

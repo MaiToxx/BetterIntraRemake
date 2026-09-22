@@ -1,6 +1,10 @@
 import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { getCloudLogin, testCloudConnection } from "./account.ts";
+import {
+  getCloudLogin,
+  getLastKnownSessions,
+  refreshSessionCount,
+} from "./account.ts";
 import { getConfig } from "../../core/config.ts";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { AccountState, createInitialState } from "./state.ts";
@@ -10,7 +14,19 @@ function renderAccountTab(
   state: AccountState,
   handlers: ReturnType<typeof createHandlers>,
 ): ReturnType<typeof html> {
-  const isConnected = state.activeSessions > 0;
+  const isConnected = state.cloud === "online";
+  const statusClass =
+    state.cloud === "checking"
+      ? "badge-ghost"
+      : isConnected
+        ? "badge-success"
+        : "badge-warning";
+  const statusText =
+    state.cloud === "checking"
+      ? "Checking..."
+      : isConnected
+        ? "Connected"
+        : "Offline";
 
   if (!state.token) {
     return html`
@@ -84,12 +100,8 @@ function renderAccountTab(
               <span class="font-medium text-sm text-base-content"
                 >Cloud Status</span
               >
-              <div
-                class="badge ${isConnected
-                  ? "badge-success"
-                  : "badge-warning"} font-bold"
-              >
-                ${isConnected ? "Connected" : "Offline"}
+              <div class="badge ${statusClass} font-bold">
+                ${statusText}
               </div>
             </div>
             <div
@@ -99,7 +111,7 @@ function renderAccountTab(
                 >Sessions</span
               >
               <div class="badge badge-success font-bold text-success-content">
-                ${state.activeSessions}/10
+                ${state.activeSessions ?? "?"}/10
               </div>
             </div>
           </div>
@@ -179,18 +191,33 @@ export async function initAccountSettings(container: HTMLElement) {
   const state = createInitialState();
   const handlers = createHandlers(state, update);
 
+  // Storage only, never the network: the card used to wait for the worker's
+  // answer before its first paint, so a slow or blackholed worker left the
+  // popup blank for as long as the browser's own connection timeout.
   async function update() {
-    // Fetch latest state before re-rendering
     state.login = await getCloudLogin();
     state.token = (await getConfig("CLOUD_TOKEN")) || "";
     state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
-    if (state.token && state.login) {
-      state.activeSessions = await testCloudConnection();
-    }
-
     render(renderAccountTab(state, handlers), container);
   }
 
-  // Initial load
+  async function refreshCloud() {
+    if (!state.token || !state.login) return;
+    const count = await refreshSessionCount();
+    if (count !== null) {
+      state.activeSessions = count;
+      state.cloud = "online";
+    } else {
+      state.cloud = "offline";
+    }
+    // Set by the request itself on a 401: read after it, or the first popup
+    // after a session expiry says "Offline" and only offers Reconnect on the
+    // next re-render.
+    state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
+    render(renderAccountTab(state, handlers), container);
+  }
+
+  state.activeSessions = await getLastKnownSessions();
   await update();
+  void refreshCloud();
 }

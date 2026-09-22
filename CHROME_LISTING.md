@@ -1,44 +1,46 @@
-# Better Intra
+# Better Intra — 42 Mulhouse edition
 
-Better Intra adds quality-of-life features to the 42 Intra v3 experience.
+Better Intra adds quality-of-life features to the 42 Intra v3 profile pages: a logtime calendar, a live cluster map, custom profiles and looks, shortcuts, a friends widget, correction stats, and a few secrets. Everything works with your Intra session alone; the optional cloud account is a sign-in with that same session, no password and no OAuth page.
 
 ### 📅 Logtime
-Replace the default logtime view with a monthly calendar showing your logged hours at a glance. Each month is a colour-coded grid — darker means more hours per day. Switch to a **heatmap view** for a GitHub-style contribution map, or a **compact view** that shows past months as summary cards. Set a monthly goal (default 140h) and see a progress bar with your percentage and remaining hours. Track your daily average, last active date, and optionally use emoji-mode to gamify your hours. Fully customisable colours and animations. Subscribed 42 events appear as markers on your logtime calendar days.
+Replace the default logtime view with a monthly calendar showing your logged hours at a glance, with weekly totals. Switch to a **heatmap** of your whole history or a **compact** view of past months as summary cards. Set a monthly goal (default 140 h) and follow a progress bar with your percentage and remaining hours; track your daily average and last active day, or use **emoji mode** to turn hours into monthly "earnings". Custom colours and rainbow palettes; your subscribed 42 events appear as markers on the days.
 
 ### 🖥️ Clusters
-See directional arrows on the cluster map showing which way each seat faces (works for all campuses with submitted cluster data). Switch between clusters with a dropdown, toggle arrows on/off, and set a default cluster that loads automatically. Your campus is auto-detected — no manual setup needed.
+Directional markers on the cluster map show which way each seat faces. Pick a cluster from a dropdown, set a default one, open profiles in a new tab. Your campus is detected automatically.
 
-### 🗺️ Cluster Map Dialog
-Open a live interactive cluster map popup from your profile. See real-time seat occupancy with user avatars overlaid on occupied seats, switch between cluster rooms with tabs, and browse a Wi-Fi users list showing who's connected. **Zoom in/out** (30%–300%) with +/- controls and a reset button, or switch campuses from within the dialog — a live clock shows the selected campus's local time. Auto-refreshes every 30 seconds with a last-updated indicator. Click any seat to open that user's profile (optionally in a new tab). Works for every 42 campus.
+### 🗺️ Live cluster map
+Open an interactive cluster map from the **Clusters** button in the Intra sidebar or from your profile: seat occupancy with avatars, taken/total badges, a Wi-Fi users tab, room tabs, **zoom** (30%–300%), a campus selector with the campus's local clock, and an auto-refresh every 30 seconds. Click any seat to open that student's profile. Works for every campus with cluster data; Mulhouse is included.
 
 ### 👤 Profile
-Personalise your profile with custom avatar, banner, and background images — click your avatar to open the customisation panel with zoom slider (50-200%), click-and-drag repositioning, mouse wheel zoom, and transparent/colour background toggle with colour picker. Your custom avatar also appears in the **site navigation bar**. Choose from 30+ theme presets (synthwave, dracula, cyberpunk, garden, neon, soap, citrus, and more) that recolor your profile badges and accents. Reorder or hide dashboard cards (Logtime, Agenda, Evaluations, Projects, Achievements) by dragging them. **Campus flags** show a country flag emoji on your campus badge. Wallet, level, rank, score, and seat show as coloured badges below the profile header — click wallet to open the 42 shop. **Phoenix/Pegasus tracker** shows whether you meet your weekly thresholds with a glowing badge and hover popover. Filter your agenda by campus and event type. Click any seat label to jump to the cluster map with that seat highlighted. The Projects card uses colour-coded badges (green for projects, red for exams) for quick scanning, with a ⭐ for projects rated Outstanding and a total star badge on your own profile. Frozen students get a freeze card with a live countdown. The Thursday Roulette card also shows your monthly evaluation history as a corrector.
+Personalise your profile with a custom avatar, banner and background: click your avatar to open the editor with zoom, drag-to-reposition and a live preview, plus a transparent or solid colour behind the avatar. Your custom avatar also appears in the site navigation bar. Reorder or hide the dashboard cards (Logtime, Agenda, Evaluations, Projects, Achievements, Thursday Roulette) by dragging them. Wallet, level, rank, score and seat show as coloured badges under the header, with a **campus flag**. Projects become colour-coded badges (green for projects, red for exams), every graded project is listed with date and score, pending evaluations are sorted into "To feedback", "Evaluator" and "Evaluated", achievements get a full list with a glow on milestones, and frozen students get a freeze card with a live countdown. A **Phoenix/Pegasus tracker** shows whether you meet your weekly thresholds. Click any seat label to jump to the cluster map with that seat highlighted.
+
+### ✨ Public profile ☁️
+Show every Better Intra visitor who you are: a status with an emoji, pronouns, a short bio, flair emoji, a greeting, your GitHub, GitLab, LinkedIn, website and Discord handle; a styled name (gradient, rainbow, glow, neon, fonts), an avatar frame, a level bar style, a header gradient and a page effect (snow, stars, fireflies, confetti, bubbles, sakura, rain or embers). Only presentation values and short texts are published, and everything a visitor receives is validated in their browser before it touches the page. Visitors can turn other people's extras off.
+
+### 🎨 Customize
+A **Customize** tab restyles every Intra page live: accent colour (with gradient), your own page, card and text colours, a background image or one of 13 built-in gradients, six card styles, per-card borders and colours, fonts and size, density, rounded corners, scrollbar style, custom CSS, 30+ theme presets (synthwave, dracula, cyberpunk, nord, garden, cupcake…). Save looks as presets, share them as theme codes, and optionally **publish your look ☁️** so other Better Intra users see your profile the way you styled it.
 
 ### 🔗 Shortcuts
-Add up to 8 quick-access links displayed as colourful buttons on your profile. Each link can have a name, URL, custom colour, and optional emoji. Site icons load automatically when no emoji is set. Text colour (black or white) is chosen for readability.
+Up to 8 quick-access links on your profile as colourful buttons, each with a name, URL, colour and emoji (or the site's icon). Drag to reorder; optionally hide the default links.
 
+### 👥 Friends ☁️
+A friends panel in the bottom-right corner: add friends by login, see their avatar, level bar, wallet, correction points, location and online status; follow or unfollow from any profile; sort by name, level, wallet, points or online; a badge with the number of friends online. Data comes from the Intra itself and refreshes every 3 minutes.
 
-### 🧑‍🎓 Students ☁️ 🇧🇪
-A students directory for the **Belgium** campus, opened from the users icon in the intra sidebar. Browse 42 cursus students, upcoming intakes, or specific piscine sessions. The Pisciners tab shows a grid of month/year cards to pick a session. Toggle between grid and list views, sort by name or start date, and filter by name or login. Click any login to copy it. A filter menu narrows results by pool month, pool year, and status (active, blackholed, frozen, alumni). Status badges (skull, snowflake, graduation cap) highlight inactive students, and the list loads more entries as you scroll. Requires cloud sign-in.
+### 📆 Calendar sync ☁️
+Subscribe to your 42 events in Google Calendar, Apple Calendar or Outlook through a private ICS link, with a QR code for phones. Events are pushed every time you open your own profile, each with a 15-minute reminder. Regenerate the link at any time.
 
-### 👥 Friends
-Access a friends panel from a button in the bottom-right corner. Add friends by login, see their avatar, level bar, wallet, correction points, and online status. Sort by online status, name, level, wallet, or evaluation points. The button badge shows how many friends are online. A follow/unfollow button appears next to the role dropdown on any user's profile, letting you manage friends without opening the full widget. Requires cloud sync.
+### ⚡ Lighten the Intra
+Four switches make the Intra page itself cheaper: skip laying out off-screen rows in long cards, load images when needed, pause animations while the tab is hidden, and connect early to the image server.
 
 ### 📢 Announcements
-A top banner on profile pages shows official Better Intra announcements, colour-coded as Notice, Warning, or Critical, with optional action links. Dismiss any announcement with a click — it stays hidden for the current session.
+A banner at the top of profile pages shows Better Intra service announcements (Notice, Warning or Critical) with optional links. Dismiss one and it stays dismissed in every tab and after a restart until a new announcement is posted.
 
-### ☁️ Cloud Sync (optional)
-Authenticate with your 42 Intra account via the Cloudflare Worker to sync settings across devices. Push, pull, or enable auto-push from the hub footer to automatically sync your settings on reload. Synced visuals (avatar, banner, background) become visible to other Better Intra users viewing your profile.
+### ☁️ Cloud account (optional)
+Click **Connect with 42** in the popup: the extension signs you in with the Intra session your browser already holds (the worker verifies it against 42's public keys and never stores it). Push or pull your settings, or let auto-push sync them on reload; your custom visuals and, if you choose, your public profile and look become visible to other Better Intra users. Wipe all your cloud data in one click.
 
-### 📅 Calendar Sync ☁️
-Subscribe to your 42 events in any calendar app via a private ICS subscription URL. Scan the QR code for easy mobile setup. Events auto-sync on profile visit. Configure from the Calendar tab.
-
-### 🔔 Evaluations ☁️
-Discord DM notifications when your evaluations are booked or correcteds are revealed. The Cloudflare Worker runs every 5 minutes and sends DMs directly via the Better Intra bot — no browser polling needed. Connect your Discord account from the Discord tab — auto-joins Le Bassin to enable direct messages. Quiet hours let you pause notifications during specified hours. Pending evaluations are sorted into **"To Feedback", "Evaluator", and "Evaluated"** sections with counts. 42 sign-in required.
-
-### ⚙️ Settings Hub
-All extension settings in one place, accessible from the gear icon on the intra sidebar. Tabs for Logtime, Clusters, Profile, Shortcuts, Discord, Calendar, Advanced, and About. **Drag and drop** dashboard cards in the Profile tab to reorder them, toggle visibility, or reset to default. The footer shows your theme toggle, cloud connection status, last sync badge, and auto-push toggle. Export, import, or reset all settings from the Advanced tab. Turn features on/off or reset settings to default. Better Intra's own styled tooltips replace native ones throughout the extension.
+### ⚙️ Settings hub
+All settings in one place, from the gear in the Intra sidebar: Profile, Extras, Clusters, Logtime, Shortcuts, Calendar, Customize, Advanced and About tabs; feature toggles, per-feature reset, backup and restore as JSON, theme toggle and cloud status. Everything works from the keyboard and with a screen reader, and respects your system's reduce-motion setting.
 
 ---
 
-**Privacy**: All settings are stored locally. Cloud sync is optional and opt-in. No analytics, tracking, or advertising. See the full privacy policy on GitHub at https://api.betterintra.com.
+**Privacy**: settings are stored locally. The cloud account is optional and opt-in; signing in uses your Intra session, not a password. No analytics, tracking or advertising. Full privacy policy: https://github.com/MaiToxx/BetterIntraRemake/blob/main/PRIVACY.md

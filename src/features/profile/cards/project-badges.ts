@@ -1,5 +1,6 @@
 import { html, render } from "lit-html";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
+import { waitForDashboardCard } from "../../../core/intra/selectors.ts";
 
 const SHADOW_ID = "project-badges-shadow";
 
@@ -75,44 +76,35 @@ export async function initProjectBadges() {
   )
     return;
 
-  for (let i = 0; i < 100; i++) {
-    const cards = document.querySelectorAll<HTMLElement>(".bg-white.md\\:h-96");
-    const card = [...cards].find((c) => {
-      const titleEl = c.querySelector("[class*='uppercase']");
-      return titleEl?.textContent?.trim().toUpperCase() === "PROJECTS";
-    });
-    if (!card) {
-      await new Promise((r) => requestAnimationFrame(r));
-      continue;
-    }
+  // The card is only useful once its rows (native `li`, or the list the marks
+  // feature rendered in their place) are in: an empty card gives no badges.
+  const card = await waitForDashboardCard("PROJECTS", {
+    ready: (c) =>
+      !!c.querySelector(".h-full ul li") ||
+      !!c.querySelector(".flex.flex-col.gap-2"),
+  });
+  if (!card) return;
 
-    const ul = card.querySelector(".h-full ul");
-    const lis = ul?.querySelectorAll("li");
-    if (lis && lis.length > 0) {
-      const items: { name: string; href: string }[] = [];
-      for (const li of lis) {
-        const a = li.querySelector("a");
-        if (!a) continue;
-        items.push({ name: a.textContent?.trim() || "", href: a.href });
-      }
-      insertBadges(card, items);
-      return;
+  const lis = card.querySelectorAll(".h-full ul li");
+  if (lis.length > 0) {
+    const items: { name: string; href: string }[] = [];
+    for (const li of lis) {
+      const a = li.querySelector("a");
+      if (!a) continue;
+      items.push({ name: a.textContent?.trim() || "", href: a.href });
     }
-
-    const enhanced = card.querySelector(".flex.flex-col.gap-2");
-    if (enhanced) {
-      const items: { name: string; href: string }[] = [];
-      const divs = enhanced.querySelectorAll(":scope > div");
-      for (let j = 0; j < Math.min(divs.length, 5); j++) {
-        const a = divs[j].querySelector("a");
-        if (!a) continue;
-        items.push({ name: a.textContent?.trim() || "", href: a.href });
-      }
-      insertBadges(card, items);
-      return;
-    }
-
-    if (i >= 90) return;
-    await new Promise((r) => requestAnimationFrame(r));
+    insertBadges(card, items);
+    return;
   }
+
+  const enhanced = card.querySelector(".flex.flex-col.gap-2");
+  if (!enhanced) return;
+  const items: { name: string; href: string }[] = [];
+  const divs = enhanced.querySelectorAll(":scope > div");
+  for (let j = 0; j < Math.min(divs.length, 5); j++) {
+    const a = divs[j].querySelector("a");
+    if (!a) continue;
+    items.push({ name: a.textContent?.trim() || "", href: a.href });
+  }
+  insertBadges(card, items);
 }

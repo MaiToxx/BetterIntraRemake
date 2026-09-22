@@ -153,7 +153,7 @@ export async function loadCampusData(
     }
   }
   const existing = force ? undefined : inFlightLoads.get(cacheKey);
-  if (existing) return existing;
+  if (existing) return cachedData ? cachedData.data : existing;
   const load = (async () => {
     let data: ClusterDataFile;
     try {
@@ -178,7 +178,26 @@ export async function loadCampusData(
     if (!force) inFlightLoads.delete(cacheKey);
   });
   if (!force) inFlightLoads.set(cacheKey, load);
-  return force ? await load : load;
+  if (force) return await load;
+  // Stale-while-revalidate: an expired file is served at once and refreshed
+  // behind the caller. The worker's own max-age is the same hour as CACHE_TTL,
+  // so both lapse together and every Intra page used to stall for two worker
+  // round trips once an hour before any feature started. Only a cold install
+  // (nothing cached) waits for the network.
+  if (cachedData) {
+    load.catch(() => {});
+    return cachedData.data;
+  }
+  return load;
+}
+
+/**
+ * The background refresh started by a stale loadCampusData(), if one is
+ * running for this campus, so a caller can pick up the fresh data when it
+ * lands.
+ */
+function pendingRefresh(campusId: string): Promise<ClusterDataFile> | undefined {
+  return inFlightLoads.get(`${CACHE_PREFIX}${campusId}`);
 }
 
 export async function clearCampusConfigCache(campusId: string): Promise<void> {
@@ -217,6 +236,13 @@ export async function ensureCampusData(): Promise<void> {
         try {
           const data = await loadCampusData(campus);
           CLUSTERS = data.clusters;
+          // Served from an expired cache: the same page gets the fresh list.
+          pendingRefresh(campus)?.then(
+            (fresh) => {
+              CLUSTERS = fresh.clusters;
+            },
+            () => {},
+          );
         } catch {}
       }
     }

@@ -242,10 +242,10 @@ export async function initThemeManager() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.BETTER_INTRA_THEME) {
       sessionStorage.removeItem("intra-theme");
-      initThemeManager();
+      void initThemeManager().then(notifyThemeChange);
     }
     if (area === "local" && changes.PROFILE_THEME_PRESET) {
-      void applyThemePreset();
+      void applyThemePreset().then(notifyThemeChange);
     }
   });
   window
@@ -254,6 +254,52 @@ export async function initThemeManager() {
       const savedTheme = await getConfig("BETTER_INTRA_THEME");
       if (savedTheme === "system") {
         applyTheme(e.matches ? "dark" : "light");
+        await notifyThemeChange();
       }
     });
+}
+
+// ---------------------------------------------------------------------------
+// Theme changes for the shadow-root widgets
+// ---------------------------------------------------------------------------
+//
+// applyTheme() restyles the Intra page live, but every widget in a shadow root
+// (hub, logtime, friends, profile card) carries its own data-theme, read once
+// at mount. This one event, sent after the page is restyled, is what they
+// re-read it from; it is not sent at start-up, when they mount with the right
+// theme already.
+
+export const THEME_CHANGED_EVENT = "42_THEME_CHANGED";
+
+export interface ThemeChange {
+  theme: "dark" | "light";
+  /** The PROFILE_THEME_PRESET key ("dark" when unset). */
+  preset: string;
+}
+
+async function notifyThemeChange(): Promise<void> {
+  const [theme, preset] = await Promise.all([
+    getEffectiveTheme(),
+    getConfig("PROFILE_THEME_PRESET"),
+  ]);
+  document.dispatchEvent(
+    new CustomEvent<ThemeChange>(THEME_CHANGED_EVENT, {
+      detail: { theme, preset: preset || "dark" },
+    }),
+  );
+}
+
+/** Calls `cb` on every theme change; returns the unsubscribe function. */
+export function onThemeChange(cb: (change: ThemeChange) => void): () => void {
+  const handler = (e: Event) => cb((e as CustomEvent<ThemeChange>).detail);
+  document.addEventListener(THEME_CHANGED_EVENT, handler);
+  return () => document.removeEventListener(THEME_CHANGED_EVENT, handler);
+}
+
+/**
+ * The daisyUI theme a widget sets as data-theme: a named preset as is, the
+ * plain light/dark presets follow the effective theme.
+ */
+export function widgetTheme(theme: "dark" | "light", preset: string): string {
+  return preset !== "dark" && preset !== "light" ? preset : theme;
 }

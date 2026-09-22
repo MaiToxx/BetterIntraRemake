@@ -1,6 +1,21 @@
 import { normalizeSeatId } from "./seats";
 import type { ClusterInfo } from "./context";
 
+/**
+ * The campus shown in the header: its manifest name, else its id, else (no
+ * campus detected yet, meta.intra.42.fr answers for the viewer's own) "your
+ * campus". Never a stand-in campus: the dialog used to show Abu Dhabi, the
+ * first name of the sorted list, to anyone whose campus was not known yet.
+ */
+export function campusDisplayName(
+  options: { id: string; name: string }[],
+  campusId: string,
+): string {
+  return (
+    options.find((o) => o.id === campusId)?.name || campusId || "your campus"
+  );
+}
+
 export function formatCampusClock(timezone?: string): string {
   if (!timezone) return "";
   try {

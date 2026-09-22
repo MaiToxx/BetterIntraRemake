@@ -1,5 +1,6 @@
 {
   "manifest_version": 3,
+  "minimum_chrome_version": "111",
   "name": "Better Intra",
   "version": "1.0.8",
   "description": "UI and UX improvements for 42 Intra: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.",
@@ -38,8 +39,7 @@
   "incognito": "not_allowed",
   "host_permissions": [
     "https://api.betterintra.com/*",
-    "https://*.intra.42.fr/*",
-    "https://api.github.com/*"
+    "https://*.intra.42.fr/*"
   ],
   "content_scripts": [
     {

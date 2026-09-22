@@ -14,7 +14,8 @@
   cursor: grab;
   user-select: none;
   scrollbar-width: none;
-  touch-action: pan-x;
+  /* pan-y too: a vertical swipe that starts on the calendar scrolls the page */
+  touch-action: pan-x pan-y;
 }
 
 .log-slider-fixed.is-carousel {

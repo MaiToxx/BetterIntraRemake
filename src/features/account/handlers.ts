@@ -1,12 +1,13 @@
 import {
   applyCloudSettings,
   clearAuthFailed,
-  fetchMySettings,
+  fetchPrivateSettings,
+  hasCloudData,
   loginWith42,
   logoutCloud,
-  syncToCloud,
-  testCloudConnection,
+  pushSettings,
   wipeAllCloudData,
+  type CloudFailure,
 } from "./account";
 import { AccountState, resetButtonState } from "./state";
 import { WORKER_ORIGIN_PATTERN } from "../../core/worker.ts";
@@ -32,6 +33,16 @@ async function ensureHostPermissions(): Promise<void> {
   }
 }
 
+/** The button label for a failed Push or Pull; the Reconnect banner comes from updateUI. */
+function failureLabel(reason: CloudFailure): string {
+  if (reason === "auth") return "Session expired";
+  if (reason === "network") return "Connection Failed";
+  return "Sync Failed";
+}
+
+/**
+ * @param updateUI Re-renders from storage and `state`; never talks to the worker.
+ */
 export function createHandlers(state: AccountState, updateUI: () => void) {
   const handleLogin42 = async () => {
     await ensureHostPermissions();
@@ -70,7 +81,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
   const handleWipe = async () => {
     if (
       !confirm(
-        "This will permanently delete ALL your saved settings and sessions from the cloud. Are you sure?",
+        "This permanently deletes everything the Better Intra server holds for you: your pushed settings, every signed-in session, your calendar link and your entry in the community counter. Your local settings stay. Continue?",
       )
     )
       return;
@@ -87,37 +98,26 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
   const handlePush = async () => {
     if (state.buttons.push.loading) return;
 
+    // One POST, no probe first: the request's own outcome tells network from
+    // session from worker error, and the button reacts on the click itself.
     state.buttons.push = { loading: true, text: "Connecting..." } as any;
     updateUI();
 
-    if (!(await testCloudConnection())) {
-      state.buttons.push = {
-        loading: false,
-        error: true,
-        text: "Connection Failed",
-      } as any;
-      updateUI();
-      setTimeout(() => {
-        resetButtonState(state, "push", "Push Settings");
-        updateUI();
-      }, 2500);
-      return;
-    }
-
-    const success = await syncToCloud();
-    if (success) {
+    const result = await pushSettings();
+    if (result === "ok") {
       await clearAuthFailed();
-      await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
+      state.cloud = "online";
       state.buttons.push = {
         loading: false,
         success: true,
         text: "Synced!",
       } as any;
     } else {
+      if (result === "network") state.cloud = "offline";
       state.buttons.push = {
         loading: false,
         error: true,
-        text: "Sync Failed",
+        text: failureLabel(result),
       } as any;
     }
     updateUI();
@@ -134,24 +134,18 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     state.buttons.pull = { loading: true, text: "Connecting..." } as any;
     updateUI();
 
-    if (!(await testCloudConnection())) {
-      state.buttons.pull = {
-        loading: false,
-        error: true,
-        text: "Connection Failed",
-      } as any;
-      updateUI();
-      setTimeout(() => {
-        resetButtonState(state, "pull", "Pull Settings");
-        updateUI();
-      }, 2000);
-      return;
+    // The one GET serves the restore and the session count alike.
+    const result = await fetchPrivateSettings();
+    if (result.ok) {
+      state.cloud = "online";
+      state.activeSessions = result.activeSessions;
+    } else if (result.reason === "network") {
+      state.cloud = "offline";
     }
 
-    const settings = await fetchMySettings();
-    if (settings) {
+    if (result.ok && hasCloudData(result.settings)) {
       await clearAuthFailed();
-      await applyCloudSettings(settings);
+      await applyCloudSettings(result.settings);
       await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
       state.buttons.pull = {
         loading: false,
@@ -160,18 +154,21 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
       } as any;
       updateUI();
       setTimeout(() => reloadTab(), 1500);
-    } else {
-      state.buttons.pull = {
-        loading: false,
-        error: true,
-        text: "No Data Found",
-      } as any;
-      updateUI();
-      setTimeout(() => {
-        resetButtonState(state, "pull", "Pull Settings");
-        updateUI();
-      }, 2000);
+      return;
     }
+
+    // An empty document is a real answer, not a failure to reach the worker:
+    // "No Data Found" used to cover a flaky connection as well.
+    state.buttons.pull = {
+      loading: false,
+      error: true,
+      text: result.ok ? "No backup yet" : failureLabel(result.reason),
+    } as any;
+    updateUI();
+    setTimeout(() => {
+      resetButtonState(state, "pull", "Pull Settings");
+      updateUI();
+    }, 2000);
   };
 
   return {

@@ -1,4 +1,8 @@
 import { getConfig } from "../../../core/config.ts";
+import {
+  DASHBOARD_CARD_SELECTOR,
+  dashboardCardTitle,
+} from "../../../core/intra/selectors.ts";
 
 let cachedCards: HTMLElement[] | null = null;
 let cachedGrid: HTMLElement | null = null;
@@ -16,7 +20,7 @@ function getCards(): HTMLElement[] {
   }
 
   const currentElements = document.querySelectorAll<HTMLElement>(
-    "#logtime-shadow-wrapper, .bg-white.md\\:h-96, .lt-box-container",
+    `#logtime-shadow-wrapper, ${DASHBOARD_CARD_SELECTOR}, .lt-box-container`,
   );
   const validCards: HTMLElement[] = [];
   const seen = new Set<HTMLElement>();
@@ -67,8 +71,8 @@ function getCards(): HTMLElement[] {
 
 function getCardTitle(card: HTMLElement): string {
   if (card.id === "logtime-shadow-wrapper") return "LOGTIME";
-  const titleEl = card.querySelector("[class*='uppercase']");
-  if (titleEl?.textContent) return titleEl.textContent.trim().toUpperCase();
+  const heading = dashboardCardTitle(card);
+  if (heading) return heading;
 
   const text = (card.textContent || "").toUpperCase();
   for (const token of [
@@ -126,7 +130,7 @@ export async function optimizeLayout() {
     }
 
     document
-      .querySelectorAll<HTMLElement>(".bg-white.md\\:h-96")
+      .querySelectorAll<HTMLElement>(DASHBOARD_CARD_SELECTOR)
       .forEach((c) => {
         if ((c.textContent || "").toUpperCase().includes(cleanSearch)) {
           c.style.display = shouldHide ? "none" : "";

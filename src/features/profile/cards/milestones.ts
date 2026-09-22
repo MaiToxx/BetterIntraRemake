@@ -1,10 +1,16 @@
+import { getConfig } from "../../../core/config.ts";
+
+const STYLE_ID = "fire-milestone-style";
+/** On <html> while "Disable animations" is on: stops the ring, as freeze.ts does. */
+const STILL_CLASS = "ft-fire-still";
+
 export function initMilestones() {
   injectMilestoneStyles();
   enhanceMilestones();
 }
 
-let _milestoneAttempts = 0;
-
+// No retry here: the profile pass calls initMilestones again on every burst
+// of Intra mutations, so the milestones are decorated once React renders them.
 function enhanceMilestones() {
   const validated = document.querySelectorAll<HTMLElement>(
     ".bg-legacy-main.h-10[data-state]",
@@ -12,13 +18,6 @@ function enhanceMilestones() {
   const muted = document.querySelectorAll<HTMLElement>(
     ".bg-legacy-main-muted.h-10[data-state]",
   );
-
-  if (validated.length === 0 && muted.length === 0) {
-    if (++_milestoneAttempts > 300) return;
-    requestAnimationFrame(enhanceMilestones);
-    return;
-  }
-  _milestoneAttempts = 0;
 
   validated.forEach((el) => {
     if (el.dataset.fireBg) return;
@@ -31,24 +30,30 @@ function enhanceMilestones() {
     if (!current.dataset.fireAnimated) {
       current.dataset.fireAnimated = "true";
       current.classList.add("fire-animated");
-
-      let angle = 0;
-      function animate() {
-        if (!current.isConnected) return;
-        angle = (angle + 2.4) % 360;
-        current.style.setProperty("--angle", `${angle}deg`);
-        requestAnimationFrame(animate);
-      }
-      animate();
     }
   }
 }
 
 function injectMilestoneStyles() {
-  if (document.getElementById("fire-milestone-style")) return;
+  if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement("style");
-  style.id = "fire-milestone-style";
+  style.id = STYLE_ID;
+  // The ring used to be turned by a requestAnimationFrame loop writing
+  // --angle 60 times a second for as long as the dashboard was open. A
+  // registered custom property lets CSS animate the gradient's start angle
+  // instead: no script per frame, and it stops under the motion settings.
+  // One turn per 2.5 s is the speed the loop had (2.4deg per frame at 60 fps).
   style.textContent = `
+    @property --angle {
+      syntax: "<angle>";
+      inherits: false;
+      initial-value: 0deg;
+    }
+
+    @keyframes ft-fire-spin {
+      to { --angle: 360deg; }
+    }
+
     .fire-bg.h-10 {
       position: relative;
       overflow: hidden;
@@ -95,7 +100,13 @@ function injectMilestoneStyles() {
       mask-composite: exclude;
       z-index: 3;
       pointer-events: none;
+      animation: ft-fire-spin 2.5s linear infinite;
     }
+
+    @media (prefers-reduced-motion: reduce) {
+      .fire-animated::before { animation: none; }
+    }
+    html.${STILL_CLASS} .fire-animated::before { animation: none; }
 
     .fire-animated > * {
       position: relative;
@@ -118,4 +129,7 @@ function injectMilestoneStyles() {
     }
   `;
   document.head.appendChild(style);
+  void getConfig("DISABLE_ANIMATIONS").then((disabled) => {
+    if (disabled) document.documentElement.classList.add(STILL_CLASS);
+  });
 }

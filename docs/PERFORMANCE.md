@@ -25,6 +25,28 @@ Raw is the number that matters. An extension file is read from disk, never
 downloaded, so nothing un-gzips it: what the browser pays on an Intra page load
 is parsing `content.js`.
 
+### Unreleased
+
+- **The milestone ring no longer runs a script per frame.** The dashboard's
+  current milestone had a `requestAnimationFrame` loop writing `--angle` on
+  every frame for as long as the tab was open: 3,750 wake-ups a minute, none
+  of them in the table above, so the real dashboard figure was about eight
+  times the 465 measured. The ring is now a CSS animation on a registered
+  `@property`, stopped by `prefers-reduced-motion` and by Disable animations
+  (`tests/timers.test.ts`, row "milestones: ring angle": 3,750 -> 0).
+- **The profile-card stylesheet stays put.** It was removed and re-inserted on
+  every profile pass, which invalidated the styles of the whole document each
+  time (`tests/runtime-perf.test.ts`).
+- **Profile stats read the v2 pages three at a time** and the history page
+  together with the first feedback page, instead of up to 16 pages one after
+  the other; the walk stops at the first empty page. Writing that cache no
+  longer copies the whole storage area into the tab: the cleanup of the keys
+  older builds left runs in the background, once per update.
+- **One GitHub request per six hours**, conditional (`If-None-Match`), stored
+  with its time; the popup and the hub read the stored result and make no
+  request of their own. The About tab no longer fetches the star and follower
+  counts from `api.github.com`.
+
 ### What changed in 1.12.0
 
 `content.js` grew by 19 KB (556.5 to 575.8 KB) with this release's fixes:
@@ -47,7 +69,7 @@ within 1 ms on warm loads).
 - **Settings snapshot.** Every `getConfig` used to be one round trip to the extension process. Each context (page, popup, service worker) now loads the settings once and keeps them exact through `storage.onChanged` and a write-through on its own writes. `src/core/config/snapshot.ts` explains the design and its fallback.
 - **A leaner stylesheet.** Tailwind was scanning the whole repository (tests, docs, an agent skill file) and generating rules nothing uses; it scans `src/` only now. Eight daisyUI components nothing uses are out, and 33 duplicated theme blocks were collapsed. The 34 theme presets other than light and dark live in `shared-themes.css`, fetched only when one is picked. Checked in Chromium against the previous sheet on every theme: no computed value changed.
 - **Dead code out.** Discord reminders, the students directory, worker image upload and the Outstanding star need a 42 API application this fork does not have; they were removed after checking the worker side.
-- **No polling left.** Waits are observers with a deadline; clocks and countdowns pause while the tab is hidden.
+- **No polling left.** Waits are observers with a deadline; clocks and countdowns pause while the tab is hidden. 1.13.0 removed the three loops that had survived: the perf sheet's hunt for the logtime root (20 x 500 ms on every page), the subject tracker's wait for its PDF link (40 x 150 ms on every project page) and the document_start avatar observer that watched every page for its lifetime.
 
 ### What changed in 1.10.0
 

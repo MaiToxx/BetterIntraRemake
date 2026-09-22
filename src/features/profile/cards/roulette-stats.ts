@@ -1,6 +1,7 @@
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { DASHBOARD_CARD_SELECTOR } from "../../../core/intra/selectors.ts";
 import { hashLogin } from "../../../core/crypto.ts";
 import { createCountdown } from "../../../core/dom/countdown.ts";
 import {
@@ -531,12 +532,13 @@ function ensureCard(force: boolean): HTMLElement | null {
 
   const grid =
     document.querySelector(".dash-main") ||
-    document.querySelector(".bg-white.md\\:h-96")?.parentElement;
+    document.querySelector(DASHBOARD_CARD_SELECTOR)?.parentElement;
   if (!grid) return null;
 
   // Waiting for intra to have rendered at least one of its own cards keeps our
   // card from sitting alone on an otherwise empty dashboard for a few frames.
-  if (!force && grid.querySelector(".bg-white.md\\:h-96") === null) return null;
+  if (!force && grid.querySelector(DASHBOARD_CARD_SELECTOR) === null)
+    return null;
 
   const card = document.createElement("div");
   card.id = CARD_ID;

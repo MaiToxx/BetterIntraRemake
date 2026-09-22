@@ -52,6 +52,8 @@ export function updateActiveSortControls(state: DialogState) {
           ? "Name A → Z (click to invert)"
           : "Name Z → A (click to invert)"
         : "Sort by login";
+    nameBtn.setAttribute("aria-label", nameBtn.dataset.tip);
+    nameBtn.setAttribute("aria-pressed", String(activeSortMode === "name"));
   }
   if (sinceBtn) {
     const icon = sinceBtn.querySelector<HTMLElement>(".sort-icon");
@@ -74,9 +76,12 @@ export function updateActiveSortControls(state: DialogState) {
           ? "Newest first (click to invert)"
           : "Oldest first (click to invert)"
         : "Sort by connection time";
+    sinceBtn.setAttribute("aria-label", sinceBtn.dataset.tip);
+    sinceBtn.setAttribute("aria-pressed", String(activeSortMode === "since"));
   }
   const wifiBtn = shadow.getElementById("active-wifi-toggle");
   if (wifiBtn) {
+    wifiBtn.setAttribute("aria-pressed", String(activeWifiOnly));
     wifiBtn.style.opacity = activeWifiOnly ? "1" : "0.45";
     wifiBtn.style.fontWeight = activeWifiOnly ? "700" : "";
     wifiBtn.dataset.tip = activeWifiOnly

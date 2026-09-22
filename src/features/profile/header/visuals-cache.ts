@@ -143,17 +143,73 @@ const computeVisualKey = (urls: VisualUrls) =>
 
 const CACHE_PREFIX = "visuals_cache_";
 
+/**
+ * A stored record carries the time it was fetched, so the friends widget can
+ * tell a recent answer (including "no visuals at all") from one worth asking
+ * the worker about again. The profile page ignores the stamp: it reads the
+ * record whatever its age and revalidates on every visit, as before.
+ */
+export interface CachedVisuals extends VisualUrls {
+  fetchedAt?: number;
+}
+
+/** How long the friends widget trusts a stored record without refetching. */
+export const VISUALS_CACHE_FRESH_MS = 10 * 60 * 1000;
+
+export function visualsAreFresh(cached: CachedVisuals | null | undefined): boolean {
+  return (
+    typeof cached?.fetchedAt === "number" &&
+    Date.now() - cached.fetchedAt < VISUALS_CACHE_FRESH_MS
+  );
+}
+
 export const getCachedVisuals = async (
   login: string,
-): Promise<VisualUrls | null> => {
+): Promise<CachedVisuals | null> => {
   const result = (await chrome.storage.local.get(
     `${CACHE_PREFIX}${login}`,
-  )) as Record<string, VisualUrls>;
+  )) as Record<string, CachedVisuals>;
   return result[`${CACHE_PREFIX}${login}`] || null;
 };
 
+/** The stored records of `logins`, in one storage read; absent ones are left out. */
+export const getCachedVisualsMany = async (
+  logins: string[],
+): Promise<Map<string, CachedVisuals>> => {
+  const out = new Map<string, CachedVisuals>();
+  if (logins.length === 0) return out;
+  try {
+    const result = (await chrome.storage.local.get(
+      logins.map((l) => `${CACHE_PREFIX}${l}`),
+    )) as Record<string, CachedVisuals | undefined>;
+    for (const login of logins) {
+      const rec = result[`${CACHE_PREFIX}${login}`];
+      if (rec && typeof rec === "object") out.set(login, rec);
+    }
+  } catch {
+    // Unreadable cache: every login is simply fetched.
+  }
+  return out;
+};
+
 export const setCachedVisuals = (login: string, urls: VisualUrls) => {
-  chrome.storage.local.set({ [`${CACHE_PREFIX}${login}`]: urls });
+  setCachedVisualsMany({ [login]: urls });
+};
+
+/** Store several logins' visuals in one write (the friends list at once). */
+export const setCachedVisualsMany = (entries: Record<string, VisualUrls>) => {
+  const now = Date.now();
+  const items: Record<string, CachedVisuals> = {};
+  for (const [login, urls] of Object.entries(entries)) {
+    items[`${CACHE_PREFIX}${login}`] = { ...urls, fetchedAt: now };
+  }
+  if (Object.keys(items).length === 0) return;
+  // A cache that could not be written only costs a refetch next time.
+  try {
+    Promise.resolve(chrome.storage.local.set(items)).catch(() => {});
+  } catch {
+    // storage.local.set threw synchronously (orphaned content script)
+  }
 };
 
 /** Logins known to have no cloud visuals, with the time we learned it. */

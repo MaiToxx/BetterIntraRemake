@@ -33,7 +33,7 @@ const root = resolve(here, "..");
  * the sheet to creep back into the JavaScript.
  */
 const BUDGETS_KB = {
-  "content.js": 590, // v1.11.0: 556 KB
+  "content.js": 575, // v1.13.0: 564 KB, with html`` templates collapsed at build time
   "popup.js": 44, // v1.11.0: 37 KB
   "auth-callback.js": 16, // v1.10.0: 10 KB
   "background.js": 12, // v1.10.0: 5 KB

@@ -39,7 +39,7 @@ function renderCompactMonthCard(
     new Date(year, mon - 1),
   );
   const goalSecs = config.goal_hours * 3600;
-  const goalPercent = Math.round((total / goalSecs) * 100);
+  const goalPercent = goalSecs > 0 ? Math.round((total / goalSecs) * 100) : 0;
   const isGoalMet = goalPercent >= 100;
   const fillClass = isGoalMet ? "liquid-fill-full" : "liquid-fill";
 
@@ -50,7 +50,8 @@ function renderCompactMonthCard(
     config.max_earnings > 0 && monthEarnings > config.max_earnings
       ? config.max_earnings
       : monthEarnings;
-  const monthTacos = Math.round(cappedMonthEarnings / config.divisor);
+  const monthTacos =
+    config.divisor > 0 ? Math.round(cappedMonthEarnings / config.divisor) : 0;
 
   return html`<div
     class="compact-month ${borderTop ? "compact-divider" : ""}"

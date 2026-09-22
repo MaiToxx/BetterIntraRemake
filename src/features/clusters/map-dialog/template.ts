@@ -1,8 +1,10 @@
-import { html, TemplateResult } from "lit-html";
+import { html, nothing, TemplateResult } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
+import { hasMarkerDefinitions } from "../clusters.data.ts";
 import { type DialogState } from "./context";
+import { campusDisplayName } from "./helpers";
 import RELOAD_SVG from "../../../assets/svg/reload.svg?raw";
 import CLOCK_SVG from "../../../assets/svg/clock.svg?raw";
 import MAXIMIZE_SVG from "../../../assets/svg/maximize.svg?raw";
@@ -19,6 +21,7 @@ export function renderTemplate(state: DialogState): TemplateResult {
     defaultId,
     showMarkers,
   } = state;
+  const campusName = campusDisplayName(campusOptions, activeCampusId);
 
   return html`
     ${sharedStylesLink()}
@@ -267,22 +270,18 @@ export function renderTemplate(state: DialogState): TemplateResult {
               type="button"
               id="campus-trigger"
               class="btn btn-sm btn-ghost gap-1.5 px-2"
+              aria-label="Campus: ${campusName}"
+              aria-haspopup="menu"
               data-tip="Campus"
               data-tip-size="14px"
             >
               <span class="text-base leading-none" id="campus-trigger-flag"
-                >${getCampusFlag(
-                  campusOptions.find((o) => o.id === activeCampusId)?.name ||
-                    activeCampusId,
-                )}</span
+                >${getCampusFlag(campusName)}</span
               >
               <span
                 class="text-xs font-semibold uppercase tracking-wide"
                 id="campus-trigger-name"
-                >${(
-                  campusOptions.find((o) => o.id === activeCampusId)?.name ||
-                  activeCampusId
-                ).toUpperCase()}</span
+                >${campusName.toUpperCase()}</span
               >
               <span
                 id="totals-badge"
@@ -326,6 +325,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
               type="button"
               id="settings-btn"
               class="btn btn-circle btn-ghost btn-sm"
+              aria-label="Settings"
+              aria-haspopup="menu"
               data-tip="Settings"
               data-tip-size="14px"
             >
@@ -348,6 +349,7 @@ export function renderTemplate(state: DialogState): TemplateResult {
                 <select
                   class="select select-accent select-sm w-full"
                   id="default-cluster-select"
+                  aria-label="Default cluster"
                   data-tip="Default cluster"
                   data-tip-size="14px"
                 >
@@ -366,46 +368,56 @@ export function renderTemplate(state: DialogState): TemplateResult {
                     )}
                 </select>
               </div>
-              <button
-                class="btn btn-sm w-full mt-2 justify-between ${showMarkers
-                  ? "btn-accent"
-                  : "btn-ghost"}"
-                style="${showMarkers
-                  ? "border-color: var(--color-accent)"
-                  : ""}"
-                id="markers-btn"
-                data-tip="Toggle chair markers"
-                data-tip-size="14px"
-              >
-                <span>Show chair markers</span>
-                <span class="text-xs opacity-50"
-                  >${showMarkers ? "ON" : "OFF"}</span
-                >
-              </button>
+              ${hasMarkerDefinitions()
+                ? html`<button
+                    type="button"
+                    class="btn btn-sm w-full mt-2 justify-between ${showMarkers
+                      ? "btn-accent"
+                      : "btn-ghost"}"
+                    style="${showMarkers
+                      ? "border-color: var(--color-accent)"
+                      : ""}"
+                    id="markers-btn"
+                    aria-pressed="${showMarkers ? "true" : "false"}"
+                    data-tip="Toggle chair markers"
+                    data-tip-size="14px"
+                  >
+                    <span>Show chair markers</span>
+                    <span class="text-xs opacity-50"
+                      >${showMarkers ? "ON" : "OFF"}</span
+                    >
+                  </button>`
+                : nothing}
             </div>
           </div>
           <button
+            type="button"
             class="btn btn-circle btn-ghost btn-sm"
             id="maximize-btn"
+            aria-label="Maximize"
             data-tip="Maximize"
             data-tip-size="14px"
           >
-            <span class="maximize-icon">
+            <span class="maximize-icon" aria-hidden="true">
               ${unsafeHTML(
                 MAXIMIZE_SVG.replace("<svg", '<svg width="16" height="16"'),
               )}
             </span>
-            <span class="minimize-icon">
+            <span class="minimize-icon" aria-hidden="true">
               ${unsafeHTML(
                 MINIMIZE_SVG.replace("<svg", '<svg width="16" height="16"'),
               )}
             </span>
           </button>
           <button
+            type="button"
             class="btn btn-circle btn-ghost btn-sm text-xl"
             id="close-btn"
+            aria-label="Close"
+            data-tip="Close"
+            data-tip-size="14px"
           >
-            ✕
+            <span aria-hidden="true">✕</span>
           </button>
         </div>
       </div>
@@ -414,13 +426,18 @@ export function renderTemplate(state: DialogState): TemplateResult {
           <div id="map-area" class="h-full"></div>
         </div>
         <button
+          type="button"
           id="updated-badge"
           class="btn btn-accent btn-sm border border-base-content/20 absolute bottom-3 right-3 z-20"
           style="display:none;width:80px;justify-content:flex-start"
+          aria-label="Reload occupancy"
           data-tip="Reload occupancy"
           data-tip-size="14px"
         >
-          <span id="reload-icon" class="size-4 flex items-center justify-center"
+          <span
+            id="reload-icon"
+            class="size-4 flex items-center justify-center"
+            aria-hidden="true"
             >${unsafeHTML(RELOAD_SVG)}</span
           >
           <span id="badge-text" style="flex:1;text-align:center"></span>
@@ -453,31 +470,40 @@ export function renderTemplate(state: DialogState): TemplateResult {
             style="display:none"
           >
             <button
+              type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="sort-name"
+              aria-label="Sort by login"
               data-tip="Sort by login"
               data-tip-size="14px"
             >
               <span
                 class="sort-icon size-3 flex items-center justify-center"
+                aria-hidden="true"
               ></span>
               <span class="sort-label">Name</span>
             </button>
             <button
+              type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="sort-since"
+              aria-label="Sort by connection time"
               data-tip="Sort by connection time"
               data-tip-size="14px"
             >
               <span
                 class="sort-icon size-3 flex items-center justify-center"
+                aria-hidden="true"
               ></span>
               <span class="sort-label">Time</span>
             </button>
             <div class="w-px h-4 bg-accent-content/40"></div>
             <button
+              type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="active-wifi-toggle"
+              aria-label="Show only Wi-Fi users"
+              aria-pressed="false"
               data-tip="Show only Wi-Fi users"
               data-tip-size="14px"
             >
@@ -490,33 +516,41 @@ export function renderTemplate(state: DialogState): TemplateResult {
           class="absolute top-2 right-6 z-20 flex items-center gap-1 bg-accent text-accent-content rounded-lg px-1 py-0.5 border border-accent"
         >
           <button
+            type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-reset"
+            aria-label="Reset zoom"
             data-tip="Reset zoom"
             data-tip-size="14px"
           >
-            <span class="size-3 flex items-center justify-center"
+            <span class="size-3 flex items-center justify-center" aria-hidden="true"
               >${unsafeHTML(RESET_SVG)}</span
             >
           </button>
           <button
+            type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-out"
+            aria-label="Zoom out"
             data-tip="Zoom out"
             data-tip-size="14px"
           >
-            −
+            <span aria-hidden="true">−</span>
           </button>
-          <span class="zoom-pct text-xs tabular-nums w-10 text-center"
+          <span
+            class="zoom-pct text-xs tabular-nums w-10 text-center"
+            aria-live="polite"
             >100%</span
           >
           <button
+            type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-in"
+            aria-label="Zoom in"
             data-tip="Zoom in"
             data-tip-size="14px"
           >
-            +
+            <span aria-hidden="true">+</span>
           </button>
         </div>
       </div>

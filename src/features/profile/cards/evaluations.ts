@@ -1,11 +1,12 @@
 import { getConfig } from "../../../core/config.ts";
+import { DASHBOARD_CARD_SELECTOR } from "../../../core/intra/selectors.ts";
 
 const CARD_TITLE = "PENDING EVALUATIONS";
 
 function findNativeCard(): HTMLElement | null {
   const grid =
     document.querySelector(".dash-main") ||
-    document.querySelector(".bg-white.md\\:h-96")?.parentElement ||
+    document.querySelector(DASHBOARD_CARD_SELECTOR)?.parentElement ||
     document.body;
   const cards = grid.querySelectorAll(".bg-white");
   for (const card of cards) {

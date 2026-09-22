@@ -1,5 +1,5 @@
-import { html, render } from "lit-html";
-import { CLUSTERS } from "./clusters.data.ts";
+import { html, nothing, render } from "lit-html";
+import { CLUSTERS, hasMarkerDefinitions } from "./clusters.data.ts";
 import { adoptSharedStyles } from "../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { getIsLight } from "../../core/theme/theme-manager.ts";
@@ -56,15 +56,19 @@ export function renderClusterPicker(
           )}
         </select>
       </div>
-      <div class="h-8 w-px bg-base-content/20"></div>
-      <button
-        class="btn btn-lg px-8 text-base font-bold uppercase tracking-wider ${showMarkers
-          ? "btn-primary"
-          : "btn-ghost"}"
-        @click="${onMarkerToggle}"
-      >
-        Show chair markers
-      </button>
+      ${hasMarkerDefinitions()
+        ? html`<div class="h-8 w-px bg-base-content/20"></div>
+            <button
+              type="button"
+              class="btn btn-lg px-8 text-base font-bold uppercase tracking-wider ${showMarkers
+                ? "btn-primary"
+                : "btn-ghost"}"
+              aria-pressed="${showMarkers ? "true" : "false"}"
+              @click="${onMarkerToggle}"
+            >
+              Show chair markers
+            </button>`
+        : nothing}
     </div>
   `;
 }

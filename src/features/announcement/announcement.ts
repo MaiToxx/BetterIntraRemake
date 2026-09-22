@@ -3,8 +3,15 @@ import { sanitizeHttpUrl } from "../../core/security/safe-url.ts";
 
 import { WORKER_URL } from "../../core/worker.ts";
 const CACHE_TTL = 5 * 60 * 1000;
-const CACHE_KEY = "ft-announcement-cache";
-const DISMISS_PREFIX = "ft-announcement-dismissed:";
+/**
+ * Both live in chrome.storage.local, not sessionStorage: a student with the
+ * Intra open in several tabs dismissed the same banner once per tab (and
+ * again after every restart), and each tab fetched /announcement on its own.
+ * Neither key is a setting (not in CONFIG_DEFAULT), so backup export and
+ * cloud sync ignore them, like UPDATE_AVAILABLE.
+ */
+export const CACHE_KEY = "ANNOUNCEMENT_CACHE";
+export const DISMISSED_KEY = "ANNOUNCEMENT_DISMISSED";
 
 type AnnouncementLevel = "info" | "warning" | "critical";
 
@@ -33,29 +40,35 @@ const isProfileHost = () =>
   window.location.hostname === "profile.intra.42.fr" ||
   window.location.hostname === "profile-v3.intra.42.fr";
 
-function getCached(): { data: Announcement; timestamp: number } | null {
+type CacheEntry = { data: Announcement; timestamp: number };
+
+async function readStored(): Promise<{ cache: CacheEntry | null; dismissed: string | null }> {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY);
-    return raw
-      ? (JSON.parse(raw) as { data: Announcement; timestamp: number })
-      : null;
+    const got = await chrome.storage.local.get([CACHE_KEY, DISMISSED_KEY]);
+    const cache = got[CACHE_KEY] as CacheEntry | undefined;
+    const dismissed = got[DISMISSED_KEY];
+    return {
+      cache: cache && typeof cache.timestamp === "number" && cache.data ? cache : null,
+      dismissed: typeof dismissed === "string" ? dismissed : null,
+    };
   } catch {
-    return null;
+    return { cache: null, dismissed: null };
   }
 }
 
-function setCached(data: Announcement): void {
+async function setCached(data: Announcement): Promise<void> {
   try {
-    sessionStorage.setItem(
-      CACHE_KEY,
-      JSON.stringify({ data, timestamp: Date.now() }),
-    );
+    await chrome.storage.local.set({ [CACHE_KEY]: { data, timestamp: Date.now() } });
   } catch {
     /* ignore */
   }
 }
 
-function getDismissedKey(
+/**
+ * The announcement's id: a hash of what the student saw. A re-worded
+ * announcement gets a new id and shows again; the same one stays dismissed.
+ */
+export function announcementId(
   message: string,
   level: string,
   links: AnnouncementLink[],
@@ -66,7 +79,7 @@ function getDismissedKey(
     hash = (hash << 5) - hash + input.charCodeAt(i);
     hash |= 0;
   }
-  return `${DISMISS_PREFIX}${hash}`;
+  return String(hash);
 }
 
 function renderBanner(
@@ -80,7 +93,9 @@ function renderBanner(
     const el = document.getElementById("ft-announcement-banner");
     if (el) el.remove();
     try {
-      sessionStorage.setItem(getDismissedKey(message, level, links), "1");
+      void chrome.storage.local.set({
+        [DISMISSED_KEY]: announcementId(message, level, links),
+      });
     } catch {
       /* ignore */
     }
@@ -185,6 +200,26 @@ function renderBanner(
     }
   };
   tryInject();
+
+  // Dismissed in another tab: this one's copy goes too.
+  try {
+    const id = announcementId(message, level, links);
+    const onChanged = (changes: Record<string, { newValue?: unknown }>) => {
+      if (changes[DISMISSED_KEY]?.newValue !== id) return;
+      banner.remove();
+      chrome.storage.onChanged.removeListener(onChanged);
+    };
+    chrome.storage.onChanged?.addListener(onChanged);
+  } catch {
+    /* ignore */
+  }
+}
+
+function showUnlessDismissed(data: Announcement, dismissed: string | null): void {
+  if (!data.message) return;
+  const links = data.links ?? [];
+  if (announcementId(data.message, data.level, links) === dismissed) return;
+  renderBanner(data.message, data.level, links);
 }
 
 export async function initAnnouncementBanner(): Promise<void> {
@@ -192,41 +227,17 @@ export async function initAnnouncementBanner(): Promise<void> {
   if (document.getElementById("ft-announcement-banner")) return;
 
   try {
-    const cached = getCached();
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      if (cached.data.message) {
-        if (
-          sessionStorage.getItem(
-            getDismissedKey(
-              cached.data.message,
-              cached.data.level,
-              cached.data.links ?? [],
-            ),
-          ) !== "1"
-        ) {
-          renderBanner(
-            cached.data.message,
-            cached.data.level,
-            cached.data.links ?? [],
-          );
-        }
-      }
+    const { cache, dismissed } = await readStored();
+    if (cache && Date.now() - cache.timestamp < CACHE_TTL) {
+      showUnlessDismissed(cache.data, dismissed);
       return;
     }
 
     const res = await fetch(`${WORKER_URL}/api/v1/public/announcement`);
     if (!res.ok) return;
     const data = (await res.json()) as Announcement;
-    setCached(data);
-
-    if (
-      data.message &&
-      sessionStorage.getItem(
-        getDismissedKey(data.message, data.level, data.links ?? []),
-      ) !== "1"
-    ) {
-      renderBanner(data.message, data.level, data.links ?? []);
-    }
+    await setCached(data);
+    showUnlessDismissed(data, dismissed);
   } catch {
     /* never break intra */
   }

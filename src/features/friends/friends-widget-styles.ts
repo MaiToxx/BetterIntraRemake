@@ -131,13 +131,27 @@ export const FRIENDS_WIDGET_STYLES = html`<style>
     transform-origin: bottom right;
     transition:
       opacity 0.15s ease,
-      transform 0.15s ease;
+      transform 0.15s ease,
+      display 0.15s allow-discrete;
   }
 
+  /* display: none, not just opacity 0: an invisible fixed panel is still laid
+     out and still intersects the viewport, so every friend's avatar (their
+     custom one from any host included) was downloaded on each page load
+     without the panel ever being opened. The discrete transition lets the
+     close fade finish before the flip; @starting-style plays the open fade. */
   .friends-dropdown.closed {
+    display: none;
     opacity: 0;
     pointer-events: none;
     transform: scale(0.95) translateY(8px);
+  }
+
+  @starting-style {
+    .friends-dropdown:not(.closed) {
+      opacity: 0;
+      transform: scale(0.95) translateY(8px);
+    }
   }
 
   .friends-list-wrap {

@@ -12,7 +12,8 @@ import {
   fetchCampusList,
   fetchEventTypes,
 } from "../../clusters/clusters.data.ts";
-import { ensureCampusData } from "../../campus/campus.ts";
+import { ensureCampusData, loadCampusData } from "../../campus/campus.ts";
+import { getConfig } from "../../../core/config.ts";
 
 /**
  * Saves one setting. Every control goes through here so that a change to a
@@ -81,6 +82,11 @@ export type LiveOptions = {
   campuses: Choice[];
   /** The event types of the events feed (event visibility filter). */
   eventTypes: Choice[];
+  /**
+   * The campus file declares chair positions (`definitions`): the markers
+   * switch is drawn only then. Unknown counts as no.
+   */
+  chairMarkers?: boolean;
 };
 
 /**
@@ -102,5 +108,17 @@ export async function loadLiveOptions(): Promise<LiveOptions> {
   } catch {
     eventTypes = [];
   }
-  return { campuses, eventTypes };
+  return { campuses, eventTypes, chairMarkers: await campusHasChairMarkers() };
+}
+
+/** Whether the user's campus file declares chair positions (served from cache). */
+async function campusHasChairMarkers(): Promise<boolean> {
+  try {
+    const campusId = await getConfig("CLUSTERS_CAMPUS");
+    if (!campusId) return false;
+    const data = await loadCampusData(campusId);
+    return Object.keys(data.definitions ?? {}).length > 0;
+  } catch {
+    return false;
+  }
 }

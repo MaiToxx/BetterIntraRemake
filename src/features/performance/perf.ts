@@ -30,6 +30,7 @@
  *     optimisation, never the page.
  */
 import { getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
+import { waitForElement } from "../../core/dom/dom-wait.ts";
 
 /** The four settings of the "Lighten the Intra" block, in one storage read. */
 export const PERF_KEYS = [
@@ -242,12 +243,12 @@ function applyPerfStyle(css: string): void {
 /* --------------------------------------------------- logtime shadow root -- */
 
 const SHADOW_HOST_ID = "logtime-shadow-wrapper";
-const SHADOW_RETRY_MS = 500;
-const SHADOW_MAX_TRIES = 20;
+/** Same budget as the old 20 x 500 ms poll. */
+const SHADOW_WAIT_MS = 10000;
 
 let shadowSheet: CSSStyleSheet | null = null;
-let shadowTimer: ReturnType<typeof setTimeout> | null = null;
-let shadowTries = 0;
+/** Bumped on every call: a pending wait from an earlier settings state is stale. */
+let shadowGen = 0;
 
 /**
  * Adopt the shadow rules into the logtime widget once it exists.
@@ -255,14 +256,14 @@ let shadowTries = 0;
  * adoptedStyleSheets rather than a <style> child: logtime re-renders its
  * shadow root with lit on every view change, and an adopted sheet is the only
  * way to add CSS there without ever touching the nodes lit manages.
- * Unsupported engine, missing widget or a logtime the user turned off: we stop
- * after a bounded number of tries and the page is simply not optimised.
+ * The widget only ever mounts on the profile origin (logtime.ts), so the other
+ * Intra hosts do not even look for it: the old 500 ms poll woke 20 times on
+ * every page without a logtime widget. Unsupported engine, missing widget or a
+ * logtime the user turned off: the wait lapses and the page is simply not
+ * optimised.
  */
 function adoptShadowCss(css: string): void {
-  if (shadowTimer !== null) {
-    clearTimeout(shadowTimer);
-    shadowTimer = null;
-  }
+  const gen = ++shadowGen;
   if (typeof CSSStyleSheet !== "function") return;
 
   if (shadowSheet) {
@@ -284,26 +285,25 @@ function adoptShadowCss(css: string): void {
     }
   }
   if (!css) return; // emptied in place; no need to hunt for the widget
+  if (location.hostname !== "profile-v3.intra.42.fr") return;
 
-  shadowTries = 0;
-  const tick = () => {
-    shadowTimer = null;
-    const root = document.getElementById(SHADOW_HOST_ID)?.shadowRoot;
-    if (root) {
-      const current = root.adoptedStyleSheets;
-      if (current && !current.includes(shadowSheet!)) {
-        try {
-          root.adoptedStyleSheets = [...current, shadowSheet!];
-        } catch {
-          /* read-only in this engine: give up quietly */
-        }
+  void waitForElement<HTMLElement>(`#${SHADOW_HOST_ID}`, {
+    timeoutMs: SHADOW_WAIT_MS,
+  }).then((host) => {
+    if (gen !== shadowGen || !host || !shadowSheet) return;
+    // The host is inserted before logtime attaches its shadow root: that
+    // happens in the same task, so it is there by this microtask.
+    const root = host.shadowRoot;
+    if (!root) return;
+    const current = root.adoptedStyleSheets;
+    if (current && !current.includes(shadowSheet)) {
+      try {
+        root.adoptedStyleSheets = [...current, shadowSheet];
+      } catch {
+        /* read-only in this engine: give up quietly */
       }
-      return; // the widget is up; adopted or not, stop polling
     }
-    if (++shadowTries >= SHADOW_MAX_TRIES) return;
-    shadowTimer = setTimeout(tick, SHADOW_RETRY_MS);
-  };
-  tick();
+  });
 }
 
 /* ------------------------------------------------------------ preconnect -- */
@@ -540,9 +540,7 @@ export function stopPerformance(): void {
   imageObserver?.disconnect();
   imageObserver = null;
   passScheduled = false;
-  if (shadowTimer !== null) {
-    clearTimeout(shadowTimer);
-    shadowTimer = null;
-  }
+  // A pending host wait resolves to nothing (dom-wait stops on pagehide).
+  shadowGen++;
   applyHiddenTab(false);
 }

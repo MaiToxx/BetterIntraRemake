@@ -12,7 +12,9 @@ import {
   getFriendsList,
   isFriend,
   loadFriendsData,
+  peekCachedFriends,
   removeFriend,
+  type FriendsDetail,
 } from "./friends.ts";
 import {
   loginWith42,
@@ -24,18 +26,19 @@ import { getIsLight } from "../../core/theme/theme-manager.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
 import type { SortDir, SortMode } from "./friends-sort.ts";
-import { loadInitialData, type WidgetState } from "./friends-widget-state.ts";
+import { followTheme, loadInitialData, type WidgetState } from "./friends-widget-state.ts";
 import { renderWidget } from "./friends-panel.ts";
-import { debugRowAlignment } from "./friends-list.ts";
 
 const HOST_ID = "friends-widget-host";
 
 let _host: HTMLElement | null = null;
 let _shadow: ShadowRoot | null = null;
 let _state: WidgetState | null = null;
+let themeUnfollow: (() => void) | null = null;
+/** Each loadList() takes a number; only the latest one may write the state. */
+let _loadGeneration = 0;
 function renderWidgetUI() {
   if (_state && _shadow) render(renderWidget(_state), _shadow);
-  debugRowAlignment(_shadow);
 }
 
 /** Close the panel and leave every mode it was in. */
@@ -52,34 +55,116 @@ function clearAddError(state: WidgetState) {
   state.addPending = null;
 }
 
+/** What the panel needs right now: everything when open, the badge otherwise. */
+function neededDetail(state: WidgetState): FriendsDetail {
+  return state.open ? "full" : "online";
+}
+
 /**
  * Load the friends list into the state. `force` skips the fresh cache (the
  * refresh button). lastFetch only moves on a real success, so the refresh
  * tooltip no longer says "Updated just now" after a failure.
+ *
+ * The last cached rows are painted first, however old, so a stale cache
+ * shows the list and the online badge at once instead of a spinner for the
+ * whole fetch. A load that fails for any reason (a storage write, a rejected
+ * body) still ends: it used to leave `loading` true and the skeleton up for
+ * good, with the outside-click listener never installed.
  */
-async function loadList(force: boolean) {
+async function loadList(force: boolean, detail?: FriendsDetail) {
   const state = _state;
   if (!state) return;
+  const generation = ++_loadGeneration;
+  const current = () => _state === state && generation === _loadGeneration;
+  const requested = detail ?? neededDetail(state);
   state.loading = true;
   state.loadError = false;
   renderWidgetUI();
-  const list = await getFriendsList();
-  const result = await loadFriendsData(list, { force });
-  state.friends = result.friends;
-  state.loadError = !result.ok;
-  // Everyone answered, yet a saved login has no row: the Intra does not
-  // know it. A failed load says nothing about the logins it missed.
-  state.missingLogins = result.ok
-    ? list.filter((l) => !result.friends.some((f) => f.login === l))
-    : [];
-  if (result.ok && result.fetchedAt !== null) state.lastFetch = result.fetchedAt;
-  state.loading = false;
-  // A login saved while its check failed: it is checked now that it loaded.
-  if (
-    state.addPending &&
-    state.friends.some((f) => f.login === state.addPending)
-  ) {
-    clearAddError(state);
+  try {
+    const list = await getFriendsList();
+    if (state.friends.length === 0) {
+      const peek = await peekCachedFriends(list);
+      if (peek && peek.friends.length > 0 && current()) {
+        state.friends = peek.friends;
+        state.detailed = peek.full;
+        state.lastFetch = peek.timestamp;
+        renderWidgetUI();
+      }
+    }
+    const result = await loadFriendsData(list, { force, detail: requested });
+    if (!current()) return;
+    // Removed while the load ran (a Remove button, the profile page): the
+    // answer must not bring the login back.
+    const keep = new Set(await getFriendsList());
+    if (!current()) return;
+    state.friends = result.friends.filter((f) => keep.has(f.login));
+    state.detailed = result.detail === "full";
+    state.loadError = !result.ok;
+    // Everyone answered, yet a saved login has no row: the Intra does not
+    // know it. A failed load says nothing about the logins it missed.
+    state.missingLogins = result.ok
+      ? list.filter((l) => keep.has(l) && !result.friends.some((f) => f.login === l))
+      : [];
+    if (result.ok && result.fetchedAt !== null) state.lastFetch = result.fetchedAt;
+    // A login saved while its check failed: it is checked now that it loaded.
+    if (
+      state.addPending &&
+      state.friends.some((f) => f.login === state.addPending)
+    ) {
+      clearAddError(state);
+    }
+  } catch {
+    if (current()) state.loadError = true;
+  } finally {
+    if (current()) {
+      state.loading = false;
+      renderWidgetUI();
+      // Opened while the badge-only load ran: complete the rows now. Only
+      // after an "online" load: a full one that fell back on old rows must
+      // not start another.
+      if (requested === "online" && state.open && !state.detailed && !state.loadError)
+        void loadList(false, "full");
+    }
+  }
+}
+
+/** The panel opened: rows from an "online" load still need their details. */
+function completeOnOpen(state: WidgetState) {
+  if (state.detailed || state.loading || state.notConnected || state.needsReconnect) return;
+  void loadList(false, "full");
+}
+
+/**
+ * The saved list changed outside the widget (the Add friend button on a
+ * profile, another tab, a cloud pull): drop the rows that left and load the
+ * logins that arrived. The widget's own writes are already in its state (or
+ * are being checked), so they cost nothing here.
+ */
+function onFriendsListChanged(newList: string[]) {
+  const state = _state;
+  if (!state || state.notConnected || state.needsReconnect) return;
+  const keep = new Set(newList);
+  const before = state.friends.length + state.missingLogins.length;
+  state.friends = state.friends.filter((f) => keep.has(f.login));
+  state.missingLogins = state.missingLogins.filter((l) => keep.has(l));
+  if (state.friends.length + state.missingLogins.length !== before) renderWidgetUI();
+  if (state.loading || state.addLoading) return;
+  const known = new Set([
+    ...state.friends.map((f) => f.login),
+    ...state.missingLogins,
+    ...(state.addPending ? [state.addPending] : []),
+  ]);
+  if (newList.some((l) => !known.has(l))) void loadList(false);
+}
+
+function parseFriendsList(raw: unknown): string[] | null {
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return Array.isArray(parsed) && parsed.every((l) => typeof l === "string")
+      ? parsed
+      : null;
+  } catch {
+    return null;
   }
 }
 
@@ -155,6 +240,8 @@ export async function injectFriendsWidget() {
     _shadow?.querySelector<HTMLButtonElement>(".friends-fab button")?.focus();
   });
 
+  // the hub's theme toggle restyles the page live: the panel must follow
+  themeUnfollow?.();
   _state = {
     ...(await loadInitialData()),
     onToggle: () => {
@@ -162,10 +249,11 @@ export async function injectFriendsWidget() {
       if (_state.open) closePanel(_state);
       else _state.open = true;
       renderWidgetUI();
+      if (_state.open) completeOnOpen(_state);
     },
     onRefresh: async () => {
       if (!_state || _state.notConnected) return;
-      await loadList(true);
+      await loadList(true, "full");
       if (_state.needsReconnect) {
         _state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
       }
@@ -312,6 +400,7 @@ export async function injectFriendsWidget() {
       renderWidgetUI();
     },
   };
+  themeUnfollow = followTheme(_state, renderWidgetUI);
 
   renderWidgetUI();
 
@@ -334,6 +423,13 @@ export async function injectFriendsWidget() {
   }
 
   renderWidgetUI();
+
+  // Optional chaining: a page with a partial chrome API shim has no onChanged.
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "local" || !("FRIENDS_LIST" in changes)) return;
+    const list = parseFriendsList(changes.FRIENDS_LIST.newValue);
+    if (list) onFriendsListChanged(list);
+  });
 
   const closeOnOutsideClick = (e: Event) => {
     if (!_state || !_state.open) return;

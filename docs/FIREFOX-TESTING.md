@@ -1,7 +1,8 @@
-# Firefox testing
+# Firefox (and Chrome) testing
 
-`scripts/firefox-smoke.mjs` loads a build of Better Intra into a real Firefox,
-opens a synthetic Intra v3 page that the browser believes is
+`scripts/firefox-smoke.mjs` loads a build of Better Intra into a real Firefox
+(or, with `--browser chrome`, a real Chrome: see [Chrome](#chrome)), opens a
+synthetic Intra v3 page that the browser believes is
 `https://profile-v3.intra.42.fr/`, checks that the extension works there, and
 times it. It exists to compare the current IIFE content script with the ES
 module split described in [CODE-SPLITTING.md](CODE-SPLITTING.md), but it runs
@@ -13,13 +14,12 @@ CODE-SPLITTING.md: see [What it does not cover](#what-it-does-not-cover).
 ## Running it
 
 ```sh
-# once: the harness needs puppeteer-core (not yet in package.json)
-npm install --no-save puppeteer-core
-
+# puppeteer-core is a devDependency: npm install is enough
 node scripts/firefox-smoke.mjs dist-baseline-iife               # 3 cold + 10 warm loads
 node scripts/firefox-smoke.mjs dist-split-firefox --runs 30 --cold 6
 node scripts/firefox-smoke.mjs --compare dist-baseline-iife dist-split-firefox
 node scripts/firefox-smoke.mjs dist-firefox --json > smoke.json
+npm run smoke:chrome -- dist-chrome --runs 3 --cold 1           # the Chrome build, in Chrome
 ```
 
 The exit code is 0 when every check passed on every load, 1 when one failed,
@@ -39,6 +39,9 @@ The exit code is 0 when every check passed on every load, 1 when one failed,
 | `--csp POLICY` | none | serve the page with this `Content-Security-Policy` (the real profile-v3 sends none) |
 | `--proxy` | | force the CONNECT-proxy fallback instead of port 443 |
 | `--firefox PATH` | | the Firefox binary; otherwise `FIREFOX_BIN`, otherwise the newest one under `.browsers/firefox/` |
+| `--browser B` | firefox | `firefox` or `chrome` (see [Chrome](#chrome)) |
+| `--chrome PATH` | | the Chrome binary; otherwise `CHROME_BIN`, otherwise the platform's usual install path |
+| `--no-sandbox` | | passes `--no-sandbox` to Chrome (needed when running as root, e.g. in CI) |
 | `--verbose` | | also prints every request and console message, per load |
 
 Firefox: the harness never downloads a browser. It looks under `.browsers/`
@@ -71,10 +74,13 @@ be served under that origin, with a certificate Firefox accepts.
   that list to the loopback address without asking any resolver. The list is
   `profile-v3.intra.42.fr`, `intrapy.intra.42.fr`, `auth.42.fr`,
   `cdn.intra.42.fr`, `meta.intra.42.fr`, `profile.intra.42.fr`,
-  `projects.intra.42.fr`, `intra.42.fr`, plus every host in the build's
-  `host_permissions` that has no wildcard (the Better Intra worker and
-  `api.github.com`). `network.trr.mode` is set to 5 so that DNS over HTTPS
-  cannot bypass it. The pref only affects that throwaway profile.
+  `projects.intra.42.fr`, `intra.42.fr`, plus `api.github.com` (listed by
+  name: the extension reaches it without a host permission, as a CORS
+  request) and the Better Intra worker, taken from the build's
+  `host_permissions` and from `package.json` `config.workerUrl`
+  (`harnessHosts()` in `scripts/firefox-smoke/server.mjs`, checked by
+  `tests/smoke-harness.test.ts`). `network.trr.mode` is set to 5 so that DNS
+  over HTTPS cannot bypass it. The pref only affects that throwaway profile.
 - **Server.** One Node HTTPS server on `127.0.0.1:443` answers for all of
   those hosts, routing on the `Host` header. On Windows any user can bind
   port 443. On Linux, and wherever 443 is taken, see the fallback below.
@@ -106,8 +112,13 @@ What the server answers:
 | `auth.42.fr` | the Keycloak token endpoint: a fake JWT, new for every login (`alg: none`, `exp` one hour ahead), after `--auth-latency` ms |
 | `intrapy.intra.42.fr` | JSON for `/users/me`, `/users/{login}` and its `/locations_stats`, `/projects`, `/projects/marked`, `/achievements`, `/cursus`, `/campus`, `/summary`, and `/users/me/events`. Anything else: 404 |
 | `cdn.intra.42.fr` | a 1x1 PNG for every picture |
-| the worker | `/api/v1/public/announcement` (no announcement), `/gh/campuses/campuses.json` (one campus) and that campus's file (no clusters). Anything else: 404 |
+| `api.github.com` | `{}` for every path: no release (the background keeps its state), no star or follower count |
+| the worker | `/api/v1/public/announcement` (no announcement), `/gh/campuses/campuses.json` (one campus) and that campus's file (no clusters), `/gh/data/event_types.json` (no types), `/api/v1/public/stats` (`{}`). Anything else: 404 |
 | everything else | 404 |
+
+Every request the extension makes on a plain profile page must get a 200 from
+a stub: Chrome prints each 404 a page or content script receives as a console
+error, which would fail `d.no-console-errors` on every Chrome load.
 
 Every response carries CORS headers for the `Origin` it was asked from, as
 intrapy does, and preflights get a 204. Without them a stubbed 404 would turn
@@ -175,7 +186,7 @@ about:debugging. Firefox 156 grants a temporary MV3 add-on its
 `host_permissions`: the content scripts ran without any extra step, and the
 `content-script` check fails with a hint if that ever changes. The harness
 waits one second after the install, so that the background script's first run
-(the update check, answered 404 by the stub) is out of the way.
+(the update check, answered `{}` by the stub) is out of the way.
 
 Extension storage starts empty in every session, so all settings are at their
 defaults (dark theme, every feature on).
@@ -373,8 +384,42 @@ describe what the harness observed on v1.11.0.
 - **Attribution of content-script errors.** Firefox reports an unhandled
   rejection from the content script with no stack, so the report shows the
   message only.
-- **Chrome** and **Firefox 140 ESR**, unless you point `--firefox` at one
-  (Chrome would need a CDP variant of the launcher).
+- **Firefox 140 ESR**, unless you point `--firefox` at one.
+- On Chrome, the popup and the service worker beyond their first run, and
+  Chrome's own timings as a benchmark (see [Chrome](#chrome)).
+
+## Chrome
+
+`--browser chrome` runs the same page, stubs and checks against `dist-chrome`
+in a real Chrome, through CDP instead of WebDriver BiDi:
+
+- **No port 443, no proxy, no certificate install.** The server listens on a
+  random port and Chrome is started with
+  `--host-resolver-rules=MAP <host> 127.0.0.1:<port>, ...` for every host the
+  harness serves (the rule maps the port too), plus
+  `--ignore-certificate-errors` for the in-memory certificate. The browser
+  still sees `https://profile-v3.intra.42.fr/`, so the origin is exact.
+- **The extension** is installed with `browser.installExtension(copy)`, the
+  CDP `Extensions.loadUnpacked` route (puppeteer needs `pipe: true` and
+  `enableExtensions: true` for it). Chrome 137+ dropped `--load-extension`
+  for branded builds, so this is the one that keeps working. Headless Chrome
+  (the new headless mode, not chrome-headless-shell) runs extensions.
+- **Binary.** `--chrome PATH`, then `CHROME_BIN`, then the usual install path
+  of the platform (`C:\Program Files\Google\Chrome\Application\chrome.exe`,
+  `/usr/bin/google-chrome`, the `.app` on macOS). The harness never downloads
+  a browser.
+- **CI.** `.github/workflows/ci.yaml` runs
+  `node scripts/firefox-smoke.mjs dist-chrome --browser chrome --runs 3 --cold 1 --no-sandbox`
+  after the builds on `ubuntu-latest`, which ships `google-chrome`. A failed
+  check fails the job; a runner without Chrome (exit code 2, "no Chrome
+  found") only prints a warning.
+
+It is a functional smoke test, not a benchmark: the timing table is printed
+but headless Chrome's numbers are not comparable with Firefox's, or with the
+results below. Compare Chrome builds with other Chrome builds only, in one
+run. On 2026-09-22 (Windows 11, Chrome 153 headless, `--runs 3 --cold 1`)
+every check passed on all 4 loads of the 1.12.1 Chrome build, with no
+console message, no stubbed 404 and no unserved host.
 
 ## Files
 

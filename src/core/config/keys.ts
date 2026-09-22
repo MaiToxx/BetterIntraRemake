@@ -59,6 +59,8 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "PROFILE_AVATAR_POSITION_Y",
   "PROFILE_AVATAR_SCALE",
   "PROFILE_BADGE_BG",
+  "PROFILE_BADGE_ORDER",
+  "PROFILE_BADGE_WRAP",
   "PROFILE_IMAGE_HISTORY",
   "PROFILE_BANNER_HISTORY",
   "PROFILE_BACKGROUND_HISTORY",
@@ -79,7 +81,6 @@ export const CLOUD_SYNC_KEYS: ConfigKey[] = [
   "PERF_LAZY_IMAGES",
   "PERF_PAUSE_HIDDEN",
   "PERF_PRECONNECT",
-  "CLOUD_SYNC_ENABLED",
   "TRACKER_MODE",
   "CUSTOM_ACCENT_ENABLED",
   "CUSTOM_ACCENT_COLOR",
@@ -165,7 +166,33 @@ export const VISUAL_CLOUD_KEYS: ConfigKey[] = [
   "PROFILE_AVATAR_POSITION_Y",
   "PROFILE_AVATAR_SCALE",
   "PROFILE_BADGE_BG",
+  "PROFILE_BADGE_ORDER",
+  "PROFILE_BADGE_WRAP",
   "PROFILE_IMAGE_HISTORY",
   "PROFILE_BANNER_HISTORY",
   "PROFILE_BACKGROUND_HISTORY",
+];
+
+/**
+ * Settings that stay on this device on purpose. Every key of CONFIG_DEFAULT is
+ * either here or in CLOUD_SYNC_KEYS (tests/config.test.ts checks it), so a new
+ * setting cannot be left out of the cloud copy by accident.
+ */
+export const LOCAL_ONLY_KEYS: ConfigKey[] = [
+  // the session itself, never copied between devices
+  "CLOUD_TOKEN",
+  "CLOUD_LOGIN",
+  "CLOUD_AUTH_FAILED",
+  "LAST_CLOUD_SYNC",
+  "ACCOUNT",
+  // Manual/Auto push is a policy of this device: a pull from another device
+  // used to flip it silently
+  "CLOUD_SYNC_ENABLED",
+  // caches and per-browser progress
+  "FRIENDS_DATA_CACHE",
+  "EGGS_FOUND",
+  "SUBJECT_TRACKER_STATE",
+  // consent given on this browser
+  "SUBJECT_TRACKER_ENABLED",
+  "SUBJECT_TRACKER_SEND_DATA",
 ];

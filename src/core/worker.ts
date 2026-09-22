@@ -1,3 +1,5 @@
+import { hashLogin } from "./crypto.ts";
+
 /**
  * Base URL of the Better Intra cloud worker.
  *
@@ -21,3 +23,143 @@ export const WORKER_ORIGIN_PATTERN: string = `${new URL(WORKER_URL).origin}/*`;
  */
 export const AUTH_MODE: "oauth" | "intra" =
   __AUTH_MODE__ === "intra" ? "intra" : "oauth";
+
+// ---------------------------------------------------------------------------
+// The worker client: every request to the worker goes through workerFetch()
+// ---------------------------------------------------------------------------
+//
+// One place for what every call site used to do on its own: the deadline (a
+// stalled connection or a Worker hung on KV otherwise waits for the browser's
+// own timeout, minutes, and the spinner with it), the hashed `login` query and
+// the Bearer header, the body parsing (the worker answers a crash with a JSON
+// {error, message} 500) and the 401 -> CLOUD_AUTH_FAILED mapping that makes
+// the popup, the hub and the friends widget offer "Reconnect".
+
+/** Above the worker's KV latency by an order of magnitude; below Firefox's popup patience. */
+export const WORKER_TIMEOUT_MS = 10_000;
+
+export interface WorkerCredentials {
+  login: string;
+  token: string;
+}
+
+export interface WorkerFetchOptions {
+  method?: string;
+  /** An object is sent as JSON; a string as is. */
+  body?: unknown;
+  /** Appends `login=<hash>` and the Bearer header; 401 flags CLOUD_AUTH_FAILED. */
+  auth?: WorkerCredentials;
+  timeoutMs?: number;
+  headers?: Record<string, string>;
+}
+
+export interface WorkerResult {
+  ok: boolean;
+  /** 0 when no response came back (network error or timeout). */
+  status: number;
+  /** The parsed body when it was JSON, null otherwise. */
+  json: unknown;
+  /** The body when it was not JSON, "" otherwise. */
+  text: string;
+  /** The worker's error code and message on a JSON error body ({error, message}). */
+  error?: string;
+  message?: string;
+  timedOut: boolean;
+}
+
+const hashes = new Map<string, Promise<string>>();
+
+/** hashLogin, once per login: it used to run SubtleCrypto on every request. */
+export function hashedLogin(login: string): Promise<string> {
+  const key = login.toLowerCase().trim();
+  let hash = hashes.get(key);
+  if (!hash) {
+    hash = hashLogin(key);
+    hashes.set(key, hash);
+  }
+  return hash;
+}
+
+/** What a 401 from the worker means: the session is gone, offer "Reconnect". */
+export async function markAuthFailed(): Promise<void> {
+  await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
+}
+
+function noResponse(timedOut: boolean): WorkerResult {
+  return { ok: false, status: 0, json: null, text: "", timedOut };
+}
+
+/**
+ * Requests `path` (e.g. "/api/v1/private/settings?all=true") on the worker.
+ * Never throws: a network error or the deadline is a result with status 0.
+ */
+export async function workerFetch(
+  path: string,
+  options: WorkerFetchOptions = {},
+): Promise<WorkerResult> {
+  const url = new URL(WORKER_URL + path);
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
+  if (options.auth) {
+    url.searchParams.set("login", await hashedLogin(options.auth.login));
+    headers.Authorization = `Bearer ${options.auth.token}`;
+  }
+  let body: string | undefined;
+  if (typeof options.body === "string") body = options.body;
+  else if (options.body !== undefined) {
+    body = JSON.stringify(options.body);
+    headers["Content-Type"] ??= "application/json";
+  }
+
+  // Own controller rather than AbortSignal.timeout(): the timer is cleared as
+  // soon as the response lands, and fake timers can drive it in tests.
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? WORKER_TIMEOUT_MS,
+  );
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: options.method ?? "GET",
+      headers,
+      body,
+      signal: controller.signal,
+    });
+  } catch {
+    clearTimeout(timer);
+    return noResponse(controller.signal.aborted);
+  }
+
+  let text = "";
+  try {
+    text = await response.text();
+  } catch {
+    // a body cut off mid-way: the status still tells the caller what happened
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const result: WorkerResult = {
+    ok: response.ok,
+    status: response.status,
+    json: null,
+    text,
+    timedOut: false,
+  };
+  const type = response.headers.get("content-type") ?? "";
+  if (type.includes("json") || /^\s*[[{]/.test(text)) {
+    try {
+      result.json = JSON.parse(text);
+      result.text = "";
+    } catch {
+      // not JSON after all: left in `text`
+    }
+  }
+  if (result.json && typeof result.json === "object") {
+    const { error, message } = result.json as Record<string, unknown>;
+    if (typeof error === "string") result.error = error;
+    if (typeof message === "string") result.message = message;
+  }
+  if (response.status === 401 && options.auth) await markAuthFailed();
+  return result;
+}

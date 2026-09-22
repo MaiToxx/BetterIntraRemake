@@ -221,7 +221,29 @@ export const releaseAvatar = (): void => {
   document.documentElement.classList.remove(AVATAR_PENDING_CLASS);
 };
 
+const AVATAR_PENDING_STYLE_ID = "ft-avatar-pending-style";
+
+/**
+ * The one rule that makes holdAvatar() effective. Installed by main.ts at
+ * document_start, on its own: the hold has to be in place before the React app
+ * paints, and the rest of the profile sheet only arrives with initProfile().
+ * A static rule replaces the document-wide MutationObserver that used to write
+ * an inline `opacity: 0` on the first avatar it saw (and then never
+ * disconnected on pages without one). <head> may not be parsed yet at
+ * document_start, so the sheet goes on <html> if it has to.
+ */
+export const injectAvatarPendingRule = (): void => {
+  if (document.getElementById(AVATAR_PENDING_STYLE_ID)) return;
+  const host = document.head || document.documentElement;
+  if (!host) return;
+  const style = document.createElement("style");
+  style.id = AVATAR_PENDING_STYLE_ID;
+  style.textContent = `html.${AVATAR_PENDING_CLASS} ${AVATAR_SELECTOR} { opacity: 0 !important; }`;
+  host.appendChild(style);
+};
+
 export const injectCustomStyles = () => {
+  injectAvatarPendingRule();
   if (document.getElementById("ft-profile-host-styles")) return;
   const style = document.createElement("style");
   style.id = "ft-profile-host-styles";
@@ -238,9 +260,6 @@ export const injectCustomStyles = () => {
       will-change: background-image, transform;
       transform: translate3d(0, 0, 0);
       backface-visibility: hidden;
-    }
-    html.${AVATAR_PENDING_CLASS} ${AVATAR_SELECTOR} {
-      opacity: 0 !important;
     }
     ${AVATAR_SELECTOR}[data-modal-listener] {
       position: relative !important;

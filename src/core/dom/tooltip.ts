@@ -1,4 +1,5 @@
 import { render } from "lit-html";
+import { onThemeChange } from "../theme/theme-manager.ts";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 
 export type TooltipPosition = "top" | "right";
@@ -155,6 +156,10 @@ export function bindTooltips(
   boundRoots.add(root);
 
   let isLightCache: boolean | null = null;
+  // the verdict is per theme: the hub toggle restyles the page without a reload
+  onThemeChange(() => {
+    isLightCache = null;
+  });
   let hovered: HTMLElement | null = null;
   let hideTimer: number | null = null;
   let showTimer: number | null = null;
@@ -193,14 +198,7 @@ export function bindTooltips(
     }, HIDE_DELAY);
   };
 
-  root.addEventListener("mouseover", (e) => {
-    const path = e.composedPath() as Element[];
-    if (path.some((el) => el instanceof HTMLElement && el.id === TOOLTIP_ID)) {
-      cancelHide();
-      return;
-    }
-    const tip = path.find(isTip) ?? null;
-    if (!tip) return;
+  const show = (tip: HTMLElement) => {
     cancelHide();
     cancelShow();
     hovered = tip;
@@ -233,6 +231,17 @@ export function bindTooltips(
         }
       }, TOOLTIP_SHOW_DELAY);
     });
+  };
+
+  root.addEventListener("mouseover", (e) => {
+    const path = e.composedPath() as Element[];
+    if (path.some((el) => el instanceof HTMLElement && el.id === TOOLTIP_ID)) {
+      cancelHide();
+      return;
+    }
+    const tip = path.find(isTip) ?? null;
+    if (!tip) return;
+    show(tip);
   });
   root.addEventListener("mouseout", (e) => {
     const path = e.composedPath() as Element[];
@@ -245,6 +254,29 @@ export function bindTooltips(
       cancelShow();
       scheduleHide();
     }
+  });
+  // The keyboard gets the same text as the mouse: most tip carriers are
+  // icon-only buttons whose data-tip is the only word on them. Only the
+  // focused element itself counts, not an ancestor with a tip, so focus moving
+  // into a dialog or a card that carries one does not pop it up.
+  root.addEventListener("focusin", (e) => {
+    const target = e.composedPath()[0];
+    if (!(target instanceof Element) || !isTip(target)) return;
+    show(target);
+  });
+  root.addEventListener("focusout", (e) => {
+    const target = e.composedPath()[0];
+    if (!(target instanceof Element) || !isTip(target)) return;
+    cancelShow();
+    scheduleHide();
+  });
+  // Not preventDefault: Escape must still close the dialog underneath.
+  root.addEventListener("keydown", (e) => {
+    if ((e as KeyboardEvent).key !== "Escape") return;
+    cancelShow();
+    cancelHide();
+    hovered = null;
+    hideFloatingTooltip();
   });
 }
 

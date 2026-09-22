@@ -100,7 +100,14 @@ function normalizeConfigValue<T extends ConfigKey>(
   }
 
   if (key === "PROFILE_CARD_ORDER" && Array.isArray(value)) {
-    const stored = value as string[];
+    // A backup or a cloud copy can hold non-string items; the fix-up below
+    // calls .replace() on each one, and every read of the key used to throw
+    // until "Reset all data". Names with a leading "-" (hidden cards) stay.
+    let stored = (value as unknown[]).filter(
+      (s): s is string => typeof s === "string",
+    );
+    if (stored.length === 0) stored = [...CONFIG_DEFAULT.PROFILE_CARD_ORDER];
+    value = stored;
     const defaults = CONFIG_DEFAULT.PROFILE_CARD_ORDER;
     const storedSet = new Set(
       stored.map((s) => s.replace(/^-/, "").toUpperCase()),
@@ -113,4 +120,40 @@ function normalizeConfigValue<T extends ConfigKey>(
   }
 
   return value as BetterIntraConfig[T];
+}
+
+/**
+ * Whether a raw value has the structure CONFIG_DEFAULT gives its key: the
+ * check a backup file and a cloud copy go through before they are written to
+ * storage. Only the shape, derived from the default: the hub's enum and range
+ * rules live with its defs (features/hub/backup.ts). Unknown keys are refused.
+ */
+export function isValidStoredValue(key: string, value: unknown): boolean {
+  if (!(key in CONFIG_DEFAULT)) return false;
+  const reference: unknown = CONFIG_DEFAULT[key as ConfigKey];
+  if (reference === null) {
+    // nullable keys hold null or an object (a cache, the account)
+    return value === null || (typeof value === "object" && !Array.isArray(value));
+  }
+  if (Array.isArray(reference)) {
+    if (!Array.isArray(value)) return false;
+    if (key === "SHORTCUTS_LINKS") {
+      return value.every(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          typeof (item as { name?: unknown }).name === "string" &&
+          typeof (item as { url?: unknown }).url === "string",
+      );
+    }
+    // every other list is a list of strings (card order, friends, histories)
+    return value.every((item) => typeof item === "string");
+  }
+  if (typeof reference === "number") {
+    return typeof value === "number" && Number.isFinite(value);
+  }
+  if (typeof reference === "object") {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+  return typeof value === typeof reference;
 }

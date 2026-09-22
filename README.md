@@ -54,7 +54,7 @@ Data that upstream fetched through the 42 API is rebuilt from what the Intra alr
 - correction statistics and Thursday Roulette history are parsed from the v2 Intra pages;
 - cluster occupancy comes from `meta.intra.42.fr`.
 
-The worker is deployed at `betterintra-remake.maitox.workers.dev`. Only that host and `*.intra.42.fr` are contacted.
+The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it and `*.intra.42.fr`, the extension only contacts `api.github.com` (release check, About tab) and the image hosts other students chose for their visuals.
 
 ---
 
@@ -188,11 +188,11 @@ The **transcript download** is still in the extension but only shows up on campu
 
 See [PRIVACY.md](./PRIVACY.md).
 
-- Settings live in `chrome.storage.local`. Nothing leaves the browser until you connect with 42.
-- With the cloud account, settings, friend logins, custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login.
-- Signing in sends your current Intra session token to the worker once, for verification. It is not stored.
-- Other users' profiles: their public visuals and look are fetched from the worker when they use Better Intra.
-- No analytics, tracking or advertising. Permissions: `storage`, `alarms`, `activeTab`, and access to `*.intra.42.fr`, the worker and `api.github.com` (update check).
+- Settings live in `chrome.storage.local`. Signed out, the extension only talks to the worker for the public visuals of the profiles you open (by login hash), campus and announcement data, and to GitHub for the update check.
+- With the cloud account, the settings you push (friends list included), custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login, plus a users row (login hash, country, first sign-in) for the public counters. *Wipe All Data* deletes all of it.
+- Signing in sends your current Intra session token to the worker once, for verification against 42's public keys. It is not stored.
+- Other users' profiles: their public visuals and look are fetched from the worker when they use Better Intra; their images load from an allowlist of image hosts only.
+- No analytics, tracking or advertising. Permissions: `storage`, `alarms`, `activeTab`, and access to `*.intra.42.fr` and the worker. No host permission is needed for `api.github.com`: the update check is an ordinary cross-origin request.
 
 ## Self-hosting
 

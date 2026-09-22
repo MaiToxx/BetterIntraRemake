@@ -1,6 +1,8 @@
+import { DASHBOARD_CARD_SELECTOR } from "../../core/intra/selectors.ts";
+
 export function findLogtimeMount(): HTMLElement | null {
   const legacy = Array.from(
-    document.querySelectorAll<HTMLElement>(".bg-white.md\\:h-96"),
+    document.querySelectorAll<HTMLElement>(DASHBOARD_CARD_SELECTOR),
   ).find((c) => (c.textContent || "").toUpperCase().includes("LOGTIME"));
   if (legacy?.parentElement) return legacy.parentElement;
 
@@ -15,7 +17,7 @@ export function findLogtimeMount(): HTMLElement | null {
 }
 
 export function hideOldLogtime(): void {
-  document.querySelectorAll<HTMLElement>(".bg-white.md\\:h-96").forEach((c) => {
+  document.querySelectorAll<HTMLElement>(DASHBOARD_CARD_SELECTOR).forEach((c) => {
     if ((c.textContent || "").toUpperCase().includes("LOGTIME"))
       c.style.display = "none";
   });
@@ -43,12 +45,19 @@ export function setupScrollHandlers(scrollWrapper: HTMLElement): () => void {
     scrollWrapper.scrollLeft = scrollLeft - walk;
   };
 
+  // The strip only takes the wheel while it can still move that way: at
+  // either end the event goes on to the page, which otherwise could not be
+  // scrolled with the pointer over a 400px-tall calendar. A trackpad's
+  // horizontal swipe is left to the native overflow-x.
   const onWheel = (e: WheelEvent) => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.deltaY === 0) return;
+    const max = scrollWrapper.scrollWidth - scrollWrapper.clientWidth;
+    const canMove =
+      (e.deltaY > 0 && scrollWrapper.scrollLeft < max - 1) ||
+      (e.deltaY < 0 && scrollWrapper.scrollLeft > 0);
+    if (!canMove) return;
     e.preventDefault();
-    e.stopPropagation();
-    if (e.deltaY !== 0) {
-      scrollWrapper.scrollLeft += e.deltaY;
-    }
+    scrollWrapper.scrollLeft += e.deltaY;
   };
 
   scrollWrapper.addEventListener("mousedown", onMouseDown);

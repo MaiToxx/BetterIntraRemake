@@ -15,7 +15,7 @@ import {
   isJwtExpired,
   waitForIntrapyToken,
 } from "../../core/intra/intrapy.ts";
-import { WORKER_URL } from "../../core/worker.ts";
+import { WORKER_HOST, workerFetch } from "../../core/worker.ts";
 
 export const INTRA_LOGIN_MESSAGE = "FT_INTRA_LOGIN";
 /**
@@ -53,28 +53,35 @@ export async function loginWithIntraSession(): Promise<IntraLoginResult> {
     };
   }
 
-  let res: Response;
-  try {
-    res = await fetch(`${WORKER_URL}/auth/intra`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    });
-  } catch {
+  // Keycloak's JWKS fetch on a cold worker can take a moment: longer than the
+  // default deadline, shorter than the user's patience for a login button.
+  const res = await workerFetch("/auth/intra", {
+    method: "POST",
+    body: { token },
+    timeoutMs: 20_000,
+  });
+  if (res.status === 0) {
     return {
       ok: false,
-      error: `Could not reach the Better Intra server (${new URL(WORKER_URL).host}). If the extension asked for access to that site, click Allow, then retry.\nBetter Intra ${__APP_VERSION__}`,
+      error: `Could not reach the Better Intra server (${WORKER_HOST}). If the extension asked for access to that site, click Allow, then retry.\nBetter Intra ${__APP_VERSION__}`,
+    };
+  }
+  if (res.status === 429) {
+    // the worker limits sign-ins per login and per address
+    return {
+      ok: false,
+      error: "Too many sign-in attempts. Wait a minute, then try again.",
     };
   }
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
+    const text = res.message ?? res.text;
     return {
       ok: false,
       error: `Server refused the login (${res.status}): ${text.slice(0, 200)}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`,
     };
   }
 
-  const data = (await res.json()) as { token?: string; login?: string };
+  const data = (res.json ?? {}) as { token?: string; login?: string };
   if (!data.token || !data.login) {
     return { ok: false, error: "Unexpected server response." };
   }

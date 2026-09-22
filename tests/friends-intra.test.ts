@@ -94,13 +94,13 @@ describe("applyIntraVisuals", () => {
 
   it("keeps plain URLs and colours from the worker", () => {
     const f = applyIntraVisuals(base(), {
-      avatar: "https://cdn.example/bob.png",
+      avatar: "https://cdn.intra.42.fr/users/bob.png",
       avatarBg: "#ff0000",
       avatarPosX: 10,
       avatarPosY: "20",
       avatarScale: 150,
     });
-    expect(f.customAvatar).toBe("https://cdn.example/bob.png");
+    expect(f.customAvatar).toBe("https://cdn.intra.42.fr/users/bob.png");
     expect(f.avatarBg).toBe("#ff0000");
     expect(f).toMatchObject({ avatarPosX: 10, avatarPosY: 20, avatarScale: 150 });
   });
@@ -120,6 +120,16 @@ describe("applyIntraVisuals", () => {
     expect(applyIntraVisuals(base(), { avatar: "javascript:alert(1)" }).customAvatar).toBeNull();
     expect(applyIntraVisuals(base(), { avatar: "data:image/png;base64,AAAA" }).customAvatar).toBeNull();
     expect(applyIntraVisuals(base(), { avatarBg: "url(https://evil/x)" }).avatarBg).toBe("transparent");
+  });
+
+  // The friends widget loads these avatars on every Intra page: an avatar on
+  // a host outside the allowlist would show the viewer's IP to that host.
+  it("drops an avatar hosted off the image host allowlist, or served over http", () => {
+    expect(applyIntraVisuals(base(), { avatar: "https://my-site.example/bob.png" }).customAvatar).toBeNull();
+    expect(applyIntraVisuals(base(), { avatar: "http://i.imgur.com/bob.png" }).customAvatar).toBeNull();
+    expect(applyIntraVisuals(base(), { avatar: "https://i.imgur.com/bob.png" }).customAvatar).toBe(
+      "https://i.imgur.com/bob.png",
+    );
   });
 
   it("leaves the friend untouched without visuals", () => {
@@ -169,11 +179,11 @@ describe("fetchFriendsDataViaIntra", () => {
       displayname: "Alice",
       profile_picture: "https://cdn.intra.42.fr/users/alice.jpg",
     });
-    responses.set("/public/visuals?login=hashed-alice", { avatar: "https://cdn.example/a.png" });
+    responses.set("/public/visuals?login=hashed-alice", { avatar: "https://i.imgur.com/a.png" });
 
     const [alice] = await fetchFriendsDataViaIntra(["alice"]);
     expect(alice.avatar).toBe("https://cdn.intra.42.fr/users/alice.jpg");
-    expect(alice.customAvatar).toBe("https://cdn.example/a.png");
+    expect(alice.customAvatar).toBe("https://i.imgur.com/a.png");
     expect(calls.some((u) => u.endsWith("/users/alice/summary"))).toBe(false);
     expect(calls.some((u) => u.endsWith("/users/alice"))).toBe(true);
     expect(calls.some((u) => u.endsWith("/users/alice/cursus"))).toBe(true);

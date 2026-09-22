@@ -6,6 +6,21 @@
 const TOKEN_STORAGE_KEY = "ft_intrapy_token";
 const TOKEN_EVENT = "42_INTRAPY_TOKEN";
 
+/**
+ * A Date for a timestamp from intrapy.intra.42.fr.
+ *
+ * The API returns "YYYY-MM-DDTHH:MM:SS" without a timezone, meaning UTC.
+ * Append "Z" only when the string has a time part and no offset, so that
+ * every card agrees on the day (parsing it bare treats it as local time, off
+ * by one day around midnight; appending "Z" blindly broke strings that had an
+ * offset). Date-only strings are already UTC per the ECMAScript date format.
+ */
+export function parseIntraDate(dateStr: string): Date {
+  const bare =
+    dateStr.includes("T") && !/(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr);
+  return new Date(bare ? dateStr + "Z" : dateStr);
+}
+
 function b64urlToString(segment: string): string | null {
   try {
     const pad =

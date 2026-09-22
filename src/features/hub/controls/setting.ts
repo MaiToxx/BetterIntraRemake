@@ -10,7 +10,11 @@ import { renderCalendarPanel } from "../../calendar/calendar.ui.ts";
 import { renderPresetsPanel } from "../../customize/presets.ui.ts";
 import { renderCardsPanel } from "../../customize/cards.ui.ts";
 import { renderAboutPanel } from "../hub.about.ts";
-import type { HubSettingDef } from "../hubSettings.data.ts";
+import {
+  isLiveKey,
+  normalizeSearchText,
+  type HubSettingDef,
+} from "../hubSettings.data.ts";
 import { settingIds, type LiveOptions } from "./context.ts";
 import {
   renderColor,
@@ -54,7 +58,10 @@ export function renderSetting(
   live: LiveOptions,
 ) {
   if (def.kind === "divider") {
-    return html`<div class="divider font-bold my-2 col-span-full opacity-70">
+    return html`<div
+      class="divider font-bold my-2 col-span-full opacity-70"
+      data-search-divider
+    >
       ${def.label}
     </div>`;
   }
@@ -76,6 +83,9 @@ export function renderSetting(
       : "col-span-full";
   const ids = settingIds(def);
   const panel = PANEL_KINDS.has(def.kind);
+  // most settings only take effect after the Reload of the footer; the few
+  // the page applies on the spot carry no tag
+  const needsReload = !!def.key && !isLiveKey(def.key);
 
   return html`<div
     class="card bg-base-200 shadow-sm p-3 sm:p-4 ${gridClass} ${hidden
@@ -83,6 +93,7 @@ export function renderSetting(
       : enabled
         ? ""
         : "opacity-40 grayscale"}"
+    data-search="${normalizeSearchText(`${def.label} ${def.desc ?? ""}`)}"
   >
     <div
       class="flex ${isFullWidth
@@ -90,7 +101,16 @@ export function renderSetting(
         : "flex-col sm:flex-row sm:items-center"} justify-between gap-3 sm:gap-4"
     >
       <div class="flex flex-col">
-        <span class="text-sm" id="${ids.label}">${def.label}</span>
+        <span class="flex items-center gap-2">
+          <span class="text-sm" id="${ids.label}">${def.label}</span>
+          ${needsReload
+            ? html`<span
+                class="badge badge-xs badge-ghost opacity-70 font-normal"
+                title="Takes effect after a page reload"
+                >reload</span
+              >`
+            : ""}
+        </span>
         ${def.desc
           ? html`<span class="text-xs opacity-50" id="${ids.desc}"
               >${def.desc}</span

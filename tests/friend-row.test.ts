@@ -9,9 +9,10 @@ import { cssUrl, sanitizeCssUrl } from "../src/core/security/css-sanitize";
 import type { FriendData } from "../src/features/friends/friends-types";
 
 // A friend's avatar URL is chosen by that student and reaches the widget
-// unchanged through the worker and sanitizeCssUrl(), which keeps ')' and ';'.
+// unchanged through the worker and sanitizeCssUrl(), which keeps ')' and ';'
+// (the host allowlist only says where it is fetched from, imgur here).
 const PAYLOAD =
-  "https://evil.example/a.png);position:fixed!important;left:-100vw!important;top:-100vh!important;width:300vw!important;height:300vh!important;z-index:2147483647!important;pointer-events:auto!important;background-image:url(https://evil.example/fake.png";
+  "https://i.imgur.com/a.png);position:fixed!important;left:-100vw!important;top:-100vh!important;width:300vw!important;height:300vh!important;z-index:2147483647!important;pointer-events:auto!important;background-image:url(https://evil.example/fake.png";
 const WIKIMEDIA =
   "https://upload.wikimedia.org/wikipedia/commons/a/a9/Example_(cropped).jpg";
 
@@ -71,7 +72,7 @@ describe("friend row custom avatar", () => {
     // What the worker's friends endpoint passes through as-is from another
     // student's settings (oauth mode).
     const friend: FriendData = {
-      ...friendWithAvatar("https://cdn.example/a.png"),
+      ...friendWithAvatar("https://i.imgur.com/a.png"),
       avatarScale: "100%;position:fixed" as unknown as number,
       avatarPosX: "20" as unknown as number,
       avatarPosY: 30,

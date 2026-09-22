@@ -2,6 +2,7 @@ import { html, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
+import { findDashboardCard } from "../../../core/intra/selectors.ts";
 import { getEffectiveTheme, THEMES } from "../../../core/theme/theme-manager.ts";
 import { loadCampusData, TranscriptEntry } from "../../campus/campus.ts";
 import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
@@ -195,6 +196,70 @@ async function openTranscriptDialog(
   renderFormContent(0);
 }
 
+/**
+ * The campus file's transcripts, resolved once per page.
+ *
+ * WHY: profile.ts calls initTranscript() on every mutation pass of the
+ * dashboard (up to 30 s of React bursts). Reading the campus file per pass, and
+ * forcing an uncached reload of the manifest and the campus file whenever it
+ * had no transcripts (every campus but Belgium), cost two worker round trips
+ * and two storage writes per pass, and held every other feature of the pass
+ * behind them. A campus that gains transcripts is picked up by the 1 h cache
+ * TTL or the hub's reload button. Cleared on rejection so a transient worker
+ * failure is retried by the next pass.
+ */
+let transcriptsPromise: Promise<TranscriptEntry[]> | null = null;
+
+function loadTranscripts(campusId: string): Promise<TranscriptEntry[]> {
+  if (transcriptsPromise) return transcriptsPromise;
+  transcriptsPromise = loadCampusData(campusId).then(
+    (data) => data.transcripts ?? [],
+    (e) => {
+      transcriptsPromise = null;
+      throw e;
+    },
+  );
+  return transcriptsPromise;
+}
+
+const findProjectsCard = () => findDashboardCard("PROJECTS");
+
+/**
+ * One synchronous look per pass: the next pass repairs a React re-mount, so
+ * no animation-frame loop (which had no deadline) is needed.
+ */
+function injectTranscriptButton(
+  cloudLogin: string,
+  transcripts: TranscriptEntry[],
+): void {
+  const projectsCard = findProjectsCard();
+  if (!projectsCard) return;
+  if (projectsCard.querySelector("[data-ft-transcript]")) return;
+
+  const inner = projectsCard.querySelector<HTMLElement>(
+    ".flex.flex-col.w-full.h-full",
+  );
+  if (!inner) return;
+
+  const transcriptBtn = document.createElement("a");
+  transcriptBtn.setAttribute("data-ft-transcript", "");
+  transcriptBtn.className =
+    "text-center text-legacy-main bg-transparent border border-legacy-main py-1.5 px-2 cursor-pointer text-xs uppercase hover:opacity-80";
+  transcriptBtn.style.cursor = "pointer";
+  transcriptBtn.textContent = "Transcript";
+  transcriptBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    openTranscriptDialog(cloudLogin, transcripts);
+  });
+
+  const actionRow = inner.querySelector<HTMLElement>(".flex.flex-row.gap-2");
+  if (actionRow) {
+    actionRow.insertBefore(transcriptBtn, actionRow.firstChild);
+  } else {
+    inner.insertBefore(transcriptBtn, inner.firstChild);
+  }
+}
+
 export async function initTranscript() {
   if (
     location.hostname !== "profile-v3.intra.42.fr" ||
@@ -211,54 +276,11 @@ export async function initTranscript() {
 
   let transcripts: TranscriptEntry[];
   try {
-    let data = await loadCampusData(campusId);
-    if (!data.transcripts || data.transcripts.length === 0) {
-      data = await loadCampusData(campusId, true);
-      if (!data.transcripts || data.transcripts.length === 0) return;
-    }
-    transcripts = data.transcripts;
+    transcripts = await loadTranscripts(campusId);
   } catch {
     return;
   }
+  if (transcripts.length === 0) return;
 
-  const tryInject = () => {
-    const cards = document.querySelectorAll<HTMLElement>(".bg-white.md\\:h-96");
-    const projectsCard = [...cards].find((c) => {
-      const titleEl = c.querySelector("[class*='uppercase']");
-      return titleEl?.textContent?.trim().toUpperCase() === "PROJECTS";
-    });
-    if (!projectsCard) {
-      requestAnimationFrame(tryInject);
-      return;
-    }
-    if (projectsCard.querySelector("[data-ft-transcript]")) return;
-
-    const inner = projectsCard.querySelector<HTMLElement>(
-      ".flex.flex-col.w-full.h-full",
-    );
-    if (!inner) {
-      requestAnimationFrame(tryInject);
-      return;
-    }
-
-    const transcriptBtn = document.createElement("a");
-    transcriptBtn.setAttribute("data-ft-transcript", "");
-    transcriptBtn.className =
-      "text-center text-legacy-main bg-transparent border border-legacy-main py-1.5 px-2 cursor-pointer text-xs uppercase hover:opacity-80";
-    transcriptBtn.style.cursor = "pointer";
-    transcriptBtn.textContent = "Transcript";
-    transcriptBtn.addEventListener("click", (e) => {
-      e.preventDefault();
-      openTranscriptDialog(cloudLogin, transcripts);
-    });
-
-    const actionRow = inner.querySelector<HTMLElement>(".flex.flex-row.gap-2");
-    if (actionRow) {
-      actionRow.insertBefore(transcriptBtn, actionRow.firstChild);
-    } else {
-      inner.insertBefore(transcriptBtn, inner.firstChild);
-    }
-  };
-
-  requestAnimationFrame(tryInject);
+  injectTranscriptButton(cloudLogin, transcripts);
 }

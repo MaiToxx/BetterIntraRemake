@@ -13,6 +13,9 @@ export const CLUSTERS_SETTINGS: readonly HubSettingDef[] = [
     label: "Show markers",
     desc: "Shows the direction markers on the cluster screen.",
     kind: "toggle",
+    // only Belgium's campus file declares chair positions; elsewhere the
+    // switch changed nothing and read as broken
+    requiresChairMarkers: true,
     defaultValue: CONFIG_DEFAULT.CLUSTERS_SHOW_MARKERS,
     grid: true,
     colSpan: 1,

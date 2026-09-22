@@ -4,6 +4,9 @@ import {
   createChevronElement,
   createProjectLink,
   createTeamRow,
+  compareLastEvent,
+  injectFinishedProjects,
+  type MarkedProject,
 } from "../src/features/profile/cards/marks";
 
 describe("renderStatusIcon", () => {
@@ -100,5 +103,62 @@ describe("createTeamRow", () => {
   it("renders X icon for non-validated team", () => {
     const row = createTeamRow(mockProject, mockTeam);
     expect(row.querySelector("svg")).toBeTruthy();
+  });
+});
+
+describe("marks sort order (PROFILE_MARKS_SORT_ORDER)", () => {
+  const project = (name: string, date: string): MarkedProject => ({
+    projects_user_id: name.length,
+    project_name: name,
+    project_slug: name,
+    final_mark: 100,
+    last_event_date: date,
+    is_validated: true,
+    occurrence: 0,
+    teams: [],
+  });
+  const marks = [
+    project("libft", "2024-01-15T10:00:00Z"),
+    project("get_next_line", "2024-03-02T10:00:00Z"),
+    project("ft_printf", "2024-02-10T10:00:00Z"),
+  ];
+
+  it("compareLastEvent orders both ways", () => {
+    const dates = marks.map((m) => m.last_event_date);
+    expect([...dates].sort(compareLastEvent("newest_first"))).toEqual([
+      "2024-03-02T10:00:00Z",
+      "2024-02-10T10:00:00Z",
+      "2024-01-15T10:00:00Z",
+    ]);
+    expect([...dates].sort(compareLastEvent("oldest_first"))).toEqual([
+      "2024-01-15T10:00:00Z",
+      "2024-02-10T10:00:00Z",
+      "2024-03-02T10:00:00Z",
+    ]);
+  });
+
+  const mountCard = () => {
+    const card = document.createElement("div");
+    const inner = document.createElement("div");
+    inner.className = "flex flex-col w-full h-full";
+    card.appendChild(inner);
+    document.body.appendChild(card);
+    return card;
+  };
+  const rowNames = () =>
+    [...document.querySelectorAll<HTMLElement>("#ft-marks-injected a")].map(
+      (a) => a.textContent,
+    );
+
+  it("injectFinishedProjects follows the order it is given", () => {
+    const card = mountCard();
+    injectFinishedProjects(card, marks, "oldest_first");
+    expect(rowNames()).toEqual(["libft", "ft_printf", "get_next_line"]);
+    injectFinishedProjects(card, marks, "newest_first");
+    expect(rowNames()).toEqual(["get_next_line", "ft_printf", "libft"]);
+    // the default stays what every user had before the setting worked
+    injectFinishedProjects(card, marks);
+    expect(rowNames()).toEqual(["get_next_line", "ft_printf", "libft"]);
+    card.remove();
   });
 });

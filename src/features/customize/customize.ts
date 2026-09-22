@@ -14,15 +14,15 @@
  * public-look.ts), which is validated key by key before reaching this file.
  */
 import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
-import { sanitizeCssUrl } from "../../core/security/css-sanitize.ts";
+import { sanitizeCssUrl, sanitizeHexColor } from "../../core/security/css-sanitize.ts";
+import { AVATAR_SELECTOR, DASHBOARD_CARD_SELECTOR } from "../../core/intra/selectors.ts";
 
 /** Elements the Intra v3 theme paints with the page background colour. */
 const PAGE_SURFACES =
   "html, body, main, footer, header, #root, #root > div, [class*=\"min-h-screen\"]";
 /** Selector used by the theme for dashboard/profile cards. */
-const CARD_SURFACES = "div.bg-white, .bg-white.md\\:h-96";
-/** Profile avatar (kept in sync with selectors.ts AVATAR_SELECTOR). */
-const AVATAR = "div.rounded-full.w-52.h-52";
+const CARD_SURFACES = `div.bg-white, ${DASHBOARD_CARD_SELECTOR}`;
+const AVATAR = AVATAR_SELECTOR;
 
 /** "H S% L%" -> the same with the lightness shifted (clamped 0-100). */
 export function shiftLightness(hsl: string, delta: number): string {
@@ -107,7 +107,6 @@ export interface CardLook {
 }
 export type CardLookMap = Partial<Record<CardId, CardLook>>;
 
-const HEX6 = /^#[0-9a-f]{6}$/i;
 
 /** Keep known card ids with valid hex colours only; drops empty entries. */
 export function sanitizeCardMap(raw: unknown): CardLookMap {
@@ -121,7 +120,8 @@ export function sanitizeCardMap(raw: unknown): CardLookMap {
     const look: CardLook = {};
     for (const field of ["bg", "border", "title"] as const) {
       const val = c[field];
-      if (typeof val === "string" && HEX6.test(val.trim())) look[field] = val.trim();
+      const hex = sanitizeHexColor(val);
+      if (hex) look[field] = hex;
     }
     if (c.glow === true) look.glow = true;
     if (Object.keys(look).length > 0) out[id] = look;
@@ -142,8 +142,8 @@ function cardRules(c: CustomizeConfig): string[] {
     `box-shadow: 0 0 0 1px ${color}, 0 0 22px color-mix(in srgb, ${color} 45%, transparent) !important;`;
 
   const borderColor =
-    c.CUSTOM_CARD_BORDER_MODE === "custom" && HEX6.test(c.CUSTOM_CARD_BORDER_COLOR)
-      ? c.CUSTOM_CARD_BORDER_COLOR
+    c.CUSTOM_CARD_BORDER_MODE === "custom" && sanitizeHexColor(c.CUSTOM_CARD_BORDER_COLOR)
+      ? sanitizeHexColor(c.CUSTOM_CARD_BORDER_COLOR)
       : c.CUSTOM_CARD_BORDER_MODE === "accent"
         ? accent
         : "";
@@ -156,8 +156,8 @@ function cardRules(c: CustomizeConfig): string[] {
   }
 
   const titleColor =
-    c.CUSTOM_CARD_TITLE_MODE === "custom" && HEX6.test(c.CUSTOM_CARD_TITLE_COLOR)
-      ? c.CUSTOM_CARD_TITLE_COLOR
+    c.CUSTOM_CARD_TITLE_MODE === "custom" && sanitizeHexColor(c.CUSTOM_CARD_TITLE_COLOR)
+      ? sanitizeHexColor(c.CUSTOM_CARD_TITLE_COLOR)
       : c.CUSTOM_CARD_TITLE_MODE === "accent"
         ? accent
         : "";

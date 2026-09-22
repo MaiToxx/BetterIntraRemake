@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { collapseLitTemplatesPlugin } from "./scripts/collapse-lit-templates.ts";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import fs from "fs";
@@ -18,6 +19,7 @@ const authMode = readAuthMode();
 
 export default defineConfig({
   plugins: [
+    collapseLitTemplatesPlugin(),
     tailwindcss(),
     // This build writes shared-styles.css into the same folder as the content
     // build: it has to cut the same themes out, or it would put them back.

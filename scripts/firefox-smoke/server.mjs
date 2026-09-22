@@ -7,10 +7,15 @@
  *   intrapy.intra.42.fr      JSON stubs for the endpoints a profile page
  *                            calls; anything else is a 404
  *   cdn.intra.42.fr          a 1x1 PNG for every picture
- *   the extension's other    (the worker, api.github.com, ...) 404, except
- *   host_permissions hosts   the worker's announcement (none), campus list
- *                            (one campus) and that campus's file (empty)
+ *   api.github.com           an empty JSON object (no release, no counts)
+ *   the worker               404, except the announcement (none), the campus
+ *                            list (one campus), that campus's file (empty),
+ *                            the event types (none) and the public stats
  *   any other host           404
+ *
+ * Chrome prints every 404 the page or a content script receives as a console
+ * error, so each request the extension makes on a plain profile page must get
+ * a 200 here, or d.no-console-errors fails on every Chrome load.
  *
  * Every response carries CORS headers for the Origin it was asked from, like
  * the real intrapy does, so that a stubbed 404 never turns into a
@@ -36,6 +41,8 @@ export const LOGIN = "smoketest";
 /** The campus the page reports (hook.js relays it as 42_CAMPUS_DETECTED). */
 export const CAMPUS = { id: 4242, name: "Smoke Campus", slug: "smoke-campus" };
 
+export const GITHUB_API_HOST = "api.github.com";
+
 /** Intra hosts that are always redirected (a wildcard cannot be). */
 export const INTRA_HOSTS = [
   PROFILE_HOST,
@@ -47,6 +54,34 @@ export const INTRA_HOSTS = [
   "projects.intra.42.fr",
   "intra.42.fr",
 ];
+
+/**
+ * The hosts the harness must answer for a build, from its manifest and the
+ * worker origin of package.json. api.github.com is listed by name: the
+ * extension reaches it as a plain CORS request, without a host permission,
+ * and the worker is taken from both places in case a build predates one.
+ * Returns { hosts, workerHosts }: every host, and the ones that answer like
+ * the Better Intra worker.
+ */
+export function harnessHosts(manifest, workerOrigin) {
+  const hosts = new Set([GITHUB_API_HOST]);
+  const workerHosts = new Set();
+  const hostOf = (s) => {
+    const m = /^https?:\/\/([^/]+)(?:\/|$)/.exec(String(s));
+    return m && !m[1].includes("*") ? m[1].toLowerCase() : null;
+  };
+  for (const p of manifest.host_permissions || []) {
+    const h = hostOf(p);
+    if (h) hosts.add(h);
+    if (h && !h.endsWith("intra.42.fr") && !h.endsWith("github.com")) workerHosts.add(h);
+  }
+  const worker = workerOrigin ? hostOf(workerOrigin) : null;
+  if (worker) {
+    hosts.add(worker);
+    workerHosts.add(worker);
+  }
+  return { hosts: [...hosts], workerHosts: [...workerHosts] };
+}
 
 const PNG_1PX = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -269,12 +304,17 @@ export async function startServer(o) {
 
     if (hostname === "cdn.intra.42.fr") return send(200, "image/png", PNG_1PX, cached);
 
+    // No release (the background keeps its state), no star or follower count.
+    if (hostname === GITHUB_API_HOST) return json(200, {});
+
     if (workers.has(hostname)) {
       // No announcement, and a one-campus list with an empty cluster file.
       // The real worker always answers these two: a 404 on either makes
       // fetchCampusList / loadCampusData throw, and some callers do not catch
       // it (an unhandled rejection the real site never shows).
       if (url.pathname === "/api/v1/public/announcement") return json(200, {});
+      if (url.pathname === "/api/v1/public/stats") return json(200, {});
+      if (url.pathname === "/gh/data/event_types.json") return json(200, { event_types: {} });
       if (url.pathname === "/gh/campuses/campuses.json") {
         return json(200, {
           campuses: [{ id: String(CAMPUS.id), name: CAMPUS.name, timezone: "Europe/Paris" }],

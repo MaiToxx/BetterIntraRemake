@@ -4,7 +4,16 @@ import { openClusterDialog } from "../../clusters/map-dialog.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../../core/dom/tooltip.ts";
 import { appendSvg } from "../../../core/dom/svg.ts";
-import { getIsLight } from "../../../core/theme/theme-manager.ts";
+import {
+  getIsLight,
+  onThemeChange,
+  widgetTheme,
+} from "../../../core/theme/theme-manager.ts";
+import {
+  PROFILE_CARD_SELECTOR,
+  PROFILE_PASS_DEADLINE_MS,
+  probeSelectorAt,
+} from "../../../core/intra/selectors.ts";
 import ARROW_SHARE_SVG from "../../../assets/svg/arrow_share.svg?raw";
 import { initShortcutButtons, initFriendBadge } from "./personal-info.ts";
 import { injectCampusFlag } from "../../campus/campus-flags.ts";
@@ -15,6 +24,24 @@ const INFO_CARD_ID = "ft-info-card";
 
 let _badgeTheme: string = "dark";
 let _cursusListenerInitialized = false;
+let _themeListenerInitialized = false;
+
+/**
+ * The hub's theme toggle restyles the page live; the info card sits in a
+ * shadow root with its own data-theme and would keep the old one until a
+ * reload.
+ */
+function followThemeChanges() {
+  if (_themeListenerInitialized) return;
+  _themeListenerInitialized = true;
+  onThemeChange(({ theme, preset }) => {
+    _badgeTheme = widgetTheme(theme, preset);
+    document
+      .getElementById(SHADOW_HOST_ID)
+      ?.shadowRoot?.getElementById(INFO_CARD_ID)
+      ?.setAttribute("data-theme", _badgeTheme);
+  });
+}
 
 /**
  * Enter and Space activate `el` as they would a native button. For badges that
@@ -395,7 +422,10 @@ function moveStatsBar(profileCard: HTMLElement | null) {
 
 function injectProfileCardStyles() {
   const STYLE_ID = "ft-profile-card-styles";
-  document.getElementById(STYLE_ID)?.remove();
+  // The rules are constant, so the existing node is always right. Replacing
+  // it invalidated the whole document's styles on every profile pass, and the
+  // getComputedStyle in extractLevelColor then forced a full recalculation.
+  if (document.getElementById(STYLE_ID)) return;
 
   const style = document.createElement("style");
   style.id = STYLE_ID;
@@ -541,8 +571,17 @@ function extractLevelColor(profileCard: HTMLElement | null): string | null {
 
 export function findProfileCard(): HTMLElement | null {
   const loginElement =
-    document.querySelector<HTMLElement>('p[class="text-sm"]');
-  if (!loginElement) return null;
+    document.querySelector<HTMLElement>(PROFILE_CARD_SELECTOR);
+  if (!loginElement) {
+    // Nothing mounts without this card. Say so once if it is still missing
+    // when the profile pass stops looking (the deadline profile.ts uses).
+    probeSelectorAt(
+      "profile card",
+      PROFILE_CARD_SELECTOR,
+      PROFILE_PASS_DEADLINE_MS(location.pathname),
+    );
+    return null;
+  }
   const card = loginElement.closest(
     ".flex.flex-col.lg\\:flex-row",
   )?.parentElement;
@@ -582,12 +621,8 @@ export async function initProfileCardStyling() {
     ? "dark"
     : "light";
   const presetKey = await getConfig("PROFILE_THEME_PRESET");
-  _badgeTheme =
-    presetKey !== "dark" && presetKey !== "light"
-      ? presetKey
-      : effectiveTheme === "light"
-        ? "light"
-        : "dark";
+  _badgeTheme = widgetTheme(effectiveTheme, presetKey || "dark");
+  followThemeChanges();
 
   if (profileCard && !profileCard.classList.contains(PROFILE_CARD_CLASS)) {
     profileCard.classList.add(PROFILE_CARD_CLASS);

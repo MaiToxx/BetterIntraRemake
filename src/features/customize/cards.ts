@@ -4,9 +4,12 @@
  * Cheap and idempotent: called on every pass of the profile page.
  */
 import { CARD_TITLES } from "./customize.ts";
+import {
+  CARD_TITLE_SELECTOR,
+  DASHBOARD_CARD_SELECTOR,
+} from "../../core/intra/selectors.ts";
 
-const CARD_SELECTOR =
-  ".bg-white.md\\:h-96:not([data-ft-card]), .lt-box-container:not([data-ft-card])";
+const CARD_SELECTOR = `${DASHBOARD_CARD_SELECTOR}:not([data-ft-card]), .lt-box-container:not([data-ft-card])`;
 
 export function cardIdFromTitle(title: string): string | null {
   const t = title.trim().toUpperCase();
@@ -25,7 +28,7 @@ export function tagDashboardCards(root: ParentNode = document): void {
   if (host && !host.dataset.ftCard) host.dataset.ftCard = "logtime";
 
   root.querySelectorAll<HTMLElement>(CARD_SELECTOR).forEach((card) => {
-    const heading = card.querySelector<HTMLElement>("[class*='uppercase']");
+    const heading = card.querySelector<HTMLElement>(CARD_TITLE_SELECTOR);
     const id =
       cardIdFromTitle(heading?.textContent ?? "") ??
       cardIdFromTitle((card.textContent ?? "").slice(0, 200));

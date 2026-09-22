@@ -1,6 +1,4 @@
-import { hashLogin } from "../../core/crypto.ts";
-
-import { WORKER_URL } from "../../core/worker.ts";
+import { workerFetch } from "../../core/worker.ts";
 
 /** What an event of the feed is built from (a subset of the Intra event). */
 interface IcsEvent {
@@ -99,25 +97,18 @@ export async function syncCalendarIcs(
   const currentHash = computeHash(events);
   if (!force && store["CALENDAR_EVENTS_HASH"] === currentHash) return;
 
-  const hashed = await hashLogin(cloudLogin);
   const ics = generateIcs(events);
 
-  try {
-    const res = await fetch(
-      `${WORKER_URL}/api/v1/private/calendar/update?login=${encodeURIComponent(hashed)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${sessionToken}`,
-        },
-        body: JSON.stringify({ ics }),
-      },
-    );
-    if (res.ok) {
-      await chrome.storage.local.set({ CALENDAR_EVENTS_HASH: currentHash });
-    }
-  } catch {
-    // silent
+  // A 401 flags CLOUD_AUTH_FAILED through workerFetch: the worker keeps ten
+  // sessions per login and revokes the oldest on the eleventh sign-in, and
+  // this feed used to stop updating on the revoked machines without a word.
+  const res = await workerFetch("/api/v1/private/calendar/update", {
+    method: "POST",
+    body: { ics },
+    auth: { login: cloudLogin, token: sessionToken },
+    timeoutMs: 20_000,
+  });
+  if (res.ok) {
+    await chrome.storage.local.set({ CALENDAR_EVENTS_HASH: currentHash });
   }
 }

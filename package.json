@@ -1,7 +1,7 @@
 {
   "name": "better-intra",
   "private": true,
-  "version": "1.12.1",
+  "version": "1.13.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/MaiToxx/BetterIntraRemake.git"
@@ -30,7 +30,8 @@
     "generate:store-images": "node scripts/generate-store-images.js",
     "generate:description": "node scripts/convert-description.js",
     "check:cycles": "node scripts/check-cycles.mjs",
-    "smoke:firefox": "node scripts/firefox-smoke.mjs"
+    "smoke:firefox": "node scripts/firefox-smoke.mjs",
+    "smoke:chrome": "node scripts/firefox-smoke.mjs --browser chrome"
   },
   "devDependencies": {
     "@types/chrome": "^0.2.9",

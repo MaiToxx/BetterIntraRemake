@@ -53,3 +53,26 @@ describe("URL history thumbnails", () => {
     expect(btn.dataset.tip).toBe("https://img.example/a.png");
   });
 });
+
+// Other students only get images from the host allowlist; the author sees
+// their own regardless, so the editor has to say when a URL is theirs only.
+describe("image host hint", () => {
+  function hint(value: string): string | null {
+    const root = document.createElement("div");
+    render(renderUrlField("Image URL", value, () => {}), root);
+    return root.querySelector("[data-image-host-hint]")?.textContent?.replace(/\s+/g, " ").trim() ?? null;
+  }
+
+  it("names an off-list host, and http", () => {
+    expect(hint("https://my-site.example/a.png")).toContain(
+      "Only you will see this image: host my-site.example is not on the list",
+    );
+    expect(hint("http://i.imgur.com/a.png")).toContain("only load https images");
+  });
+
+  it("stays silent for an allowlisted https URL, an empty or an unparsable value", () => {
+    expect(hint("https://i.imgur.com/a.png")).toBeNull();
+    expect(hint("")).toBeNull();
+    expect(hint("not a url")).toBeNull();
+  });
+});

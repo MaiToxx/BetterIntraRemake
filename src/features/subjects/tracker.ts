@@ -8,6 +8,7 @@ import {
   formatRelativeTime,
 } from "./fingerprint.ts";
 import { renderSubjectBadge } from "./ui.ts";
+import { waitForElement } from "../../core/dom/dom-wait.ts";
 
 import { WORKER_URL } from "../../core/worker.ts";
 const CHECK_COOLDOWN_MS = 15 * 60 * 1000;
@@ -56,11 +57,25 @@ function isProjectPage(): string | null {
   return matchProjectSlug(window.location.pathname);
 }
 
-function findSubjectAnchor(): HTMLAnchorElement | null {
-  const anchors = document.querySelectorAll<HTMLAnchorElement>(
-    '.project-attachments-list a[href$=".pdf"]',
-  );
-  return anchors[0] ?? null;
+const SUBJECT_ANCHOR_SELECTOR = '.project-attachments-list a[href$=".pdf"]';
+/** Same deadline as the old 40 x 150 ms poll. */
+const SUBJECT_WAIT_MS = 6000;
+
+/**
+ * The state key holds one entry per project slug ever opened with a PDF and
+ * is a snapshot key: every write copies and broadcasts the whole record. Kept
+ * to the most recently checked slugs so it cannot grow for the life of the
+ * install. Bounded by the curriculum in practice; the cap is a safety net.
+ */
+const MAX_TRACKED_SLUGS = 500;
+
+function pruneState(state: SubjectTrackerState): SubjectTrackerState {
+  const slugs = Object.keys(state);
+  if (slugs.length <= MAX_TRACKED_SLUGS) return state;
+  slugs.sort((a, b) => (state[b].checkedAt ?? 0) - (state[a].checkedAt ?? 0));
+  const kept: SubjectTrackerState = {};
+  for (const slug of slugs.slice(0, MAX_TRACKED_SLUGS)) kept[slug] = state[slug];
+  return kept;
 }
 
 async function readLocalState(): Promise<SubjectTrackerState> {
@@ -125,19 +140,6 @@ function versionDateOf(
   return modifiedAt ?? createdAt ?? fallback ?? undefined;
 }
 
-async function waitForSubject(
-  anchor: HTMLAnchorElement | null,
-): Promise<HTMLAnchorElement | null> {
-  const MAX_ATTEMPTS = 40;
-  const DELAY_MS = 150;
-  for (let i = 0; i < MAX_ATTEMPTS; i++) {
-    if (anchor) return anchor;
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-    anchor = findSubjectAnchor();
-  }
-  return anchor;
-}
-
 export async function initSubjectTracker(): Promise<void> {
   const enabled = await getConfig("SUBJECT_TRACKER_ENABLED");
   if (!enabled) return;
@@ -145,7 +147,13 @@ export async function initSubjectTracker(): Promise<void> {
   const slug = isProjectPage();
   if (!slug) return;
 
-  const anchor = await waitForSubject(findSubjectAnchor());
+  // One observer with a deadline: the Rails page is rendered by the time this
+  // runs, so on the many projects pages without a subject PDF the old 150 ms
+  // poll woke 40 times for nothing.
+  const anchor = await waitForElement<HTMLAnchorElement>(
+    SUBJECT_ANCHOR_SELECTOR,
+    { timeoutMs: SUBJECT_WAIT_MS },
+  );
   if (!anchor) return;
 
   const url = anchor.href;
@@ -171,15 +179,18 @@ export async function initSubjectTracker(): Promise<void> {
         checkedAt: Date.now(),
       };
     } else if (!entry.tracked) {
-      // Never-seen slug → seed via the worker (reads the PDF metadata).
+      // Never-seen slug → seed via the worker (reads the PDF metadata). No
+      // date when the report fails or the PDF carries none: a Date.now() seed
+      // read as a "Subject updated / just now" alert on a subject nothing
+      // happened to.
       const report = await reportToWorker(slug, client, url);
       nextLocal = {
         lastUrl: normalizeUrl(url),
-        versionDate:
-          report?.modifiedAt ??
-          report?.createdAt ??
-          local.versionDate ??
-          Date.now(),
+        versionDate: versionDateOf(
+          report?.createdAt,
+          report?.modifiedAt,
+          local.versionDate,
+        ),
         changedAt: local.changedAt,
         checkedAt: Date.now(),
       };
@@ -239,7 +250,7 @@ export async function initSubjectTracker(): Promise<void> {
   }
 
   await chrome.storage.local.set({
-    SUBJECT_TRACKER_STATE: { ...state, [slug]: nextLocal },
+    SUBJECT_TRACKER_STATE: pruneState({ ...state, [slug]: nextLocal }),
   });
 
   maybeRenderBadge(slug, nextLocal, anchor);

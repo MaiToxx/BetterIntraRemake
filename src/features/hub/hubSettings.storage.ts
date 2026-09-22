@@ -1,8 +1,8 @@
 import { getConfig } from "../../core/config.ts";
 import {
-  FEATURE_DEFS,
   FEATURE_IDS,
   STORAGE_KEY,
+  TOGGLEABLE_FEATURE_IDS,
   FeatureId,
 } from "./hubSettings.data.ts";
 
@@ -17,8 +17,10 @@ function normalizeActive(raw: unknown): FeatureId[] {
     }
   }
 
+  // Garbage falls back to the features that have a switch, like the default:
+  // an always-on tab has no initializer, so listing it changed nothing.
   if (!Array.isArray(parsed)) {
-    return FEATURE_DEFS.map((f) => f.id);
+    return [...TOGGLEABLE_FEATURE_IDS];
   }
 
   // An empty list is a valid choice (the user disabled every feature).
@@ -30,7 +32,7 @@ function normalizeActive(raw: unknown): FeatureId[] {
   );
 
   // Only unknown ids: the stored value is garbage, fall back to the defaults.
-  if (ids.length === 0) return FEATURE_DEFS.map((f) => f.id);
+  if (ids.length === 0) return [...TOGGLEABLE_FEATURE_IDS];
 
   return ids;
 }

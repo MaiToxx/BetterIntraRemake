@@ -49,14 +49,34 @@ export async function isFriend(login: string): Promise<boolean> {
 }
 
 const CACHE_KEY = "FRIENDS_DATA_CACHE";
-// In intra mode every friend costs up to 3 intrapy calls plus a worker call
-// on the user's own Intra session, so the list is kept longer.
-export const FRIENDS_CACHE_TTL = AUTH_MODE === "intra" ? 3 * 60_000 : 30_000;
+// In intra mode every friend costs up to 3 intrapy calls on the user's own
+// Intra session, so the list is kept longer: 5 minutes, not more, since the
+// online count on the button is what goes stale and Refresh is the only way
+// to force it.
+export const FRIENDS_CACHE_TTL = AUTH_MODE === "intra" ? 5 * 60_000 : 30_000;
 const CACHE_TTL = FRIENDS_CACHE_TTL;
+/**
+ * The worker's friends endpoint aggregates 42 API calls for up to 50 logins;
+ * without a deadline a stalled connection kept the widget loading for good.
+ */
+export const FRIENDS_FETCH_TIMEOUT_MS = 30_000;
 
 interface FriendsCache {
   data: FriendData[];
   timestamp: number;
+  /**
+   * False when the rows come from an "online" fetch (see friends-intra.ts):
+   * their level, picture and custom avatar are the last known ones, so the
+   * cache serves the closed widget's badge but not the open panel. Absent
+   * from older caches, which were always full.
+   */
+  full?: boolean;
+  /**
+   * Whether custom avatars were asked for. A cache written with them off is
+   * not full for a panel that now shows them, so switching the setting on
+   * does not show the 42 pictures until the cache expires.
+   */
+  visuals?: boolean;
   /**
    * The logins that were asked for. The cache is only served for a list it
    * covers: it used to be served whatever the list, so a friend removed (or
@@ -80,7 +100,13 @@ async function getCachedData(): Promise<FriendsCache | null> {
       val.logins.every((l) => typeof l === "string")
         ? val.logins
         : undefined;
-    return { data: val.data, timestamp: val.timestamp, logins };
+    return {
+      data: val.data,
+      timestamp: val.timestamp,
+      logins,
+      full: val.full !== false,
+      visuals: val.visuals !== false,
+    };
   } catch {
     return null;
   }
@@ -89,10 +115,17 @@ async function getCachedData(): Promise<FriendsCache | null> {
 async function setCachedData(
   data: FriendData[],
   logins: string[],
+  stage: { full: boolean; visuals: boolean },
 ): Promise<void> {
   try {
     await chrome.storage.local.set({
-      [CACHE_KEY]: { data, timestamp: Date.now(), logins: [...logins] },
+      [CACHE_KEY]: {
+        data,
+        timestamp: Date.now(),
+        logins: [...logins],
+        full: stage.full,
+        visuals: stage.visuals,
+      },
     });
   } catch {
     // A cache that could not be written only costs a refetch next time.
@@ -106,6 +139,8 @@ async function dropFromCache(login: string): Promise<void> {
     [CACHE_KEY]: {
       data: cached.data.filter((f) => f.login !== login),
       timestamp: cached.timestamp,
+      full: cached.full,
+      visuals: cached.visuals,
       ...(cached.logins
         ? { logins: cached.logins.filter((l) => l !== login) }
         : {}),
@@ -129,6 +164,8 @@ export async function cacheFriendData(friend: FriendData): Promise<void> {
     [CACHE_KEY]: {
       data: [...cached.data.filter((f) => f.login !== friend.login), friend],
       timestamp: cached.timestamp,
+      full: cached.full,
+      visuals: cached.visuals,
       logins: cached.logins.includes(friend.login)
         ? cached.logins
         : [...cached.logins, friend.login],
@@ -156,8 +193,30 @@ function pickCached(
   return logins.flatMap((l) => byLogin.get(l) ?? []);
 }
 
+/**
+ * The last cached rows of `logins`, however old, with the cache's time: what
+ * the widget paints while the real load runs, instead of a spinner. Never a
+ * login that is not in `logins`, so a removed friend cannot come back.
+ */
+export async function peekCachedFriends(
+  logins: string[],
+): Promise<{ friends: FriendData[]; timestamp: number; full: boolean } | null> {
+  const cached = await getCachedData();
+  if (!cached) return null;
+  return {
+    friends: pickCached(cached, logins),
+    timestamp: cached.timestamp,
+    full: cached.full !== false,
+  };
+}
+
+/** How much of each friend to load (see friends-intra.ts). */
+export type FriendsDetail = "online" | "full";
+
 /** The whole friends list, and whether it could really be fetched. */
 export interface FriendsLoadResult {
+  /** What the rows carry: "online" rows keep their last known level and avatar. */
+  detail: FriendsDetail;
   /**
    * The friends to show. When `ok` is false, the rows that could not be
    * fetched are the last cached ones (however old), or are missing.
@@ -180,22 +239,44 @@ export interface FriendsLoadResult {
  */
 export async function loadFriendsData(
   logins: string[],
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; detail?: FriendsDetail } = {},
 ): Promise<FriendsLoadResult> {
+  const detail: FriendsDetail = opts.detail ?? "full";
   if (logins.length === 0) {
-    return { friends: [], ok: true, fetchedAt: Date.now() };
+    return { friends: [], ok: true, fetchedAt: Date.now(), detail: "full" };
   }
 
   const token = await getConfig("CLOUD_TOKEN");
   const cloudLogin = await getConfig("CLOUD_LOGIN");
-  if (!token || !cloudLogin) return { friends: [], ok: false, fetchedAt: null };
+  if (!token || !cloudLogin)
+    return { friends: [], ok: false, fetchedAt: null, detail };
+
+  // Only the open panel shows custom avatars: the closed widget and a user
+  // who turned them off never cost the worker a request.
+  const wantVisuals =
+    AUTH_MODE === "intra" &&
+    detail === "full" &&
+    !!(await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"));
 
   const cached = await getCachedData();
-  if (!opts.force && cached && isFresh(cached) && cacheCovers(cached, logins)) {
+  /** What the cached rows, if any, can stand for. */
+  const cachedDetail: FriendsDetail =
+    !cached ||
+    (cached.full !== false && (!wantVisuals || cached.visuals !== false))
+      ? "full"
+      : "online";
+  if (
+    !opts.force &&
+    cached &&
+    isFresh(cached) &&
+    cacheCovers(cached, logins) &&
+    (detail === "online" || cachedDetail === "full")
+  ) {
     return {
       friends: pickCached(cached, logins),
       ok: true,
       fetchedAt: cached.timestamp,
+      detail: cachedDetail,
     };
   }
 
@@ -204,18 +285,25 @@ export async function loadFriendsData(
     // Fall back to the last known non-empty data, as before
     const old = pickCached(cached, logins);
     return old.length > 0 && cached
-      ? { friends: old, ok: true, fetchedAt: cached.timestamp }
-      : { friends: [], ok: true, fetchedAt: Date.now() };
+      ? { friends: old, ok: true, fetchedAt: cached.timestamp, detail: cachedDetail }
+      : { friends: [], ok: true, fetchedAt: Date.now(), detail };
   };
 
   if (AUTH_MODE === "intra") {
     // No 42 API on the self-hosted worker: build the data from the Intra's
     // own API with the page's session token (see friends-intra.ts).
-    const result = await fetchFriendsIntraResult(logins);
+    const result = await fetchFriendsIntraResult(logins, {
+      detail,
+      visuals: wantVisuals,
+      known: pickCached(cached, logins),
+    });
     if (result.failed.length === 0) {
       if (result.friends.length === 0) return emptyAnswer();
-      await setCachedData(result.friends, logins);
-      return { friends: result.friends, ok: true, fetchedAt: Date.now() };
+      await setCachedData(result.friends, logins, {
+        full: detail === "full",
+        visuals: wantVisuals,
+      });
+      return { friends: result.friends, ok: true, fetchedAt: Date.now(), detail };
     }
     // Some logins could not be checked (expired session, rate limit,
     // offline): keep what did come back, the last known rows for the rest,
@@ -226,21 +314,24 @@ export async function loadFriendsData(
     const friends = logins.flatMap(
       (l) => fresh.get(l) ?? (failed.has(l) ? (old.get(l) ?? []) : []),
     );
-    return { friends, ok: false, fetchedAt: null };
+    return { friends, ok: false, fetchedAt: null, detail };
   }
 
   try {
     const hashedLogin = await hashLogin(cloudLogin);
     const res = await fetch(
       `${WORKER_URL}/api/v1/private/friends/data?login=${encodeURIComponent(hashedLogin)}&logins=${encodeURIComponent(logins.join(","))}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(FRIENDS_FETCH_TIMEOUT_MS),
+      },
     );
     if (res.ok) {
       const data = (await res.json()) as { friends?: FriendData[] };
       const friends = data.friends ?? [];
       if (friends.length === 0) return emptyAnswer();
-      await setCachedData(friends, logins);
-      return { friends, ok: true, fetchedAt: Date.now() };
+      await setCachedData(friends, logins, { full: true, visuals: true });
+      return { friends, ok: true, fetchedAt: Date.now(), detail: "full" };
     } else if (res.status === 401) {
       await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
     }
@@ -249,7 +340,12 @@ export async function loadFriendsData(
   }
 
   // On failure, fall back to the last known data for these logins, if any
-  return { friends: pickCached(cached, logins), ok: false, fetchedAt: null };
+  return {
+    friends: pickCached(cached, logins),
+    ok: false,
+    fetchedAt: null,
+    detail: cachedDetail,
+  };
 }
 
 /**
@@ -281,7 +377,10 @@ export async function checkFriendLogin(login: string): Promise<FriendCheck> {
     const hashedLogin = await hashLogin(cloudLogin);
     const res = await fetch(
       `${WORKER_URL}/api/v1/private/friends/data?login=${encodeURIComponent(hashedLogin)}&logins=${encodeURIComponent(normalized)}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(FRIENDS_FETCH_TIMEOUT_MS),
+      },
     );
     if (res.status === 401) {
       await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });

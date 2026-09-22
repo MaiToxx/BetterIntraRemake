@@ -79,6 +79,7 @@ describe("loadFriendsData (oauth)", () => {
       friends: [],
       ok: false,
       fetchedAt: null,
+      detail: "full",
     });
   });
 });

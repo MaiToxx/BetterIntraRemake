@@ -41,30 +41,16 @@ const QUICK_LINKS = [
   },
 ];
 
-// These used to be module-level fetches, i.e. three network requests on every
-// intra page load even when the hub was never opened. They are now started
-// the first time the About panel is rendered and memoised afterwards.
+// This used to be a module-level fetch, i.e. a network request on every intra
+// page load even when the hub was never opened. It is started the first time
+// the About panel is rendered and memoised afterwards. Nothing here talks to
+// api.github.com: a whole campus shares its 60 requests an hour, and the
+// star and follower counts that used to be fetched on open were not worth
+// starving the background's update check of them.
 function lazy<T>(factory: () => Promise<T>): () => Promise<T> {
   let promise: Promise<T> | null = null;
   return () => (promise ??= factory());
 }
-
-const REPO_PATH = HUB_INFO.github.replace(/^https:\/\/github\.com\//, "");
-const REPO_OWNER = REPO_PATH.split("/")[0];
-
-const getStarCount = lazy(() =>
-  fetch(`https://api.github.com/repos/${REPO_PATH}`)
-    .then((r) => r.json())
-    .then((d) => d.stargazers_count as number)
-    .catch(() => null),
-);
-
-const getFollowerCount = lazy(() =>
-  fetch(`https://api.github.com/users/${REPO_OWNER}`)
-    .then((r) => r.json())
-    .then((d) => d.followers as number)
-    .catch(() => null),
-);
 
 /** Newer release recorded by the background update check, if any. */
 const getUpdateInfo = async (): Promise<UpdateInfo | null> => {
@@ -171,18 +157,6 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                     ${unsafeHTML(STAR_SVG)}
                   </span>
                   <span>Star</span>
-                  ${until(
-                    getStarCount().then((c) =>
-                      c != null
-                        ? html`<span class="badge badge-sm font-mono"
-                            >${c}</span
-                          >`
-                        : "",
-                    ),
-                    html`<span
-                      class="loading loading-spinner loading-xs"
-                    ></span>`,
-                  )}
                 </a>
               </div>
             </div>
@@ -364,14 +338,6 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                 ${unsafeHTML(PERSON_FOLLOW_SVG)}
               </span>
               <span>Follow</span>
-              ${until(
-                getFollowerCount().then((c) =>
-                  c != null
-                    ? html`<span class="badge badge-sm font-mono">${c}</span>`
-                    : "",
-                ),
-                html`<span class="loading loading-spinner loading-xs"></span>`,
-              )}
             </a>
             <a
               href="https://github.com/sponsors/nicopasla"

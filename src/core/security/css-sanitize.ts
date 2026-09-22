@@ -6,6 +6,9 @@
  * that anything interpolated into a <style> element is either a normalised
  * http(s) URL, a plain colour or a known keyword.
  */
+import { isAllowedImageHost } from "./image-hosts.ts";
+
+export { isAllowedImageHost };
 
 /**
  * Absolute http(s) URL, normalised by the URL parser (which percent-encodes
@@ -43,6 +46,18 @@ export function sanitizeCssUrl(value: unknown): string {
 export function cssUrl(value: unknown): string {
   const href = sanitizeCssUrl(value);
   return href ? `url("${href}")` : "";
+}
+
+/**
+ * sanitizeCssUrl() for an image ANOTHER user published: https only (a
+ * browser upgrades or blocks an http image anyway, so it never showed) and a
+ * host on the allowlist (image-hosts.ts), otherwise "". Never used on the
+ * author's own settings.
+ */
+export function allowedImageUrl(value: unknown): string {
+  const href = sanitizeCssUrl(value);
+  if (!href.startsWith("https:")) return "";
+  return isAllowedImageHost(new URL(href).hostname) ? href : "";
 }
 
 /** #rgb, #rgba, #rrggbb, #rrggbbaa, rgb()/rgba()/hsl()/hsla() with numeric args, or a keyword. */

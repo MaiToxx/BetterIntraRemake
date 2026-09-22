@@ -3,7 +3,14 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
-import { waitForIntrapyToken } from "../../../core/intra/intrapy.ts";
+import {
+  findDashboardCard,
+  waitForDashboardCard,
+} from "../../../core/intra/selectors.ts";
+import {
+  parseIntraDate,
+  waitForIntrapyToken,
+} from "../../../core/intra/intrapy.ts";
 import { INTRA_FONT } from "../../logtime/constants.ts";
 import CHECK_SVG from "../../../assets/svg/check.svg?raw";
 import X_SVG from "../../../assets/svg/x.svg?raw";
@@ -13,7 +20,7 @@ import { createSkeleton } from "../../../core/dom/skeleton.ts";
 const DATE_COLUMN_WIDTH = "150px";
 const SCORE_COLUMN_WIDTH = "24px";
 
-interface MarkedProject {
+export interface MarkedProject {
   projects_user_id: number;
   project_name: string;
   project_slug: string;
@@ -29,6 +36,28 @@ interface MarkedProject {
   }[];
 }
 
+/** The "Marks sort order" setting (PROFILE_MARKS_SORT_ORDER). */
+export type MarksOrder = "newest_first" | "oldest_first";
+
+/**
+ * Comparator on two `last_event_date` values for the given order. The API
+ * dates are ISO-like strings, so both the list built from the API and the
+ * rows Intra rendered (data-last-event-date) sort with the same function.
+ */
+export function compareLastEvent(
+  order: MarksOrder,
+): (a: string, b: string) => number {
+  return order === "oldest_first"
+    ? (a, b) => a.localeCompare(b)
+    : (a, b) => b.localeCompare(a);
+}
+
+/** Read the setting once per page; "newest first" when unset or unknown. */
+async function readMarksOrder(): Promise<MarksOrder> {
+  const order = await getConfig("PROFILE_MARKS_SORT_ORDER");
+  return order === "oldest_first" ? "oldest_first" : "newest_first";
+}
+
 const INJECTED_ID = "ft-marks-injected";
 const SKELETON_ID = "ft-marks-skeleton";
 
@@ -40,24 +69,14 @@ let marksInitialized = false;
 let ownProfileLoading = false;
 let otherProfileRunning = false;
 let cachedLogin: string | null = null;
+/** Sort order read by initMarks, reused when the cursus is switched. */
+let marksOrder: MarksOrder = "newest_first";
 
 /** How long to wait for the page to hand over a usable Intra token. */
 const TOKEN_WAIT_MS = 15000;
 
-/**
- * The API returns "YYYY-MM-DDTHH:MM:SS" without a timezone, meaning UTC.
- * Append "Z" only when no offset is present so both the row and its tooltip
- * agree (parsing it bare used to treat it as local time, off by one day
- * around midnight; appending "Z" blindly broke strings that had an offset).
- */
-function parseApiDate(dateStr: string): Date {
-  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateStr)
-    ? new Date(dateStr)
-    : new Date(dateStr + "Z");
-}
-
 function formatDate(dateStr: string): string {
-  const d = parseApiDate(dateStr);
+  const d = parseIntraDate(dateStr);
   const now = new Date();
   const todayMidnight = new Date(
     now.getFullYear(),
@@ -81,7 +100,7 @@ function formatDate(dateStr: string): string {
 }
 
 function formatTooltipDate(dateStr: string): string {
-  const d = parseApiDate(dateStr);
+  const d = parseIntraDate(dateStr);
   const dd = String(d.getDate()).padStart(2, "0");
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yy = String(d.getFullYear() % 100).padStart(2, "0");
@@ -161,17 +180,9 @@ async function getMarks(
   return fetched;
 }
 
-function findCard(title: "PROJECTS" | "MARKS"): HTMLElement | null {
-  const cards = document.querySelectorAll<HTMLElement>(".bg-white.md\\:h-96");
-  for (const card of cards) {
-    const titleEl = card.querySelector("[class*='uppercase']");
-    const text = titleEl?.textContent?.trim();
-    if (text?.toUpperCase().startsWith(title)) {
-      return card;
-    }
-  }
-  return null;
-}
+// prefix: the MARKS heading of another student's profile carries a count
+const findCard = (title: "PROJECTS" | "MARKS") =>
+  findDashboardCard(title, { prefix: true });
 
 export function renderStatusIcon(
   container: HTMLElement,
@@ -257,21 +268,14 @@ export function createTeamRow(
   return row;
 }
 
-async function waitForCard(
-  title: "PROJECTS" | "MARKS",
-): Promise<HTMLElement | null> {
-  for (let i = 0; i < 100; i++) {
-    const card = findCard(title);
-    if (card) {
-      if (i >= 30) return card;
-      const ul = card.querySelector(".h-full ul");
-      const lis = ul?.querySelectorAll("li");
-      if (lis && lis.length > 0) return card;
-    }
-    await new Promise((r) => requestAnimationFrame(r));
-  }
-  return null;
-}
+// Rows first, so the skeleton measures a rendered list; past the grace an
+// empty card (a student with no project yet) is still taken.
+const waitForCard = (title: "PROJECTS" | "MARKS") =>
+  waitForDashboardCard(title, {
+    prefix: true,
+    ready: (card) => !!card.querySelector(".h-full ul li"),
+    readyGraceFrames: 30,
+  });
 
 function removeMarksSkeleton() {
   document.getElementById(SKELETON_ID)?.remove();
@@ -321,7 +325,11 @@ function showMarksSkeleton(card: HTMLElement) {
   }
 }
 
-function injectFinishedProjects(card: HTMLElement, marks: MarkedProject[]) {
+export function injectFinishedProjects(
+  card: HTMLElement,
+  marks: MarkedProject[],
+  order: MarksOrder = "newest_first",
+) {
   removeMarksSkeleton();
   document.getElementById(INJECTED_ID)?.remove();
 
@@ -333,10 +341,9 @@ function injectFinishedProjects(card: HTMLElement, marks: MarkedProject[]) {
   const hFull = inner.querySelector<HTMLElement>(".h-full");
   const hasBadges = hFull?.querySelector("ul")?.style.display === "none";
 
-  const sorted = [...marks].sort(
-    (a, b) =>
-      new Date(b.last_event_date).getTime() -
-      new Date(a.last_event_date).getTime(),
+  const byLastEvent = compareLastEvent(order);
+  const sorted = [...marks].sort((a, b) =>
+    byLastEvent(a.last_event_date, b.last_event_date),
   );
 
   const container = document.createElement("div");
@@ -480,7 +487,7 @@ async function handleCursusSwitch(cursusId: string) {
   }
   const card = await cardPromise;
   if (card) {
-    injectFinishedProjects(card, marks ?? []);
+    injectFinishedProjects(card, marks ?? [], marksOrder);
   } else {
     removeMarksSkeleton();
   }
@@ -508,6 +515,7 @@ function collectEntries(
 async function enhanceExistingMarks(
   card: HTMLElement,
   marks?: MarkedProject[],
+  order: MarksOrder = "newest_first",
 ): Promise<boolean> {
   let attempts = 0;
   while (attempts < 30) {
@@ -734,11 +742,13 @@ async function enhanceExistingMarks(
         }
 
         const sortedEntries = [...container.children] as HTMLElement[];
-        sortedEntries.sort((a, b) => {
-          const da = a.getAttribute("data-last-event-date") || "";
-          const db = b.getAttribute("data-last-event-date") || "";
-          return db.localeCompare(da);
-        });
+        const byLastEvent = compareLastEvent(order);
+        sortedEntries.sort((a, b) =>
+          byLastEvent(
+            a.getAttribute("data-last-event-date") || "",
+            b.getAttribute("data-last-event-date") || "",
+          ),
+        );
         for (const entry of sortedEntries) container.appendChild(entry);
 
         card.dataset.ftEntries = String(entries.length);
@@ -759,6 +769,7 @@ export async function initMarks() {
   if (!showMarks) return;
 
   if (location.hostname !== "profile-v3.intra.42.fr") return;
+  marksOrder = await readMarksOrder();
 
   const isOwnProfile = location.pathname === "/";
   if (isOwnProfile) {
@@ -797,7 +808,7 @@ export async function initMarks() {
 
     const card = await cardPromise;
     if (card) {
-      injectFinishedProjects(card, marks ?? []);
+      injectFinishedProjects(card, marks ?? [], marksOrder);
     } else {
       removeMarksSkeleton();
     }
@@ -822,7 +833,7 @@ export async function initMarks() {
       marksData =
         (await getMarks(key, targetLogin, token, cursusId)) ?? undefined;
     }
-    const enhanced = await enhanceExistingMarks(card, marksData);
+    const enhanced = await enhanceExistingMarks(card, marksData, marksOrder);
     otherProfileRunning = false;
     if (!enhanced) {
       marksInitialized = true;
@@ -844,7 +855,7 @@ export async function initMarks() {
         const currentCount = collectEntries(marksCard).length;
         if (currentCount <= lastCount) return;
         enhancing = true;
-        void enhanceExistingMarks(marksCard, marksData).finally(
+        void enhanceExistingMarks(marksCard, marksData, marksOrder).finally(
           () => {
             enhancing = false;
           },

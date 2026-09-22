@@ -22,6 +22,7 @@ import {
   type Effect,
   type Intensity,
 } from "./extras.ts";
+import { sanitizeHexColor } from "../../../core/security/css-sanitize.ts";
 
 export interface Particle {
   x: number;
@@ -637,7 +638,7 @@ export function startEffect(effect: Effect, intensity: Intensity, tint: string):
     return;
   }
   const level: Intensity = INTENSITIES.includes(intensity) ? intensity : "medium";
-  const color = typeof tint === "string" && /^#[0-9a-f]{6}$/i.test(tint) ? tint.toLowerCase() : "";
+  const color = sanitizeHexColor(tint) === tint ? (tint as string).toLowerCase() : "";
   const key = `${effect}|${level}|${color}`;
   if (running && running.key === key && running.canvas.isConnected) return;
   stopEffect();

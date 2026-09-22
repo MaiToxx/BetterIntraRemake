@@ -15,6 +15,37 @@ export interface UpdateInfo {
   checkedAt: number;
 }
 
+/**
+ * chrome.storage.local key of the last completed check, whatever its answer
+ * (UPDATE_KEY only exists while a newer release is known). It is what lets the
+ * background skip a check made less than UPDATE_CHECK_INTERVAL_MS ago, and
+ * what carries the ETag GitHub answers 304 to.
+ */
+export const UPDATE_CHECK_META_KEY = "UPDATE_CHECK_META";
+
+export interface UpdateCheckMeta {
+  checkedAt: number;
+  etag?: string;
+}
+
+/**
+ * One request to GitHub per this interval, per browser. A 42 campus sits
+ * behind one address and the unauthenticated API allows 60 requests an hour
+ * for all of it; the popup and the hub read the stored result instead.
+ */
+export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/** True when the last completed check is recent enough to stand. */
+export function isUpdateCheckFresh(
+  meta: unknown,
+  now: number = Date.now(),
+): boolean {
+  if (!meta || typeof meta !== "object") return false;
+  const at = (meta as { checkedAt?: unknown }).checkedAt;
+  // a clock set back must not silence the check for years
+  return typeof at === "number" && now - at >= 0 && now - at < UPDATE_CHECK_INTERVAL_MS;
+}
+
 /** Numeric dotted-version compare: <0 if a < b, 0 if equal, >0 if a > b. */
 export function compareVersions(a: string, b: string): number {
   const pa = a.replace(/^v/i, "").split(".").map((n) => parseInt(n, 10) || 0);

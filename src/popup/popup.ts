@@ -149,9 +149,10 @@ async function main() {
   }
 
   await renderPermissionBanner(root);
+  // The banner reads what the background's 6-hourly check stored; asking
+  // for a fresh check on every open would spend the campus' shared GitHub
+  // rate limit for an answer that cannot have changed.
   await renderUpdateBanner(root);
-  // refresh the check in the background so the badge never stays stale
-  void chrome.runtime.sendMessage({ type: "FT_CHECK_UPDATE" }).catch(() => {});
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== "local") return;

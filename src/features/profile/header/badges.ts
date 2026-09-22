@@ -1,9 +1,6 @@
 import { getConfig } from "../../../core/config.ts";
-import { fetchCampusList } from "../../campus/campus.ts";
+import { loadCampusData } from "../../campus/campus.ts";
 import { TITLE_BADGE_SELECTOR } from "../../../core/intra/selectors.ts";
-
-import { WORKER_URL } from "../../../core/worker.ts";
-const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 
 interface CampusBadgeData {
   badgeBaseUrl: string;
@@ -13,6 +10,13 @@ interface CampusBadgeData {
 let badgeData: CampusBadgeData | null | undefined;
 let fetchPromise: Promise<CampusBadgeData | null> | undefined;
 
+/**
+ * The badge map lives in the campus file that loadCampusData() already holds
+ * in storage (CAMPUS_DATA_<id>, 1 h TTL, stale-if-error). Fetching that same
+ * file again here, under a second cache key, cost every dashboard load one
+ * worker request and one storage read, for a result that is null on every
+ * campus without badges. The per-page memo keeps the null result too.
+ */
 async function getCampusBadgeData(): Promise<CampusBadgeData | null> {
   if (badgeData !== undefined) return badgeData;
 
@@ -20,34 +24,17 @@ async function getCampusBadgeData(): Promise<CampusBadgeData | null> {
 
   fetchPromise = (async () => {
     const campusId = await getConfig("CLUSTERS_CAMPUS");
+    // An empty id makes loadCampusData probe every campus file.
     if (!campusId) return null;
 
-    const manifest = await fetchCampusList();
-    const campus = manifest.campuses.find((c) => c.id === campusId);
-    const slug = campus
-      ? campus.name.toLowerCase().replace(/\s+/g, "-")
-      : campusId;
-
-    const cacheKey = `BADGES_DATA_${slug}`;
-    const cached = await chrome.storage.local.get(cacheKey);
-    const entry = cached[cacheKey];
-    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-      return entry as CampusBadgeData;
-    }
-
     try {
-      const res = await fetch(`${CAMPUS_BASE}/${slug}.json`);
-      if (res.ok) {
-        const data = await res.json();
-        if (typeof data.badgeBaseUrl === "string") {
-          const parsed: CampusBadgeData = {
-            badgeBaseUrl: data.badgeBaseUrl,
-            badges:
-              data.badges && typeof data.badges === "object" ? data.badges : {},
-          };
-          await chrome.storage.local.set({ [cacheKey]: parsed });
-          return parsed;
-        }
+      const data = await loadCampusData(campusId);
+      if (typeof data.badgeBaseUrl === "string") {
+        return {
+          badgeBaseUrl: data.badgeBaseUrl,
+          badges:
+            data.badges && typeof data.badges === "object" ? data.badges : {},
+        };
       }
     } catch {}
 

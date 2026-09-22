@@ -59,10 +59,33 @@ function checkLinkField(def: HubSettingDef) {
   };
 }
 
-/** <input type="number"> gives a string: store a number when it is one. */
-function numericValue(raw: string): unknown {
-  const n = Number(raw);
-  return raw.trim() !== "" && Number.isFinite(n) ? n : raw;
+/**
+ * <input type="number"> gives a string, and min/max/step are only hints to
+ * the browser: a cleared field, a pasted word or 5000 in a "30-100" field
+ * all reach the change event. A blank or non-finite value falls back to the
+ * default (the logtime renderer divides by the goal and the emoji value), and
+ * the rest is clamped to the def's range, so a number key never holds a
+ * string or a value the description rules out.
+ */
+export function normalizeNumber(def: HubSettingDef, raw: string): number {
+  let n = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(n)) n = Number(def.defaultValue);
+  if (def.min !== undefined) n = Math.max(def.min, n);
+  if (def.max !== undefined) n = Math.min(def.max, n);
+  return n;
+}
+
+/**
+ * The control template is drawn once, so the corrected value is written back
+ * into the field by hand: the user sees what was stored.
+ */
+function saveNumber(def: HubSettingDef) {
+  return (e: Event) => {
+    const input = e.target as HTMLInputElement;
+    const n = normalizeNumber(def, input.value);
+    input.value = String(n);
+    saveSetting(def.key!, n);
+  };
 }
 
 /** PROFILE_EVENT_TYPE_FILTER offers the fetched event types after "Show All". */
@@ -113,11 +136,7 @@ export function renderNumber(
           aria-labelledby="${settingIds(def).label}"
           aria-describedby="${describedBy(def)}"
           ?disabled="${!enabled}"
-          @change="${(e: Event) =>
-            saveSetting(
-              def.key!,
-              numericValue((e.target as HTMLInputElement).value),
-            )}"
+          @change="${saveNumber(def)}"
         />
         <span class="opacity-70">€</span>
       </label>`
@@ -132,8 +151,7 @@ export function renderNumber(
         aria-labelledby="${settingIds(def).label}"
         aria-describedby="${describedBy(def)}"
         ?disabled="${!enabled}"
-        @change="${(e: Event) =>
-          saveSetting(def.key!, numericValue((e.target as HTMLInputElement).value))}"
+        @change="${saveNumber(def)}"
       />`;
 }
 

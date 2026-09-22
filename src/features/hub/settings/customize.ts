@@ -19,6 +19,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_SHARE_LOOK",
+    live: true,
     label: "Publish my look on my profile",
     desc: "Other Better Intra users see your accent, palette, background and card style when they open your profile. Fonts, size, scrollbar and custom CSS are never shared. Needs the cloud account.",
     kind: "toggle",
@@ -30,6 +31,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_SHOW_OTHERS_LOOK",
+    live: true,
     label: "Show other people's looks",
     desc: "Apply the look a student published when you visit their profile. Turn off to always keep your own style.",
     kind: "toggle",
@@ -41,6 +43,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_ACCENT_ENABLED",
+    live: true,
     label: "Custom accent colour",
     desc: "Use your own colour instead of the theme preset's accent.",
     kind: "toggle",
@@ -51,6 +54,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_ACCENT_COLOR",
+    live: true,
     label: "Accent colour",
     desc: "Buttons, links, highlights and progress bars across the intranet.",
     kind: "color",
@@ -63,6 +67,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_ACCENT_GRADIENT",
+    live: true,
     label: "Two-colour accent",
     desc: "Buttons and progress bars fade from the accent colour to a second one.",
     kind: "toggle",
@@ -74,6 +79,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_ACCENT_COLOR_2",
+    live: true,
     label: "Second colour",
     desc: "End colour of the accent gradient.",
     kind: "color",
@@ -87,6 +93,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_THEME_ENABLED",
+    live: true,
     label: "Custom palette",
     desc: "Replace the theme's page, card and text colours with your own. Works best with the dark theme.",
     kind: "toggle",
@@ -97,6 +104,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_THEME_BG",
+    live: true,
     label: "Page colour",
     desc: "Background of the pages.",
     kind: "color",
@@ -109,6 +117,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_THEME_CARD",
+    live: true,
     label: "Card colour",
     desc: "Cards, sidebar, popovers and inputs.",
     kind: "color",
@@ -121,6 +130,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_THEME_TEXT",
+    live: true,
     label: "Text colour",
     desc: "Main text colour; secondary text is derived from it.",
     kind: "color",
@@ -134,6 +144,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_PAGE_BG_URL",
+    live: true,
     label: "Page background image",
     desc: "Image URL shown behind every Intra page (fixed, covers the window). Leave empty to disable.",
     kind: "url",
@@ -144,6 +155,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_PAGE_BG_PRESET",
+    live: true,
     label: "Background preset",
     desc: "Built-in gradient behind every page, used when no image URL is set.",
     kind: "select",
@@ -155,6 +167,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_BG_ANIMATE",
+    live: true,
     label: "Animate the gradient",
     desc: "Slow drift of the background preset. Off when your system asks for reduced motion.",
     kind: "toggle",
@@ -165,6 +178,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_PAGE_BG_DIM",
+    live: true,
     label: "Darken image (%)",
     desc: "Dark overlay on the background image to keep text readable. 0–90.",
     kind: "number",
@@ -179,6 +193,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_OPACITY",
+    live: true,
     label: "Card opacity (%)",
     desc: "Transparency of cards, with a subtle blur. 30–100.",
     kind: "number",
@@ -192,6 +207,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_STYLE",
+    live: true,
     label: "Card style",
     desc: "Shadow and border of cards.",
     kind: "select",
@@ -211,6 +227,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_SCROLLBAR",
+    live: true,
     label: "Scrollbar",
     desc: "Style of the page scrollbars.",
     kind: "select",
@@ -227,6 +244,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_AVATAR_SHAPE",
+    live: true,
     label: "Avatar shape",
     desc: "Shape of the profile picture on profiles.",
     kind: "select",
@@ -243,6 +261,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_BORDER_MODE",
+    live: true,
     label: "Card border",
     desc: "Frame every dashboard card (Agenda, Evaluations, Achievements, Projects, Roulette, Logtime) like the Logtime widget.",
     kind: "select",
@@ -258,6 +277,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_BORDER_COLOR",
+    live: true,
     label: "Border colour",
     desc: "Used when Card border is set to Custom colour.",
     kind: "color",
@@ -271,6 +291,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_BORDER_WIDTH",
+    live: true,
     label: "Border width (px)",
     desc: "1–6 px, also for per-card borders below.",
     kind: "number",
@@ -284,6 +305,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_GLOW",
+    live: true,
     label: "Card glow",
     desc: "Soft halo around every card, in the border colour (or the accent).",
     kind: "toggle",
@@ -294,6 +316,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_TITLE_MODE",
+    live: true,
     label: "Card titles",
     desc: "Colour of the AGENDA, PROJECTS… headings.",
     kind: "select",
@@ -309,6 +332,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CARD_TITLE_COLOR",
+    live: true,
     label: "Title colour",
     desc: "Used when Card titles is set to Custom colour.",
     kind: "color",
@@ -330,6 +354,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_DENSITY",
+    live: true,
     label: "Density",
     desc: "Spacing between and inside cards. Experimental: follows the Intra's own layout classes.",
     kind: "select",
@@ -345,6 +370,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_HIDE_FOOTER",
+    live: true,
     label: "Hide the footer",
     desc: "Removes the page footer on every Intra page.",
     kind: "toggle",
@@ -356,6 +382,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_FONT",
+    live: true,
     label: "Font",
     desc: "Font family used on every Intra page. System fonts only, nothing is downloaded.",
     kind: "select",
@@ -375,9 +402,12 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_FONT_FAMILY",
+    live: true,
     label: "Custom font family",
     desc: "CSS font-family value, e.g. 'Fira Sans', sans-serif. Used when Font is set to Custom.",
     kind: "text",
+    dependsOn: "CUSTOM_FONT",
+    dependsOnValues: ["custom"],
     placeholder: "'Fira Sans', sans-serif",
     defaultValue: CONFIG_DEFAULT.CUSTOM_FONT_FAMILY,
     grid: true,
@@ -386,6 +416,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_FONT_SCALE",
+    live: true,
     label: "Size (%)",
     desc: "Scales the whole interface: 90 for a denser layout, 110 for larger text. 70–140.",
     kind: "number",
@@ -399,6 +430,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_RADIUS",
+    live: true,
     label: "Corners",
     desc: "Roundness of cards, buttons and inputs.",
     kind: "select",
@@ -417,6 +449,7 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "customize",
     key: "CUSTOM_CSS",
+    live: true,
     label: "Custom CSS",
     desc: "Applied last on every Intra page, on top of the theme and the settings above. Reload the page to undo a broken rule.",
     kind: "textarea",

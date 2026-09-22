@@ -54,6 +54,13 @@ const dropdown = (root: ShadowRoot) =>
 const rowLogins = (root: ShadowRoot) =>
   [...root.querySelectorAll(".list-row .text-primary")].map((e) => e.textContent);
 const text = (root: ShadowRoot) => root.textContent ?? "";
+/** Wait for the load the panel starts when it opens (refresh icon at rest). */
+const settled = (root: ShadowRoot) =>
+  vi.waitFor(() =>
+    expect(
+      root.querySelector('button[aria-label="Refresh friends"].loading'),
+    ).toBeNull(),
+  );
 const escape = (target: Element) =>
   target.dispatchEvent(
     new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }),
@@ -85,7 +92,6 @@ beforeEach(async () => {
   });
   mocks.token = "Bearer t";
   statusOf.clear();
-  vi.spyOn(console, "debug").mockImplementation(() => {});
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) => {
@@ -218,6 +224,7 @@ describe("adding a friend", () => {
   it("drops the pending login when a later check says it does not exist", async () => {
     const root = await mount();
     fab(root).click();
+    await settled(root);
     mocks.token = null;
     await typeLogin(root, "typo");
     await vi.waitFor(() => expect(text(root)).toContain("Could not check typo"));

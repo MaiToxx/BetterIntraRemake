@@ -3,7 +3,14 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
-import { waitForIntrapyToken } from "../../../core/intra/intrapy.ts";
+import {
+  findDashboardCard,
+  waitForDashboardCard,
+} from "../../../core/intra/selectors.ts";
+import {
+  parseIntraDate,
+  waitForIntrapyToken,
+} from "../../../core/intra/intrapy.ts";
 import { INTRA_FONT } from "../../logtime/constants.ts";
 import CHECK_CIRCLE_SVG from "../../../assets/svg/check-circle.svg?raw";
 
@@ -46,27 +53,14 @@ async function fetchAchievements(
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("en-US", {
+  return parseIntraDate(dateStr).toLocaleDateString("en-US", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
 }
 
-function findCard(): HTMLElement | null {
-  for (const card of document.querySelectorAll<HTMLElement>(
-    ".bg-white.md\\:h-96",
-  )) {
-    if (
-      card
-        .querySelector("[class*='uppercase']")
-        ?.textContent?.trim()
-        .toUpperCase() === "LAST ACHIEVEMENTS"
-    )
-      return card;
-  }
-  return null;
-}
+const findCard = () => findDashboardCard("LAST ACHIEVEMENTS");
 
 function renderList(
   achievements: Achievement[],
@@ -168,18 +162,13 @@ function inject(achievements: Achievement[]) {
 async function tryInject(achievements: Achievement[]) {
   const sorted = [...achievements].sort(
     (a, b) =>
-      new Date(b.achieved_at).getTime() - new Date(a.achieved_at).getTime(),
+      parseIntraDate(b.achieved_at).getTime() -
+      parseIntraDate(a.achieved_at).getTime(),
   );
-  let attempts = 0;
-  const poll = () => {
-    if (++attempts > 50) return;
-    if (!findCard()) {
-      requestAnimationFrame(poll);
-      return;
-    }
-    inject(sorted);
-  };
-  requestAnimationFrame(poll);
+  const card = await waitForDashboardCard("LAST ACHIEVEMENTS", {
+    maxFrames: 50,
+  });
+  if (card) inject(sorted);
 }
 
 export async function initAchievements() {

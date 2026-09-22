@@ -1,5 +1,5 @@
 import { render } from "lit-html";
-import { getConfig, getConfigMany } from "../../core/config.ts";
+import { CONFIG_DEFAULT, getConfig, getConfigMany } from "../../core/config.ts";
 import { resolveRainbowColors } from "./rainbow-presets.ts";
 import { hashLogin } from "../../core/crypto.ts";
 import {
@@ -21,6 +21,7 @@ import { getLastSeenFormatted, limit } from "./utils.ts";
 import {
   getEffectiveTheme,
   getIsLight,
+  onThemeChange,
   THEMES,
 } from "../../core/theme/theme-manager.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
@@ -35,6 +36,7 @@ const INTRAPY_BASE = "https://intrapy.intra.42.fr";
 const EVENTS_TOKEN_WAIT_MS = 10_000;
 import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
 import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
+import { sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 const historyCache = new Map<string, Record<string, number>>();
 const fetchPromiseMap = new Map<string, Promise<void>>();
 
@@ -147,6 +149,21 @@ function mergeHistoryWithHook(
   return merged;
 }
 
+/**
+ * The renderer divides by the goal and the emoji value and multiplies by the
+ * rate: a 0, a "" (a hub field cleared by an older build, or a backup that
+ * holds one) or a string would show "Infinity%", "NaN%" and "Infinity 🌮".
+ * Values are healed where they are read, so nothing stored needs a migration.
+ */
+const positive = (v: unknown, fallback: number): number => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+};
+const nonNegative = (v: unknown, fallback: number): number => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
+
 // One storage read for all logtime settings instead of fifteen serial ones.
 const getConfigs = async (): Promise<LogtimeConfig> => {
   const c = await getConfigMany([
@@ -166,19 +183,25 @@ const getConfigs = async (): Promise<LogtimeConfig> => {
     "LOGTIME_CALENDAR_VIEW",
   ] as const);
   return {
-    goal_hours: c.LOGTIME_GOAL_HOURS,
+    goal_hours: positive(c.LOGTIME_GOAL_HOURS, CONFIG_DEFAULT.LOGTIME_GOAL_HOURS),
     show_average: c.LOGTIME_SHOW_AVERAGE,
     show_goal: c.LOGTIME_SHOW_GOAL,
     show_tacos: c.LOGTIME_SHOW_TACOS,
     emoji: limit(c.LOGTIME_EMOJI),
-    divisor: c.LOGTIME_EMOJI_DIVISOR,
-    rate: c.LOGTIME_EMOJI_RATE,
+    divisor: positive(
+      c.LOGTIME_EMOJI_DIVISOR,
+      CONFIG_DEFAULT.LOGTIME_EMOJI_DIVISOR,
+    ),
+    rate: nonNegative(c.LOGTIME_EMOJI_RATE, CONFIG_DEFAULT.LOGTIME_EMOJI_RATE),
     show_days_mode: c.LOGTIME_SHOW_DAYS_MODE,
     calendar_color: c.LOGTIME_CALENDAR_COLOR,
     labels_color: c.LOGTIME_LABELS_COLOR,
     rainbow_colors: resolveRainbowColors(c.LOGTIME_RAINBOW_PALETTE),
     disable_animations: c.DISABLE_ANIMATIONS,
-    max_earnings: c.LOGTIME_MAX_EARNINGS,
+    max_earnings: nonNegative(
+      c.LOGTIME_MAX_EARNINGS,
+      CONFIG_DEFAULT.LOGTIME_MAX_EARNINGS,
+    ),
     calendar_view: c.LOGTIME_CALENDAR_VIEW,
   };
 };
@@ -196,6 +219,27 @@ let primaryColor = "hsl(199 89% 48%)";
 let primaryContent = "hsl(0 0% 100%)";
 let scrollHandlersCleanup: (() => void) | null = null;
 let heatmapScrollHandler: ((e: Event) => void) | null = null;
+
+/**
+ * The browser's scroll restoration runs at load, while the widget is still
+ * being mounted and scrolled to the latest month: it is paused only on the
+ * page that mounts the widget, and only until that first scroll has settled.
+ * It used to be switched to "manual" on every Intra page for good, so Back
+ * and reload landed at the top of every long projects list or forum thread.
+ */
+let heldScrollRestoration: History["scrollRestoration"] | null = null;
+
+function holdScrollRestoration(): void {
+  if (!("scrollRestoration" in history) || heldScrollRestoration !== null) return;
+  heldScrollRestoration = history.scrollRestoration;
+  history.scrollRestoration = "manual";
+}
+
+function releaseScrollRestoration(): void {
+  if (heldScrollRestoration === null) return;
+  history.scrollRestoration = heldScrollRestoration;
+  heldScrollRestoration = null;
+}
 
 function isOwnProfile(): boolean {
   return (
@@ -554,6 +598,7 @@ function renderLogtime(
     skipScroll = false;
     restoreScrollLeft = -1;
     scrollWrapper.scrollLeft = 0;
+    releaseScrollRestoration();
   } else if (scrollWrapper) {
     if (scrollHandlersCleanup) {
       scrollHandlersCleanup();
@@ -614,7 +659,10 @@ function renderLogtime(
       if (document.readyState !== "complete") {
         window.addEventListener("load", scrollToLatest, { once: true });
       }
-      setTimeout(scrollToLatest, 100);
+      setTimeout(() => {
+        scrollToLatest();
+        releaseScrollRestoration();
+      }, 100);
     }
   }
 }
@@ -710,12 +758,7 @@ export function applyPublicLogtimeSettings(logtime: {
 
   // These values belong to the viewed user and are interpolated into <style>
   // text: only accept plain hex colours and finite, positive numbers.
-  const isHex = (v: unknown): v is string =>
-    typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v.trim());
-  const positive = (v: unknown, fallback: number): number => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
-  };
+  const isHex = (v: unknown): v is string => sanitizeHexColor(v) !== "";
 
   CONFIG.calendar_color = isHex(logtime.calendarColor)
     ? logtime.calendarColor.trim()
@@ -748,14 +791,17 @@ export function applyPublicLogtimeSettings(logtime: {
 let initPromise: Promise<void> | null = null;
 let hookInstalled = false;
 
+function useTheme(theme: "dark" | "light", presetKey: string): void {
+  currentTheme = theme;
+  const preset = THEMES[presetKey] ?? THEMES["dark"];
+  primaryColor = `hsl(${preset.primary})`;
+  primaryContent = `hsl(${preset.primaryForeground})`;
+}
+
 export function initLogtime(): Promise<void> {
   if (isLoaded) return Promise.resolve();
   if (initPromise) return initPromise;
   initPromise = (async () => {
-    if ("scrollRestoration" in history) {
-      history.scrollRestoration = "manual";
-    }
-
     // Three independent storage round-trips: awaited together, their latency
     // is paid once instead of three times before the widget can render.
     const [config, theme, presetKey] = await Promise.all([
@@ -764,19 +810,23 @@ export function initLogtime(): Promise<void> {
       getConfig("PROFILE_THEME_PRESET"),
     ]);
     CONFIG = config;
-    currentTheme = theme;
-    const preset = THEMES[presetKey] ?? THEMES["dark"];
-    primaryColor = `hsl(${preset.primary})`;
-    primaryContent = `hsl(${preset.primaryForeground})`;
+    useTheme(theme, presetKey);
     // isLoaded stays false on non-target pages, so init can legitimately run
     // again later: never install the data listener twice.
     if (!hookInstalled) {
       installFetchHook();
+      // The hub's theme toggle restyles the page live; the widget's own
+      // data-theme and label colours are baked into each render.
+      onThemeChange(({ theme: next, preset }) => {
+        useTheme(next, preset);
+        if (lastStats) renderLogtime(lastStats);
+      });
       hookInstalled = true;
     }
 
     if (isProfileV3TargetPage()) {
       isLoaded = true;
+      holdScrollRestoration();
     }
     // The page may have fetched /locations_stats before this listener existed
     // (the hook runs at document_start, we run after DOMContentLoaded and

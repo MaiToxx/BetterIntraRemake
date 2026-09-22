@@ -10,7 +10,6 @@ import {
   parseRouletteHistorics,
   pruneProfileStatsCache,
   readProfileStatsCache,
-  resetProfileStatsCacheState,
   writeProfileStatsCache,
   type ProfileStatsCache,
 } from "../src/features/profile/cards/profile-stats-intra";
@@ -114,7 +113,6 @@ describe("profile stats cache", () => {
 
   beforeEach(async () => {
     await chrome.storage.local.clear();
-    resetProfileStatsCacheState();
   });
 
   it("stores every login under a single key and reads it back within the TTL", async () => {
@@ -157,21 +155,6 @@ describe("profile stats cache", () => {
     expect(Object.keys(pruneProfileStatsCache(cache, now))).toEqual(["b", "a"]);
   });
 
-  it("removes the legacy per-login keys once, keeping the new key", async () => {
-    await chrome.storage.local.set({
-      FT_PROFILE_STATS_alice: { at: now, data: data(1) },
-      FT_PROFILE_STATS_bob: { at: now, data: data(2) },
-      OTHER_KEY: "keep",
-    });
-    await writeProfileStatsCache("carol", data(3), now);
-    const store = await chrome.storage.local.get(null);
-    expect(Object.keys(store).sort()).toEqual([PROFILE_STATS_CACHE_KEY, "OTHER_KEY"].sort());
-    expect(store.OTHER_KEY).toBe("keep");
-
-    // only the first write scans the whole storage
-    const getCalls = vi.mocked(chrome.storage.local.get).mock.calls.filter((c) => c[0] === null).length;
-    await writeProfileStatsCache("dave", data(4), now);
-    const getCallsAfter = vi.mocked(chrome.storage.local.get).mock.calls.filter((c) => c[0] === null).length;
-    expect(getCallsAfter).toBe(getCalls);
-  });
+  // The legacy FT_PROFILE_STATS_<login> keys are removed once by the
+  // background on update (tests/background-*.test.ts), not on every write.
 });

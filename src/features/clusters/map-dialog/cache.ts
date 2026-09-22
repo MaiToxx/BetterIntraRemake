@@ -43,6 +43,52 @@ export async function getCachedCluster(
   }
 }
 
+/**
+ * How many cluster maps stay in chrome.storage.local. A map is a few hundred
+ * KB of SVG and Chrome caps storage.local at 10 MB for the whole extension
+ * (settings and friends included): once full, every later set() fails. Twelve
+ * maps cover a campus with a couple of neighbours in roughly 3-4 MB.
+ */
+export const SVG_CACHE_MAX_ENTRIES = 12;
+
+/**
+ * Keep the SVG cache bounded. The campus being written is never evicted, so
+ * its expired maps still serve as the stale fallback when the worker fails;
+ * other campuses lose their expired maps first, then the oldest ones beyond
+ * the cap. Failures are ignored: a sweep that cannot run must not stop a map
+ * from being shown.
+ */
+async function sweepSvgCache(keepCampusId: string): Promise<void> {
+  const all = (await chrome.storage.local.get(null)) as Record<string, unknown>;
+  const now = Date.now();
+  const entries: { key: string; cachedAt: number; own: boolean }[] = [];
+  for (const [key, raw] of Object.entries(all)) {
+    if (!key.startsWith(SVG_CACHE_PREFIX)) continue;
+    const own = key.startsWith(`${SVG_CACHE_PREFIX}${keepCampusId}_`);
+    let cachedAt = 0;
+    try {
+      cachedAt = Number((JSON.parse(String(raw)) as CachedCluster).cachedAt) || 0;
+    } catch {}
+    entries.push({ key, cachedAt, own });
+  }
+  const remove = new Set<string>();
+  for (const e of entries) {
+    if (!e.own && now - e.cachedAt > CACHE_TTL) remove.add(e.key);
+  }
+  const kept = entries
+    .filter((e) => !remove.has(e.key))
+    .sort((a, b) => b.cachedAt - a.cachedAt);
+  let count = 0;
+  for (const e of kept) {
+    if (e.own || count < SVG_CACHE_MAX_ENTRIES) {
+      count++;
+      continue;
+    }
+    remove.add(e.key);
+  }
+  if (remove.size > 0) await chrome.storage.local.remove([...remove]);
+}
+
 export async function setCachedCluster(
   campusId: string,
   clusterId: string,
@@ -52,6 +98,9 @@ export async function setCachedCluster(
   await chrome.storage.local.set({
     [`${SVG_CACHE_PREFIX}${campusId}_${clusterId}`]: JSON.stringify(data),
   });
+  try {
+    await sweepSvgCache(campusId);
+  } catch {}
 }
 
 export function getSvgSlug(svgUrl: string): string {

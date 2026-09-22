@@ -10,6 +10,7 @@
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { sanitizeCssUrl } from "../../../core/security/css-sanitize.ts";
+import { disallowedImageHost } from "../../../core/security/image-hosts.ts";
 import LINK_SVG from "../../../assets/svg/link.svg?raw";
 
 export interface FormState {
@@ -118,8 +119,31 @@ export function renderUrlField(
           />
         </label>
       </div>
+      ${renderImageHostHint(value)}
       ${renderUrlHistory(history, onInput, onClearHistory)}
     </div>
+  `;
+}
+
+/**
+ * Other students only get images from the host allowlist (image-hosts.ts);
+ * the author always sees their own. Said here, at typing time, so that "my
+ * avatar works for me but not for you" is not a surprise.
+ */
+function renderImageHostHint(value: string) {
+  const raw = value.trim();
+  if (!raw) return html``;
+  const host = disallowedImageHost(raw);
+  const reason = /^http:\/\//i.test(raw)
+    ? "other students' browsers only load https images"
+    : host
+      ? `host ${host} is not on the list of image hosts other students' browsers may load from`
+      : "";
+  if (!reason) return html``;
+  return html`
+    <p class="text-xs opacity-70 mt-1" data-image-host-hint>
+      Only you will see this image: ${reason}.
+    </p>
   `;
 }
 

@@ -5,9 +5,12 @@
  * reloading the open Intra tabs once a new cloud session is stored.
  */
 import {
+  UPDATE_CHECK_META_KEY,
   UPDATE_KEY,
   isNewerVersion,
+  isUpdateCheckFresh,
   parseLatestRelease,
+  type UpdateCheckMeta,
   type UpdateInfo,
 } from "./core/update-check";
 
@@ -25,43 +28,85 @@ const RELOAD_AFTER_LOGIN_DELAY_MS = 500;
  * browser's own network timeout, minutes later.
  */
 const INTRA_PAGE_TIMEOUT_MS = 15000;
+/** Builds before 1.8.20 kept one `FT_PROFILE_STATS_<login>` key per profile. */
+const LEGACY_PROFILE_STATS_PREFIX = "FT_PROFILE_STATS_";
+const PROFILE_STATS_CACHE_KEY = "FT_PROFILE_STATS_CACHE";
 
 /**
- * In-flight update check. The alarm, the browser start-up and the popup's
- * FT_CHECK_UPDATE can land in the same service-worker lifetime; a second
- * GitHub request would only get the same answer (and count against the
- * unauthenticated rate limit twice).
+ * In-flight update check. The alarm and the browser start-up can land in the
+ * same service-worker lifetime; a second GitHub request would only get the
+ * same answer (and count against the unauthenticated rate limit twice).
  */
 let updateCheckInFlight: Promise<void> | null = null;
 
+/**
+ * Run a check unless one completed less than UPDATE_CHECK_INTERVAL_MS ago.
+ * Only the stored result is ever shown (popup banner, hub About tab, badge),
+ * so a check that is not due costs a request and changes nothing.
+ */
 function checkForUpdate(): Promise<void> {
   if (updateCheckInFlight) return updateCheckInFlight;
-  updateCheckInFlight = runUpdateCheck().finally(() => {
+  updateCheckInFlight = runUpdateCheckIfDue().finally(() => {
     updateCheckInFlight = null;
   });
   return updateCheckInFlight;
 }
 
-async function runUpdateCheck(): Promise<void> {
+async function readCheckMeta(): Promise<UpdateCheckMeta | null> {
+  try {
+    const store = await chrome.storage.local.get(UPDATE_CHECK_META_KEY);
+    const meta = store[UPDATE_CHECK_META_KEY] as UpdateCheckMeta | undefined;
+    return meta && typeof meta === "object" ? meta : null;
+  } catch {
+    return null;
+  }
+}
+
+async function runUpdateCheckIfDue(): Promise<void> {
+  const meta = await readCheckMeta();
+  if (isUpdateCheckFresh(meta)) return;
+  await runUpdateCheck(meta);
+}
+
+async function runUpdateCheck(meta: UpdateCheckMeta | null): Promise<void> {
   const current = chrome.runtime.getManifest().version;
   try {
-    const res = await fetch(RELEASES_API, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github+json",
+    };
+    // GitHub answers 304 with no body when the release did not change, and
+    // documents that such conditional requests do not count against the
+    // primary rate limit.
+    if (meta?.etag) headers["If-None-Match"] = meta.etag;
+    const res = await fetch(RELEASES_API, { headers });
+    if (res.status === 304) {
+      await chrome.storage.local.set({
+        [UPDATE_CHECK_META_KEY]: { checkedAt: Date.now(), etag: meta?.etag } satisfies UpdateCheckMeta,
+      });
+      return;
+    }
     if (!res.ok) return; // rate-limited or no release yet: keep previous state
     const latest = parseLatestRelease(await res.json());
     if (!latest) return;
+    const etag = res.headers.get("ETag") ?? undefined;
+    const nextMeta: UpdateCheckMeta = etag
+      ? { checkedAt: Date.now(), etag }
+      : { checkedAt: Date.now() };
     if (isNewerVersion(latest.version, current)) {
       const info: UpdateInfo = {
         version: latest.version,
         url: latest.url,
         checkedAt: Date.now(),
       };
-      await chrome.storage.local.set({ [UPDATE_KEY]: info });
+      await chrome.storage.local.set({
+        [UPDATE_KEY]: info,
+        [UPDATE_CHECK_META_KEY]: nextMeta,
+      });
       await chrome.action.setBadgeBackgroundColor({ color: "#00babc" });
       await chrome.action.setBadgeText({ text: "NEW" });
     } else {
       await chrome.storage.local.remove(UPDATE_KEY);
+      await chrome.storage.local.set({ [UPDATE_CHECK_META_KEY]: nextMeta });
       await chrome.action.setBadgeText({ text: "" });
     }
   } catch {
@@ -69,17 +114,55 @@ async function runUpdateCheck(): Promise<void> {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+/**
+ * Firefox drops alarms at browser exit and onInstalled does not fire on a
+ * plain restart: without this, a session only ever got the start-up check.
+ * The get() guard keeps an existing alarm's schedule (Chrome restores it).
+ */
+async function ensureUpdateAlarm(): Promise<void> {
+  try {
+    const existing = await chrome.alarms.get(UPDATE_ALARM);
+    if (existing) return;
+    chrome.alarms.create(UPDATE_ALARM, {
+      delayInMinutes: 1,
+      periodInMinutes: UPDATE_PERIOD_MINUTES,
+    });
+  } catch {
+    // alarms unavailable (tests, odd runtimes): the start-up check still runs
+  }
+}
+
+/**
+ * Older builds stored the profile stats under one key per visited login. The
+ * scan of the whole storage area this takes belongs here, once per update,
+ * not in every profile tab that writes the stats cache.
+ */
+async function removeLegacyProfileStatsKeys(): Promise<void> {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const legacy = Object.keys(all).filter(
+      (k) =>
+        k.startsWith(LEGACY_PROFILE_STATS_PREFIX) && k !== PROFILE_STATS_CACHE_KEY,
+    );
+    if (legacy.length > 0) await chrome.storage.local.remove(legacy);
+  } catch {
+    /* best effort */
+  }
+}
+
+chrome.runtime.onInstalled.addListener((details) => {
   // a fresh install/update is by definition up to date: clear any stale flag
-  void chrome.storage.local.remove(UPDATE_KEY);
+  void chrome.storage.local.remove([UPDATE_KEY, UPDATE_CHECK_META_KEY]);
   void chrome.action.setBadgeText({ text: "" });
   chrome.alarms.create(UPDATE_ALARM, {
     delayInMinutes: 1,
     periodInMinutes: UPDATE_PERIOD_MINUTES,
   });
+  if (details.reason === "update") void removeLegacyProfileStatsKeys();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  void ensureUpdateAlarm();
   void checkForUpdate();
 });
 
@@ -140,12 +223,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch(() => sendResponse({ ok: false }));
     return true;
   }
-  if (message?.type === "FT_CHECK_UPDATE") {
-    checkForUpdate()
-      .catch(() => undefined)
-      .finally(() => sendResponse(true));
-    return true;
-  }
   if (message?.type === "FT_RELOAD_INTRA_TABS") {
     reloadIntraTabs()
       .catch(() => undefined)
@@ -155,12 +232,25 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return undefined;
 });
 
-/** Reload every open Intra tab so content scripts pick up the new session. */
+/**
+ * Reload the open v3 profile tabs so their widgets pick up the new session.
+ * Only that SPA latches a signed-out state (friends widget, hub cloud gates,
+ * the cards that need a session). The v2 hosts read CLOUD_TOKEN at use time
+ * through the settings snapshot, which storage.onChanged keeps current, and a
+ * reload there would throw away whatever is being typed: an evaluation
+ * feedback on projects.intra.42.fr, a forum post, a slot form.
+ */
 async function reloadIntraTabs() {
-  const tabs = await chrome.tabs.query({ url: "https://*.intra.42.fr/*" });
+  const tabs = await chrome.tabs.query({
+    url: "https://profile-v3.intra.42.fr/*",
+  });
   // nothing to refresh: never reload an unrelated active tab
   if (tabs.length === 0) return;
   for (const tab of tabs) {
     if (tab.id) chrome.tabs.reload(tab.id);
   }
 }
+
+// Every event-page load / service-worker wake repairs a missing alarm, even
+// when onStartup did not fire (e.g. the add-on re-enabled mid-session).
+void ensureUpdateAlarm();
