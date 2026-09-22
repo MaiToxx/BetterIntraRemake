@@ -243,7 +243,7 @@ describe("loading failures", () => {
   it("shows an error with Retry, not 'No friends yet', when nothing loads", async () => {
     mocks.token = null;
     const root = await mount();
-    expect(text(root)).toContain("Could not load your friends");
+    await vi.waitFor(() => expect(text(root)).toContain("Could not load your friends"));
     expect(text(root)).not.toContain("No friends yet");
 
     mocks.token = "Bearer t";

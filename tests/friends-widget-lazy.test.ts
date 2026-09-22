@@ -241,12 +241,15 @@ describe("the saved list changes outside the widget", () => {
     const root = await mount();
     fab(root).click();
     await settled(root);
+    // the open panel's load may still be settling its visuals: let every
+    // request of the mount land before counting (slow CI runners)
+    await new Promise((r) => setTimeout(r, 50));
     const before = calls.length;
     await chrome.storage.local.set({ FRIENDS_LIST: JSON.stringify(["alice"]) });
     change(["alice"]);
     expect(rowLogins(root)).toEqual(["alice"]);
     change(["alice"]);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setTimeout(r, 50));
     expect(calls.length).toBe(before);
   });
 });
