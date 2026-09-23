@@ -169,7 +169,9 @@ jobs:
           channel: unlisted
           apiKey: ${{ secrets.AMO_SIGN_KEY }}
           apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
-          timeout: 900000
+          # AMO approval can queue well past 15 min (1.14.0 timed out after
+          # passing validation): wait up to an hour rather than fail the release
+          timeout: 3600000
 
       - name: Rename signed artifact
         if: env.HAS_AMO == 'true'
