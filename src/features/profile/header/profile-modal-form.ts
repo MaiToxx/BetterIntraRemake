@@ -87,12 +87,23 @@ function renderUrlHistory(
     </div>
   `;
 }
+/**
+ * What the Upload button next to a URL field shows: nothing, a progress
+ * note, or the last error. Kept by the caller between renders.
+ */
+export interface UploadUi {
+  onFile: (file: File) => void;
+  status?: string;
+  busy?: boolean;
+}
+
 export function renderUrlField(
   label: string,
   value: string,
   onInput: (val: string) => void,
   history: string[] = [],
   onClearHistory?: () => void,
+  upload?: UploadUi,
 ) {
   return html`
     <div class="form-control w-full">
@@ -117,7 +128,33 @@ export function renderUrlField(
               onInput((e.target as HTMLInputElement).value)}"
           />
         </label>
+        ${upload
+          ? html`<label
+              class="btn btn-sm btn-outline btn-accent self-center ${upload.busy ? "btn-disabled" : ""}"
+              title="Upload an image from this computer (2 MB at most)"
+            >
+              ${upload.busy ? "Uploading…" : "Upload"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                class="hidden"
+                data-upload-input
+                ?disabled="${!!upload.busy}"
+                @change="${(e: Event) => {
+                  const input = e.target as HTMLInputElement;
+                  const file = input.files?.[0];
+                  input.value = "";
+                  if (file) upload.onFile(file);
+                }}"
+              />
+            </label>`
+          : ""}
       </div>
+      ${upload?.status
+        ? html`<p class="text-xs mt-1 ${upload.busy ? "opacity-70" : "text-error"}" data-upload-status>
+            ${upload.status}
+          </p>`
+        : ""}
       ${renderUrlHistory(history, onInput, onClearHistory)}
     </div>
   `;

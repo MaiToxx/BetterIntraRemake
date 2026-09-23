@@ -64,7 +64,7 @@ The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it an
 
 ### 👤 Profile
 
-* **Custom visuals** — your own avatar, banner and background images (fill, fit, stretch, center, tile). Click your avatar on your profile to open the editor: zoom, drag to reposition, live preview. Link history keeps the last 10 URLs per field.
+* **Custom visuals** — your own avatar, banner and background images (fill, fit, stretch, center, tile). Click your avatar on your profile to open the editor: zoom, drag to reposition, live preview. Paste an image link, or **Upload** one from your computer (PNG, JPEG, GIF or WebP, 2 MB; it is stored on the Better Intra server, one per field). Link history keeps the last 10 URLs per field.
 * **Avatar decoration** — transparent or solid colour behind the avatar, optional solid border.
 * **Visuals sync ☁️** — other Better Intra users see your custom images on your profile. Click a custom avatar to see the original.
 * **Instant visuals** — visuals are cached locally and refreshed silently.
@@ -165,7 +165,6 @@ These upstream features cannot work on this fork's worker, so they were removed 
 * **Discord evaluation reminders** — need a Discord bot and a 42 API token on the server.
 * **Students directory** — the worker builds it with a 42 API application token, for the Belgium campus only.
 * **⭐ Outstanding flag** — the worker reads it from the 42 API with a token that Intra sign-in sessions do not have.
-* **Image upload to the worker** — needs an R2 bucket; use any image host and paste the URL instead.
 * **Older logtime months** — "Load older months" reads the whole history through the 42 API, which also needs an application on the worker. The card stays hidden (its code is kept for workers that have one), and the calendar shows the months the Intra page itself loads.
 
 The **transcript download** is still in the extension but only shows up on campuses whose campus file lists their transcript templates, which today is only Belgium ([campuses/belgium.json](campuses/belgium.json)). It needs no server: adding the Mulhouse records to [campuses/mulhouse.json](campuses/mulhouse.json) would be enough to turn it on.

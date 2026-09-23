@@ -45,7 +45,7 @@ export interface WorkerCredentials {
 
 export interface WorkerFetchOptions {
   method?: string;
-  /** An object is sent as JSON; a string as is. */
+  /** An object is sent as JSON; a string or a Blob (an upload) as is. */
   body?: unknown;
   /** Appends `login=<hash>` and the Bearer header; 401 flags CLOUD_AUTH_FAILED. */
   auth?: WorkerCredentials;
@@ -103,8 +103,8 @@ export async function workerFetch(
     url.searchParams.set("login", await hashedLogin(options.auth.login));
     headers.Authorization = `Bearer ${options.auth.token}`;
   }
-  let body: string | undefined;
-  if (typeof options.body === "string") body = options.body;
+  let body: string | Blob | undefined;
+  if (typeof options.body === "string" || options.body instanceof Blob) body = options.body;
   else if (options.body !== undefined) {
     body = JSON.stringify(options.body);
     headers["Content-Type"] ??= "application/json";

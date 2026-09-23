@@ -11,6 +11,7 @@ import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getTitleBadges } from "./badges.ts";
 import { renderAvatarEditor } from "./avatar-editor.ts";
+import { uploadProfileImage, type ImageSlot } from "./image-upload.ts";
 import {
   renderModeRadios,
   renderUrlField,
@@ -26,6 +27,33 @@ import EYE_SLASH_SVG from "../../../assets/svg/eye-slash.svg?raw";
 
 /** Index of the badge being dragged in the badges tab, if any. */
 let badgeDragIdx: number | null = null;
+
+/** Upload progress per field, shown next to its URL box until the next render. */
+const uploadStatus: Partial<Record<ImageSlot, { text: string; busy: boolean }>> = {};
+
+/**
+ * The Upload button of a URL field: sends the file to the worker and drops
+ * the served URL into the field, as if it had been pasted.
+ */
+function uploadUi(slot: ImageSlot, onFormUpdate: FormUpdate) {
+  const st = uploadStatus[slot];
+  return {
+    status: st?.text,
+    busy: st?.busy,
+    onFile: async (file: File) => {
+      uploadStatus[slot] = { text: `Uploading ${file.name}…`, busy: true };
+      onFormUpdate({});
+      const result = await uploadProfileImage(slot, file);
+      if (result.ok) {
+        delete uploadStatus[slot];
+        onFormUpdate({ [slot]: result.url });
+      } else {
+        uploadStatus[slot] = { text: result.error, busy: false };
+        onFormUpdate({});
+      }
+    },
+  };
+}
 
 /** Every tab's panel, rendered from the current form state. */
 export function renderTabPanels(
@@ -65,6 +93,7 @@ function renderAvatarPanel(
             (val) => onFormUpdate({ avatar: val }),
             history.avatar,
             () => onClearHistory("avatar"),
+            uploadUi("avatar", onFormUpdate),
           )}
           <div class="flex gap-2 items-center mt-2">
             <div class="join w-full">
@@ -182,6 +211,7 @@ function renderBannerPanel(
             (val) => onFormUpdate({ banner: val }),
             history.banner,
             () => onClearHistory("banner"),
+            uploadUi("banner", onFormUpdate),
           )}
           ${renderModeRadios("PROFILE_BANNER_MODE", state.bannerMode, (val) =>
             onFormUpdate({ bannerMode: val }),
@@ -248,6 +278,7 @@ function renderBackgroundPanel(
             (val) => onFormUpdate({ background: val }),
             history.background,
             () => onClearHistory("background"),
+            uploadUi("background", onFormUpdate),
           )}
           ${renderModeRadios(
             "PROFILE_BACKGROUND_MODE",
