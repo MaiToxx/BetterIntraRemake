@@ -89,13 +89,22 @@ describe("publish.yaml: Chrome Web Store", () => {
   });
 
   it("a store failure cannot hold back updates.json/updates.xml, and still leaves a warning", () => {
-    const manifests = indexOf(list, "Update auto-update manifests");
+    const chromeManifest = indexOf(list, "Update Chrome auto-update manifest");
+    const firefoxManifest = indexOf(list, "Update Firefox auto-update manifest");
     const build = indexOf(list, "Build Extension (Chrome Web Store)");
-    // built from the release tag, before the manifests step checks out main
-    expect(build).toBeLessThan(manifests);
+    // built from the release tag, before any step checks out main
+    expect(build).toBeLessThan(chromeManifest);
     expect(list[build].text).toContain("continue-on-error: true");
-    expect(indexOf(list, "Publish to Chrome Web Store")).toBeGreaterThan(manifests);
+    expect(indexOf(list, "Publish to Chrome Web Store")).toBeGreaterThan(chromeManifest);
     expect(publish.text).toContain("continue-on-error: true");
+    // Mozilla's approval (up to an hour) comes after everything Chrome needs
+    const sign = indexOf(list, "web-ext sign (Firefox)");
+    expect(sign).toBeGreaterThan(indexOf(list, "Upload Chrome files to GitHub Release"));
+    expect(sign).toBeGreaterThan(chromeManifest);
+    expect(sign).toBeGreaterThan(indexOf(list, "Publish to Chrome Web Store"));
+    expect(firefoxManifest).toBeGreaterThan(indexOf(list, "Upload Firefox file to GitHub Release"));
+    // sources are archived from the release tag, before main is checked out
+    expect(indexOf(list, "Collect source code")).toBeLessThan(chromeManifest);
     const warn = list[indexOf(list, "Chrome Web Store step failed")];
     expect(warn.text).toContain("steps.cws.outcome == 'failure'");
     expect(warn.text).toContain("::warning::");

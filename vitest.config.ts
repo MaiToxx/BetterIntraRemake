@@ -12,6 +12,7 @@ export default defineConfig({
     __WORKER_URL__: JSON.stringify("https://api.betterintra.com"),
     __AUTH_MODE__: JSON.stringify("oauth"),
     __STORE_BUILD__: JSON.stringify(false),
+      __TARGET__: JSON.stringify("firefox"),
     __TS_VERSION__: JSON.stringify("test"),
     __VITE_VERSION__: JSON.stringify("test"),
     __LIT_VERSION__: JSON.stringify("test"),

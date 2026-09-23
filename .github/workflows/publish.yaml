@@ -154,46 +154,21 @@ jobs:
           rm -f crx-key.pem
           ls -la better-intra.crx
 
-      - name: Collect source code
-        if: env.HAS_AMO == 'true'
-        run: git archive --format=zip --output=sources.zip ${{ github.ref }}
-
-      - name: web-ext sign (Firefox)
-        if: env.HAS_AMO == 'true'
-        id: web-ext-sign
-        uses: kewisch/action-web-ext@v2
-        with:
-          cmd: sign
-          source: ${{ steps.web-ext-build-ff.outputs.target }}
-          sourceCode: sources.zip
-          channel: unlisted
-          apiKey: ${{ secrets.AMO_SIGN_KEY }}
-          apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
-          # AMO approval can queue well past 15 min (1.14.0 timed out after
-          # passing validation): wait up to an hour rather than fail the release
-          timeout: 3600000
-
-      - name: Rename signed artifact
-        if: env.HAS_AMO == 'true'
-        run: mv "${{ steps.web-ext-sign.outputs.target }}" better-intra.xpi
-
-      - name: Use unsigned artifact (no AMO credentials configured)
-        if: env.HAS_AMO != 'true'
-        run: |
-          mv "${{ steps.web-ext-build-ff.outputs.target }}" better-intra.xpi
-          echo "::warning::AMO_SIGN_KEY / AMO_SIGN_SECRET not set: the Firefox .xpi is unsigned and will not auto-update."
-
-      - name: Upload to GitHub Release
+      # Order matters: everything that does not need Mozilla goes out first.
+      # AMO approval of the signed .xpi can take from two minutes to an hour
+      # (1.14.0 timed out after 15), and it used to hold back the Chrome files
+      # and updates.xml with it. The in-extension update check waits for its
+      # own browser's file (parseLatestRelease in src/core/update-check.ts).
+      - name: Upload Chrome files to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            better-intra.xpi
             better-intra-chrome.zip
             better-intra.crx
 
-      # Built here, before the next step checks out main: later it would
-      # package main's HEAD instead of the release tag. A failure must not
-      # hold back updates.json/updates.xml, hence continue-on-error.
+      # Built and archived here, before a step checks out main: later they
+      # would package main's HEAD instead of the release tag. A store build
+      # failure must not hold back anything else, hence continue-on-error.
       - name: Build Extension (Chrome Web Store)
         id: cws-build
         if: env.HAS_CWS == 'true'
@@ -202,31 +177,31 @@ jobs:
           npm run build:chrome-store
           (cd dist-chrome-store && zip -qr ../better-intra-chrome-store.zip .)
 
+      - name: Collect source code
+        if: env.HAS_AMO == 'true'
+        run: git archive --format=zip --output=sources.zip ${{ github.ref }}
+
       # Auto-update manifests live on the main branch (the browsers fetch them
-      # from raw.githubusercontent.com): publish the new version there once
-      # the artifacts are attached to the release.
-      #   updates.json -> Firefox (only meaningful for signed builds)
-      #   updates.xml  -> Chrome self-hosted .crx (Linux)
-      - name: Update auto-update manifests
-        if: env.HAS_AMO == 'true' || env.HAS_CRX == 'true'
+      # from raw.githubusercontent.com).
+      #   updates.xml  -> Chrome self-hosted .crx (Linux): now
+      #   updates.json -> Firefox: after signing, further down
+      - name: Update Chrome auto-update manifest
+        if: env.HAS_CRX == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           git fetch origin main
           git checkout main
-          if [ "$HAS_AMO" = "true" ]; then node scripts/update-updates-json.js "${RELEASE_TAG#v}"; fi
-          if [ "$HAS_CRX" = "true" ]; then node scripts/update-updates-xml.js "${RELEASE_TAG#v}"; fi
+          git reset --hard origin/main
+          node scripts/update-updates-xml.js "${RELEASE_TAG#v}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # only the manifests that were (re)generated exist
-          for f in updates.json updates.xml; do [ -f "$f" ] && git add "$f"; done
-          git commit -m "chore: update manifests for ${RELEASE_TAG}" || exit 0
+          git add updates.xml
+          git commit -m "chore: update updates.xml for ${RELEASE_TAG}" || exit 0
           git push origin main
 
-      # Last, and allowed to fail: the Web Store refuses an upload while the
-      # previous version is still in review, which is common at this release
-      # pace, and a store or credential hiccup must not stop Firefox and
-      # Linux Chrome updates (committed just above).
+      # Allowed to fail: the Web Store refuses an upload while the previous
+      # version is still in review, which is common at this release pace.
       # chrome-webstore-upload-cli 4 speaks the Web Store API v2 (v1.1 stops
       # on 15 October 2026) and needs PUBLISHER_ID. No subcommand on purpose:
       # in v4 only the bare command uploads AND submits; `upload` never
@@ -242,6 +217,51 @@ jobs:
           CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: npx --yes chrome-webstore-upload-cli@4.0.1 --source better-intra-chrome-store.zip
+
+      # Firefox last: it waits for Mozilla.
+      - name: web-ext sign (Firefox)
+        if: env.HAS_AMO == 'true'
+        id: web-ext-sign
+        uses: kewisch/action-web-ext@v2
+        with:
+          cmd: sign
+          source: ${{ steps.web-ext-build-ff.outputs.target }}
+          sourceCode: sources.zip
+          channel: unlisted
+          apiKey: ${{ secrets.AMO_SIGN_KEY }}
+          apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
+          # AMO approval can queue well past 15 min: wait up to an hour
+          timeout: 3600000
+
+      - name: Rename signed artifact
+        if: env.HAS_AMO == 'true'
+        run: mv "${{ steps.web-ext-sign.outputs.target }}" better-intra.xpi
+
+      - name: Use unsigned artifact (no AMO credentials configured)
+        if: env.HAS_AMO != 'true'
+        run: |
+          mv "${{ steps.web-ext-build-ff.outputs.target }}" better-intra.xpi
+          echo "::warning::AMO_SIGN_KEY / AMO_SIGN_SECRET not set: the Firefox .xpi is unsigned and will not auto-update."
+
+      - name: Upload Firefox file to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: better-intra.xpi
+
+      - name: Update Firefox auto-update manifest
+        if: env.HAS_AMO == 'true'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+          node scripts/update-updates-json.js "${RELEASE_TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "chore: update updates.json for ${RELEASE_TAG}" || exit 0
+          git push origin main
 
       - name: Chrome Web Store step failed
         if: steps.cws-build.outcome == 'failure' || steps.cws.outcome == 'failure'

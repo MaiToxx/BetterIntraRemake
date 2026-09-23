@@ -57,3 +57,25 @@ describe("parseLatestRelease", () => {
     ).toBeNull();
   });
 });
+
+describe("a release is announced once its browser's file is attached", () => {
+  const release = (names: string[]) => ({
+    tag_name: "v9.9.9",
+    html_url: "https://github.com/MaiToxx/BetterIntraRemake/releases/tag/v9.9.9",
+    assets: names.map((name) => ({ name })),
+  });
+
+  it("Firefox waits for the signed .xpi, Chrome only needs its zip or crx", async () => {
+    const { parseLatestRelease, RELEASE_ASSET_FIREFOX, RELEASE_ASSET_CHROME } = await import(
+      "../src/core/update-check"
+    );
+    const chromeOnly = release(["better-intra-chrome.zip", "better-intra.crx"]);
+    expect(parseLatestRelease(chromeOnly, RELEASE_ASSET_FIREFOX)).toBeNull();
+    expect(parseLatestRelease(chromeOnly, RELEASE_ASSET_CHROME)?.version).toBe("9.9.9");
+    const both = release(["better-intra-chrome.zip", "better-intra.crx", "better-intra.xpi"]);
+    expect(parseLatestRelease(both, RELEASE_ASSET_FIREFOX)?.version).toBe("9.9.9");
+    expect(parseLatestRelease(release([]), RELEASE_ASSET_CHROME)).toBeNull();
+    // the default still accepts any of them
+    expect(parseLatestRelease(chromeOnly)?.version).toBe("9.9.9");
+  });
+});

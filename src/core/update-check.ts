@@ -74,8 +74,16 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /** Extract {version, url} from a GitHub "releases/latest" payload, or null. */
+/** The release files that make a release installable, per browser. */
+export const RELEASE_ASSET_ANY = /^better-intra.*\.(zip|xpi|crx)$/;
+export const RELEASE_ASSET_FIREFOX = /^better-intra.*\.xpi$/;
+export const RELEASE_ASSET_CHROME = /^better-intra.*\.(zip|crx)$/;
+
 export function parseLatestRelease(
   json: unknown,
+  // publish.yaml attaches the Chrome files first and the signed .xpi once
+  // Mozilla approves it, sometimes an hour later: each browser waits for its own
+  wanted: RegExp = RELEASE_ASSET_ANY,
 ): { version: string; url: string } | null {
   if (!json || typeof json !== "object") return null;
   const rel = json as {
@@ -92,7 +100,7 @@ export function parseLatestRelease(
     const names = rel.assets
       .map((a) => (a && typeof a === "object" ? (a as { name?: unknown }).name : null))
       .filter((n): n is string => typeof n === "string");
-    if (!names.some((n) => /^better-intra.*\.(zip|xpi|crx)$/.test(n))) return null;
+    if (!names.some((n) => wanted.test(n))) return null;
   }
   const version = rel.tag_name.replace(/^v/i, "");
   if (!/^\d+(\.\d+)*$/.test(version)) return null;

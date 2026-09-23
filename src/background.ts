@@ -19,6 +19,8 @@ import {
   isNewerVersion,
   isUpdateCheckFresh,
   parseLatestRelease,
+  RELEASE_ASSET_CHROME,
+  RELEASE_ASSET_FIREFOX,
   type UpdateCheckMeta,
   type UpdateInfo,
 } from "./core/update-check";
@@ -95,7 +97,10 @@ async function runUpdateCheck(meta: UpdateCheckMeta | null): Promise<void> {
       return;
     }
     if (!res.ok) return; // rate-limited or no release yet: keep previous state
-    const latest = parseLatestRelease(await res.json());
+    const latest = parseLatestRelease(
+      await res.json(),
+      __TARGET__ === "firefox" ? RELEASE_ASSET_FIREFOX : RELEASE_ASSET_CHROME,
+    );
     if (!latest) return;
     const etag = res.headers.get("ETag") ?? undefined;
     const nextMeta: UpdateCheckMeta = etag

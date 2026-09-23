@@ -32,5 +32,6 @@ export default defineConfig({
     __WORKER_URL__: JSON.stringify(workerUrl),
     __AUTH_MODE__: JSON.stringify(authMode),
     __STORE_BUILD__: JSON.stringify(storeBuild),
+    __TARGET__: JSON.stringify(target),
   },
 });

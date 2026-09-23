@@ -31,3 +31,6 @@ declare const __AUTH_MODE__: string;
 
 /** True only in the Chrome Web Store package (CHROME_STORE=1): see vite.config.ts. */
 declare const __STORE_BUILD__: boolean;
+
+/** The browser this build is for (background build only; "firefox" in tests). */
+declare const __TARGET__: "firefox" | "chrome";
