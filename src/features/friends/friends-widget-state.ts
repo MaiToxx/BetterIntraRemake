@@ -4,6 +4,7 @@
  * handlers that mutate it, belong to the controller (friends.ui.ts).
  */
 import { getConfig } from "../../core/config.ts";
+import { AUTH_MODE } from "../../core/worker.ts";
 import {
   getEffectiveTheme,
   onThemeChange,
@@ -116,8 +117,11 @@ export async function loadInitialData(): Promise<WidgetData> {
     addOpen: false,
     lastFetch: null,
     theme: daisyTheme,
-    needsReconnect: !!token && authFailed,
-    notConnected: !token,
+    // In intra mode nothing the widget loads uses the Better Intra session
+    // (see loadFriendsData), so neither a missing nor an expired sign-in may
+    // lock it behind a Connect or Reconnect screen.
+    needsReconnect: AUTH_MODE !== "intra" && !!token && authFailed,
+    notConnected: AUTH_MODE !== "intra" && !token,
     deleteMode: false,
     selected: [],
     showCustomAvatars: await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"),

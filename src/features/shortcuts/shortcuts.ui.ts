@@ -1,4 +1,5 @@
-import { html, render } from "lit-html";
+import { html, nothing } from "lit-html";
+import { live } from "lit-html/directives/live.js";
 import { getConfig } from "../../core/config.ts";
 import { sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import GLOBE from "../../assets/svg/globe.svg";
@@ -55,64 +56,96 @@ export const getContrastColor = (hex: string): string => {
   return (r * 299 + g * 587 + b * 114) / 1000 >= 128 ? "#000000" : "#ffffff";
 };
 
+/** The row's "move earlier / later" buttons; a missing one is drawn disabled. */
+export type RowMoves = { up?: () => void; down?: () => void };
+
 export function renderShortcutRow(
   link: ShortcutLink,
   onDelete: () => void,
   position?: number,
+  moves?: RowMoves,
 ): ReturnType<typeof html> {
   // The placeholders are not names: each field says which shortcut it edits.
   const which = position ? `Shortcut ${position}` : "Shortcut";
+  // Three groups that wrap: one line on a wide hub; on a phone emoji + name,
+  // then the address, then the colour and the buttons (one line there left
+  // the name 26 px and the address 48 px wide). live(): the editor redraws
+  // from what the rows hold, and a field must show that even when lit's
+  // last written value is the same. The arrows: drag and drop is mouse
+  // only, a keyboard or a finger reorders with them.
   return html` <div
-    class="link-group flex flex-row gap-2 border border-base-300 rounded-lg p-2 bg-base-200/30 items-end"
+    class="link-group flex flex-wrap gap-2 border border-base-300 rounded-lg p-2 bg-base-200/30 items-end"
   >
-    <div class="flex flex-row gap-2">
+    <div class="flex gap-2 flex-1 min-w-48">
       <input
         type="text"
-        class="input w-16 text-center text-xl"
+        class="input w-16 shrink-0 text-center text-xl"
         data-shortcuts-emoji
         aria-label="${which} emoji"
-        .value="${link.emoji || ""}"
+        .value="${live(link.emoji || "")}"
         placeholder="🐝"
         maxlength="2"
       />
-    </div>
-    <div class="flex-1">
       <input
         type="text"
-        class="input w-full"
+        class="input flex-1 min-w-0"
         data-shortcuts-name
         aria-label="${which} name"
-        .value="${link.name}"
+        .value="${live(link.name)}"
         placeholder="Name"
         maxlength="20"
       />
     </div>
-    <div class="flex-2">
+    <div class="flex-2 min-w-48">
       <input
         type="url"
         class="input w-full"
         placeholder="https://example.com"
-        .value="${link.url}"
+        .value="${live(link.url)}"
         data-shortcuts-url
         aria-label="${which} address"
         pattern="^(https?://)?.*"
       />
     </div>
-    <input
-      type="color"
-      class="input w-12 p-1 cursor-pointer"
-      data-shortcuts-color
-      aria-label="${which} colour"
-      .value="${link.color}"
-    />
-    <button
-      type="button"
-      class="btn btn-outline btn-error"
-      aria-label="Remove ${which.toLowerCase()}"
-      @click="${onDelete}"
-    >
-      <span aria-hidden="true">✕</span>
-    </button>
+    <div class="flex gap-2 items-end ms-auto">
+      <input
+        type="color"
+        class="input w-12 p-1 cursor-pointer"
+        data-shortcuts-color
+        aria-label="${which} colour"
+        .value="${live(link.color)}"
+      />
+      ${moves
+        ? html`<button
+              type="button"
+              class="btn btn-square btn-ghost"
+              data-move-up
+              aria-label="Move ${which.toLowerCase()} up"
+              ?disabled="${!moves.up}"
+              @click="${() => moves.up?.()}"
+            >
+              <span aria-hidden="true">↑</span>
+            </button>
+            <button
+              type="button"
+              class="btn btn-square btn-ghost"
+              data-move-down
+              aria-label="Move ${which.toLowerCase()} down"
+              ?disabled="${!moves.down}"
+              @click="${() => moves.down?.()}"
+            >
+              <span aria-hidden="true">↓</span>
+            </button>`
+        : nothing}
+      <button
+        type="button"
+        class="btn btn-outline btn-error"
+        aria-label="Remove ${which.toLowerCase()}"
+        @click="${onDelete}"
+      >
+        <span aria-hidden="true">✕</span>
+      </button>
+    </div>
   </div>`;
 }
 
@@ -126,12 +159,19 @@ export function renderShortcutsSettings(
 ): ReturnType<typeof html> {
   const maxLinks = 8;
   const isFull = links.length >= maxLinks;
+  // The rows can hold what is being typed: the preview shows the sanitised
+  // form (no javascript: href), one chip per row so the indexes match.
+  const previewLinks = links.map(normalizeLink);
 
   return html`
     <div class="shortcuts-settings flex flex-col gap-4">
       <div class="space-y-2" @input="${onInput}">
         ${links.map((link, idx) =>
-          renderShortcutRow(link, () => onDeleteRow(idx), idx + 1),
+          renderShortcutRow(link, () => onDeleteRow(idx), idx + 1, {
+            up: idx > 0 ? () => onMoveRow(idx, idx - 1) : undefined,
+            down:
+              idx < links.length - 1 ? () => onMoveRow(idx, idx + 1) : undefined,
+          }),
         )}
       </div>
 
@@ -163,7 +203,7 @@ export function renderShortcutsSettings(
               class="preview-section p-4 rounded-xl border border-base-300 bg-base-200/10"
             >
               <div class="flex justify-center">
-                ${renderShortcutsDisplay(links, onMoveRow)}
+                ${renderShortcutsDisplay(previewLinks, onMoveRow)}
               </div>
             </div>
           `
@@ -224,6 +264,22 @@ export function extractLinksFromForm(root: HTMLElement): ShortcutLink[] {
   });
 
   return links;
+}
+
+/**
+ * Every row of the editor as it reads now, the incomplete ones and the text
+ * as typed included (extractLinksFromForm keeps only what is worth storing).
+ * The editor redraws from this, so a redraw loses nothing on screen.
+ */
+export function readLinkRows(root: HTMLElement): ShortcutLink[] {
+  const value = (row: Element, attr: string) =>
+    row.querySelector<HTMLInputElement>(`[${attr}]`)?.value ?? "";
+  return [...root.querySelectorAll(".link-group")].map((row) => ({
+    name: value(row, "data-shortcuts-name"),
+    url: value(row, "data-shortcuts-url"),
+    color: sanitizeColor(value(row, "data-shortcuts-color")),
+    emoji: value(row, "data-shortcuts-emoji"),
+  }));
 }
 
 function renderLinkContent(
@@ -356,45 +412,4 @@ export function renderShortcutsDisplay(
       })}
     </div>
   `;
-}
-
-async function initShortcutsSettings(container: HTMLElement) {
-  let links: ShortcutLink[] = await getStoredLinks();
-
-  const save = async () => {
-    const updated = extractLinksFromForm(container);
-    await chrome.storage.local.set({
-      SHORTCUTS_LINKS: JSON.stringify(updated),
-    });
-  };
-
-  const update = () => {
-    render(
-      renderShortcutsSettings(
-        links,
-        () => {
-          if (links.length < 8) {
-            links = [...links, { name: "", url: "", color: "#7dd3fc" }];
-            update();
-          }
-        },
-        async (idx) => {
-          links = links.filter((_, i) => i !== idx);
-          if (links.length === 0) {
-            links = [{ name: "", url: "", color: "#7dd3fc", emoji: "" }];
-          }
-          await save();
-          update();
-        },
-        async () => {
-          await save();
-        },
-        () => update(),
-        () => {},
-      ),
-      container,
-    );
-  };
-
-  update();
 }

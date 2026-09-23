@@ -14,6 +14,16 @@ import PERSON_FOLLOW_SVG from "../../assets/svg/person-follow.svg?raw";
 import PR_SVG from "../../assets/svg/pr.svg?raw";
 import STAR_SVG from "../../assets/svg/star.svg?raw";
 
+/**
+ * The Chrome Web Store build, where Chrome installs updates itself: the
+ * GitHub "Download" there pointed store users at a zip that loads as a
+ * second copy with another id. The define comes from the build config;
+ * `typeof` keeps a build or a test without it on the self-hosted path.
+ */
+declare const __STORE_BUILD__: boolean | undefined;
+const STORE_BUILD =
+  typeof __STORE_BUILD__ !== "undefined" && __STORE_BUILD__ === true;
+
 const QUICK_LINKS = [
   {
     href: HUB_INFO.github,
@@ -104,7 +114,11 @@ function countryName(code: string): string {
   }
 }
 
-export function renderAboutPanel(): ReturnType<typeof html> {
+// Follow goes to this fork's author; the upstream author is credited under
+// it, where his project and his Sponsors page are named as his.
+export function renderAboutPanel(
+  { storeBuild = STORE_BUILD }: { storeBuild?: boolean } = {},
+): ReturnType<typeof html> {
   return html`
     <div
       class="card bg-base-100 border border-base-300 shadow-sm w-full h-full overflow-hidden select-none"
@@ -131,9 +145,17 @@ export function renderAboutPanel(): ReturnType<typeof html> {
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn btn-sm font-bold transition-all hover:scale-105 active:scale-95"
+                  aria-label="Release notes (installed: v${HUB_INFO.version})"
                 >
                   <span>v${HUB_INFO.version}</span>
                 </a>
+                <a
+                  href="${HUB_INFO.privacy}"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="btn btn-sm btn-ghost"
+                  >Privacy</a
+                >
                 ${until(
                   listFoundEggs().then(
                     (found) =>
@@ -167,7 +189,7 @@ export function renderAboutPanel(): ReturnType<typeof html> {
           </p>
           ${until(
             getUpdateInfo().then((info) =>
-              info
+              info && !storeBuild
                 ? html`<div
                     class="alert alert-info rounded-xl flex items-center justify-between gap-3 py-2"
                   >
@@ -325,9 +347,12 @@ export function renderAboutPanel(): ReturnType<typeof html> {
           <p class="text-sm opacity-50 font-medium">
             Made for 42 Mulhouse · ${HUB_INFO.license} License
           </p>
+          <p class="text-xs opacity-40 mt-1">
+            An unofficial student project, not affiliated with or endorsed by 42.
+          </p>
           <div class="flex justify-center gap-3 mt-2">
             <a
-              href="https://github.com/nicopasla"
+              href="${HUB_INFO.author}"
               target="_blank"
               rel="noopener noreferrer"
               class="btn btn-sm gap-1"
@@ -339,20 +364,27 @@ export function renderAboutPanel(): ReturnType<typeof html> {
               </span>
               <span>Follow</span>
             </a>
+          </div>
+          <p class="text-xs opacity-60 mt-2 flex items-center justify-center gap-1 flex-wrap">
+            Original project by
             <a
-              href="https://github.com/sponsors/nicopasla"
+              class="underline"
+              href="${HUB_INFO.upstream}"
               target="_blank"
               rel="noopener noreferrer"
-              class="btn btn-sm gap-1"
+              >${HUB_INFO.upstreamAuthor}</a
             >
-              <span
-                class="size-4 flex items-center justify-center fill-current"
-              >
-                ${unsafeHTML(HEART_SVG)}
-              </span>
-              <span>Sponsor</span>
-            </a>
-          </div>
+            ·
+            <a
+              class="underline inline-flex items-center gap-1"
+              href="https://github.com/sponsors/${HUB_INFO.upstreamAuthor}"
+              target="_blank"
+              rel="noopener noreferrer"
+              ><span class="size-3 inline-flex fill-current" aria-hidden="true"
+                >${unsafeHTML(HEART_SVG)}</span
+              >Sponsor ${HUB_INFO.upstreamAuthor}</a
+            >
+          </p>
         </div>
       </div>
     </div>

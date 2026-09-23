@@ -12,6 +12,14 @@ const outDir = process.env.BUILD_OUT_DIR || "dist";
 const repo = readRepoInfo();
 const workerUrl = readWorkerUrl();
 const authMode = readAuthMode();
+/**
+ * The Chrome Web Store package (npm run build:chrome-store). Chrome updates a
+ * store install by itself once Google has reviewed the version, so that build
+ * drops the GitHub release check, its NEW badge and its Download prompts: they
+ * would point store users at a zip that installs a second copy of the
+ * extension. Compiled in as __STORE_BUILD__ by all four Vite configs.
+ */
+export const storeBuild = process.env.CHROME_STORE === "1";
 
 /** Name of the compiled Tailwind/daisyUI asset; see src/core/styles/shared-styles.ts. */
 const SHARED_CSS_FILE = "shared-styles.css";
@@ -212,6 +220,7 @@ const AUTH_CALLBACK_SCRIPT = "auth-callback.js";
 type ManifestContentScript = { matches?: string[]; js?: string[] };
 type Manifest = {
   version?: string;
+  permissions?: string[];
   host_permissions?: string[];
   content_scripts?: ManifestContentScript[];
   browser_specific_settings?: { gecko?: { id?: string; update_url?: string } };
@@ -263,8 +272,38 @@ export function finalizeManifest(template: Manifest, build: ManifestBuild): Mani
     // unpacked installs and on Windows/macOS, harmless there. The Chrome
     // Web Store build (CHROME_STORE=1) must not carry an update_url.
     manifest.update_url = build.repo.updatesXmlUrl;
+  } else {
+    // "alarms" only drives the GitHub release check, which the store build
+    // does not compile in (__STORE_BUILD__ in src/background.ts). The store
+    // reviews every permission against what the code does with it.
+    manifest.permissions = (manifest.permissions ?? []).filter((p) => p !== "alarms");
   }
   return manifest;
+}
+
+/**
+ * Licence files every package ships next to manifest.json. The extension is a
+ * fork of an MIT project and bundles MIT, BSD and ISC code (lit-html,
+ * qrcode-generator, daisyUI, Improved Intra's v2 dark theme, Lucide icons);
+ * those licences ask for their notice in every copy, and a store zip or an
+ * .xpi is a copy. Not web-accessible: nothing on a page needs them.
+ */
+export const LICENSE_FILES = ["LICENSE", "THIRD_PARTY_NOTICES.txt"] as const;
+
+/** Copy LICENSE_FILES from the repository root into outDir; returns what was copied. */
+export function copyLicenseFiles(rootDir: string, outDirPath: string): string[] {
+  const copied: string[] = [];
+  fs.mkdirSync(outDirPath, { recursive: true });
+  for (const file of LICENSE_FILES) {
+    const from = resolve(rootDir, file);
+    if (!fs.existsSync(from)) {
+      console.error(`\nLicence file not found: ${from}\n`);
+      continue;
+    }
+    fs.cpSync(from, resolve(outDirPath, file));
+    copied.push(file);
+  }
+  return copied;
 }
 
 export default defineConfig({
@@ -292,7 +331,7 @@ export default defineConfig({
           workerUrl,
           version: pkg.version,
           repo,
-          chromeStore: process.env.CHROME_STORE === "1",
+          chromeStore: storeBuild,
         });
         fs.writeFileSync(
           manifestDst,
@@ -324,6 +363,11 @@ export default defineConfig({
           fs.cpSync(from, resolve(import.meta.dirname, `${outDir}/${file}`));
         }
         console.log(`${THEME_CSS_FILES.length} theme stylesheets copied`);
+        const licences = copyLicenseFiles(
+          import.meta.dirname,
+          resolve(import.meta.dirname, outDir),
+        );
+        console.log(`licence files copied: ${licences.join(", ")}`);
       },
     },
   ],
@@ -357,6 +401,7 @@ export default defineConfig({
     __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
     __WORKER_URL__: JSON.stringify(workerUrl),
     __AUTH_MODE__: JSON.stringify(authMode),
+    __STORE_BUILD__: JSON.stringify(storeBuild),
     __TS_VERSION__: JSON.stringify(pkg.devDependencies.typescript),
     __VITE_VERSION__: JSON.stringify(pkg.devDependencies.vite),
     __LIT_VERSION__: JSON.stringify(pkg.dependencies["lit-html"]),

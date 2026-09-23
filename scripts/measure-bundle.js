@@ -33,8 +33,8 @@ const root = resolve(here, "..");
  * the sheet to creep back into the JavaScript.
  */
 const BUDGETS_KB = {
-  "content.js": 575, // v1.13.0: 564 KB, with html`` templates collapsed at build time
-  "popup.js": 44, // v1.11.0: 37 KB
+  "content.js": 610, // v1.14.0: 599 KB (theme colours +12, upload-on-save editor +7, mobile and hub work); v1.13.0: 564 KB
+  "popup.js": 56, // v1.14.0: 51 KB (sign-in disclosure the Chrome Web Store requires, sign-in feedback, Open settings); v1.13: 42 KB
   "auth-callback.js": 16, // v1.10.0: 10 KB
   "background.js": 12, // v1.10.0: 5 KB
   "hook.js": 8, // v1.10.0: 4 KB
@@ -42,7 +42,7 @@ const BUDGETS_KB = {
   // caches it, so they are budgeted separately from the code.
   // Lowered with the theme split: at 180 the 34 presets could move back in unnoticed.
   "shared-styles.css": 140, // v1.11.0: 127 KB (Tailwind scans src/ only, 23 daisyUI components, light/dark only)
-  "shared-themes.css": 42, // v1.11.0: 38 KB (the 34 other hub presets, fetched only when one is selected)
+  "shared-themes.css": 64, // v1.14.0: 56 KB, 56 presets (22 new palettes), fetched only when a named preset is selected
   "theme-dark-v2.css": 72, // v1.10.0: 62 KB (fetched on the v2 Intra only)
 };
 

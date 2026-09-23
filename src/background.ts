@@ -3,6 +3,15 @@
  * script cannot do itself: the periodic GitHub release check (badge + stored
  * UpdateInfo), fetching Intra pages cross-origin with the user's cookies, and
  * reloading the open Intra tabs once a new cloud session is stored.
+ *
+ * The Chrome Web Store build (__STORE_BUILD__) has no release check: Chrome
+ * updates a store install itself, and a GitHub release is tagged hours or
+ * days before Google's review lets the store copy follow, so the check would
+ * send every store user to a zip that installs a second copy with another
+ * id. Its manifest has no "alarms" permission either (finalizeManifest), so
+ * nothing here may touch chrome.alarms outside a `!__STORE_BUILD__` branch:
+ * in that build chrome.alarms is undefined, and a throw at the top level
+ * would stop the listeners below from being registered.
  */
 import {
   UPDATE_CHECK_META_KEY,
@@ -151,24 +160,29 @@ async function removeLegacyProfileStatsKeys(): Promise<void> {
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
-  // a fresh install/update is by definition up to date: clear any stale flag
+  // A fresh install/update is by definition up to date: clear any stale flag.
+  // The store build clears it too, in case an earlier version left one.
   void chrome.storage.local.remove([UPDATE_KEY, UPDATE_CHECK_META_KEY]);
   void chrome.action.setBadgeText({ text: "" });
-  chrome.alarms.create(UPDATE_ALARM, {
-    delayInMinutes: 1,
-    periodInMinutes: UPDATE_PERIOD_MINUTES,
-  });
+  if (!__STORE_BUILD__) {
+    chrome.alarms.create(UPDATE_ALARM, {
+      delayInMinutes: 1,
+      periodInMinutes: UPDATE_PERIOD_MINUTES,
+    });
+  }
   if (details.reason === "update") void removeLegacyProfileStatsKeys();
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  void ensureUpdateAlarm();
-  void checkForUpdate();
-});
+if (!__STORE_BUILD__) {
+  chrome.runtime.onStartup.addListener(() => {
+    void ensureUpdateAlarm();
+    void checkForUpdate();
+  });
 
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === UPDATE_ALARM) void checkForUpdate();
-});
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === UPDATE_ALARM) void checkForUpdate();
+  });
+}
 
 chrome.storage.onChanged.addListener((changes) => {
   if ("CLOUD_TOKEN" in changes && changes.CLOUD_TOKEN.newValue) {
@@ -253,4 +267,4 @@ async function reloadIntraTabs() {
 
 // Every event-page load / service-worker wake repairs a missing alarm, even
 // when onStartup did not fire (e.g. the add-on re-enabled mid-session).
-void ensureUpdateAlarm();
+if (!__STORE_BUILD__) void ensureUpdateAlarm();

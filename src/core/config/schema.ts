@@ -23,6 +23,8 @@ export interface BetterIntraConfig {
   CLOUD_TOKEN: string;
   CLOUD_LOGIN: string;
   CLOUD_AUTH_FAILED: boolean;
+  /** The sign-in notice was read and accepted on this browser (loginWith42). */
+  SIGNIN_DISCLOSURE_ACCEPTED: boolean;
   ACCOUNT: object | null; // Stores user account info from 42 API
 
   // Logtime Feature Settings

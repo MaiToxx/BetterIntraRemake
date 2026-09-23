@@ -236,3 +236,21 @@ describe("loadFriendsData when the Intra does not answer", () => {
     expect(first.ok && second.ok).toBe(true);
   });
 });
+
+describe("without a Better Intra sign-in", () => {
+  // Intra mode reads the Intra with the page's own session and the public
+  // visuals route: the Better Intra session is not needed for either.
+  it("loads the list when never signed in", async () => {
+    await chrome.storage.local.remove(["CLOUD_TOKEN", "CLOUD_LOGIN"]);
+    const r = await loadFriendsData(["alice", "bob"]);
+    expect(r.ok).toBe(true);
+    expect(logins(r.friends)).toEqual(["alice", "bob"]);
+  });
+
+  it("checks a login to add when never signed in", async () => {
+    await chrome.storage.local.remove(["CLOUD_TOKEN", "CLOUD_LOGIN"]);
+    expect((await checkFriendLogin("alice")).status).toBe("found");
+    statusOf.set("ghost", 404);
+    expect(await checkFriendLogin("ghost")).toEqual({ status: "not-found" });
+  });
+});

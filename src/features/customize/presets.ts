@@ -9,6 +9,7 @@
  */
 import { CONFIG_DEFAULT, getConfigMany } from "../../core/config.ts";
 import { CUSTOMIZE_KEYS, sanitizeCardMap, type CustomizeConfig } from "./customize.ts";
+import { THEME_IDS } from "../../core/theme/theme-ids.ts";
 
 export interface CustomPreset {
   name: string;
@@ -42,6 +43,11 @@ export function sanitizeCustomization(raw: unknown): CustomizeConfig {
       out[key] = sanitizeCardMap(v);
       continue;
     }
+    if (key === "PROFILE_THEME_PRESET") {
+      // a code from another build may name a theme this one does not have
+      out[key] = typeof v === "string" && THEME_IDS.has(v) ? v : def;
+      continue;
+    }
     out[key] = sameShape(v, def) ? v : def;
   }
   return out as CustomizeConfig;
@@ -57,7 +63,11 @@ export async function applyCustomization(values: CustomizeConfig): Promise<void>
 
 export async function resetCustomization(): Promise<void> {
   const defaults = {} as Record<string, unknown>;
-  for (const key of CUSTOMIZE_KEYS) defaults[key] = CONFIG_DEFAULT[key];
+  // Reset is the Customize tab's button: the theme picked in the Profile tab
+  // stays (a preset or a theme code still sets it).
+  for (const key of CUSTOMIZE_KEYS) {
+    if (key !== "PROFILE_THEME_PRESET") defaults[key] = CONFIG_DEFAULT[key];
+  }
   await chrome.storage.local.set(defaults);
 }
 

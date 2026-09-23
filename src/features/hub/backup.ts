@@ -14,6 +14,8 @@ export const BACKUP_EXCLUDED_KEYS: ReadonlySet<string> = new Set<ConfigKey>([
   "CLOUD_TOKEN",
   "CLOUD_LOGIN",
   "CLOUD_AUTH_FAILED",
+  // consent given on one browser, not carried to another in a file
+  "SIGNIN_DISCLOSURE_ACCEPTED",
   "LAST_CLOUD_SYNC",
   "ACCOUNT",
   "CALENDAR_SYNC_TOKEN",
@@ -173,6 +175,11 @@ export function sanitizeBackup(data: unknown): Record<string, unknown> {
     if (!(key in CONFIG_DEFAULT)) continue;
     if (BACKUP_EXCLUDED_KEYS.has(key)) continue;
     const value = parseLegacyJson(raw);
+    if (key === "CUSTOM_PRESETS") {
+      const presets = sanitizeBackupPresets(value);
+      if (presets) out[key] = presets;
+      continue;
+    }
     if (!isValidStoredValue(key, value)) continue;
     const rule = hubRule(key);
     if (rule) {
@@ -198,6 +205,51 @@ export function sanitizeBackup(data: unknown): Record<string, unknown> {
   if (customize.length > 0) {
     const clean = sanitizeCustomization(out) as Record<string, unknown>;
     for (const key of customize) out[key] = clean[key];
+  }
+  return out;
+}
+
+/** presets.ts limits, repeated: that module is not this one's to export from. */
+const MAX_PRESETS = 20;
+const MAX_PRESET_NAME = 40;
+
+/**
+ * The saved Customize presets of a backup, or null when the list is not one.
+ *
+ * isValidStoredValue only knows lists of strings, so every import dropped
+ * the presets an export had written. Each preset goes through the sanitiser
+ * theme codes use, and loses its custom CSS the way a theme code does: a
+ * stylesheet in a friendly-named preset of someone else's file would apply
+ * on Apply, past the import's custom CSS question.
+ */
+export function sanitizeBackupPresets(
+  value: unknown,
+): { name: string; values: Record<string, unknown> }[] | null {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set<string>();
+  const out: { name: string; values: Record<string, unknown> }[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const { name, values } = item as { name?: unknown; values?: unknown };
+    if (typeof name !== "string") continue;
+    const clean = name.trim().slice(0, MAX_PRESET_NAME);
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    const raw =
+      values && typeof values === "object" && !Array.isArray(values)
+        ? (values as Record<string, unknown>)
+        : {};
+    const sanitized = sanitizeCustomization({ ...raw, CUSTOM_CSS: "" }) as Record<
+      string,
+      unknown
+    >;
+    // the same rule as the top-level image links (URL_KEYS)
+    const bg = sanitized.CUSTOM_PAGE_BG_URL;
+    if (typeof bg === "string" && bg.trim() !== "" && !sanitizeCssUrl(bg)) {
+      sanitized.CUSTOM_PAGE_BG_URL = "";
+    }
+    out.push({ name: clean, values: { ...sanitized, CUSTOM_CSS: "" } });
+    if (out.length >= MAX_PRESETS) break;
   }
   return out;
 }

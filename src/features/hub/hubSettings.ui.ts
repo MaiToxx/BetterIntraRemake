@@ -21,11 +21,12 @@ import {
   getEffectiveTheme,
   getIsLight,
 } from "../../core/theme/theme-manager.ts";
+import { WORKER_URL } from "../../core/worker.ts";
 import {
   clearAuthFailed,
   loginWith42,
   logoutCloud,
-  syncToCloud,
+  pushSettings,
 } from "../account/account.ts";
 import {
   FEATURE_DEFS,
@@ -46,6 +47,25 @@ import {
 
 /** How long the hub waits after the last change before an automatic push. */
 export const AUTO_PUSH_DELAY_MS = 1000;
+
+/**
+ * When a failed automatic push is tried again. The first wait matches the
+ * worker's write limit (10 a minute per login, shared with sign-in, calendar
+ * and uploads; its 429 says Retry-After 60), and the waits grow so that a
+ * worker that stays down is not asked every minute.
+ */
+export const AUTO_PUSH_RETRY_MS: readonly number[] = [60_000, 120_000, 300_000];
+
+/** The worker the cloud features talk to, named next to the sign-in button. */
+const WORKER_HOST = (() => {
+  try {
+    return new URL(WORKER_URL).host;
+  } catch {
+    return WORKER_URL;
+  }
+})();
+
+const PRIVACY_URL = HUB_INFO.privacy;
 
 export async function openHubModal(active: FeatureId[]) {
   let dialog = document.getElementById("hub-dialog") as HTMLDialogElement;
@@ -198,6 +218,12 @@ async function createModal(active: FeatureId[]): Promise<void> {
     window.location.reload();
   };
 
+  // Header: on a phone the search takes a row of its own (squeezed between
+  // the title and the close button it was 26 px wide). Footer, signed out:
+  // signing in sends the Intra session token to a server that is not 42's,
+  // so the line under the button says whose, what for, and that it is
+  // optional, before the click. Signed in: "Push now" for Manual mode, which
+  // had no way to push from the hub (only the toolbar popup could).
   const modalTemplate = html`${sharedStylesLink()}<style>
       :host {
         display: block;
@@ -214,9 +240,30 @@ async function createModal(active: FeatureId[]): Promise<void> {
       h3 {
         font-family: ${INTRA_FONT} !important;
       }
+      /*
+       * daisyUI sizes the open panel as the tab list minus ONE row of tabs.
+       * In a window under about 1090 px the tabs wrap, and each extra row
+       * pushed the end of every tab out of reach: the panel gets the height
+       * of the rows the tabs really take instead (bindTabRowsHeight), and the
+       * rows are packed at the top so that measure does not include the
+       * spare height a stretched line would add.
+       */
+      [role="tablist"] {
+        align-content: flex-start;
+      }
       .tab-content {
-        height: 100%;
+        height: calc(100% - var(--hub-tabs-h, var(--tab-height)));
         overflow-y: auto;
+      }
+      /* Phones: icon-only tabs (the name stays for screen readers), small
+         enough for the nine to share one row. */
+      @media (max-width: 639.98px) {
+        [role="tablist"] {
+          --tab-height: 2.5rem;
+        }
+        [role="tablist"] > .tab {
+          --tab-p: 0.625rem;
+        }
       }
       /* the search filter, apart from the "hidden" the dependencies own */
       .search-hidden {
@@ -228,9 +275,9 @@ async function createModal(active: FeatureId[]): Promise<void> {
       data-theme="${currentTheme}"
     >
       <div
-        class="flex-none flex items-center justify-between gap-4 px-6 py-4 border-b border-base-200 bg-base-100 z-10"
+        class="flex-none flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6 sm:py-4 border-b border-base-200 bg-base-100 z-10"
       >
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
           <div
             class="size-8 flex items-center justify-center"
             style="color: #00babc;"
@@ -240,12 +287,16 @@ async function createModal(active: FeatureId[]): Promise<void> {
           </div>
           <div class="flex items-baseline gap-2">
             <h3 class="font-bold text-xl tracking-tight">${HUB_INFO.name}</h3>
-            <p class="text-[14px] opacity-60 font-bold tracking-widest">
+            <p
+              class="text-[14px] opacity-60 font-bold tracking-widest max-sm:hidden"
+            >
               v${HUB_INFO.version}
             </p>
           </div>
         </div>
-        <div class="flex-1 flex flex-col items-stretch max-w-md min-w-0">
+        <div
+          class="order-last basis-full sm:order-none sm:basis-auto flex-1 flex flex-col items-stretch sm:max-w-md min-w-0"
+        >
           <input
             type="search"
             id="hub-search"
@@ -273,14 +324,19 @@ async function createModal(active: FeatureId[]): Promise<void> {
 
       ${authFailed
         ? html`<div
-            class="flex-none alert alert-warning mx-4 mt-3 rounded-xl flex items-center justify-between"
+            class="flex-none alert alert-warning mx-4 mt-3 rounded-xl flex flex-wrap items-center justify-between gap-2"
+            data-hub-auth-banner
           >
             <span class="text-sm font-semibold"
-              >42 token expired - friends, marks, and cloud features
-              stopped</span
+              >Your Better Intra sign-in expired: cloud sync is paused until
+              you sign in again.</span
             >
-            <button class="btn btn-warning btn-sm font-bold" @click="${connect}">
-              Reconnect
+            <button
+              type="button"
+              class="btn btn-warning btn-sm font-bold"
+              @click="${connect}"
+            >
+              Sign in again
             </button>
           </div>`
         : ""}
@@ -295,9 +351,9 @@ async function createModal(active: FeatureId[]): Promise<void> {
 
       <div
         id="hub-footer"
-        class="flex-none p-4 border-t border-base-200 bg-base-200/50 flex justify-between items-center gap-4"
+        class="flex-none p-2 sm:p-4 border-t border-base-200 bg-base-200/50 flex flex-wrap justify-between items-center gap-2 sm:gap-4"
       >
-        <div class="flex items-center gap-3 flex-wrap">
+        <div class="flex items-center gap-3 flex-wrap min-w-0">
           <label
             class="swap btn btn-accent border border-base-content/20 text-center items-center"
           >
@@ -325,14 +381,14 @@ async function createModal(active: FeatureId[]): Promise<void> {
               <span class="text-sm font-bold">Dark</span>
             </span>
           </label>
-          <div class="flex items-center gap-2 text-xs flex-wrap">
+          <div class="flex items-center gap-2 text-xs flex-wrap min-w-0">
             ${isConnected
               ? html`<span
                     class="badge badge-success badge-lg gap-1 border border-base-content/20"
                     ><span class="size-4 inline-flex items-center" aria-hidden="true"
                       >${unsafeHTML(CLOUD_SVG)}</span
                     >
-                    ${login ? `Connected as ${login}` : "Connected"}</span
+                    ${login ? `Signed in as ${login}` : "Signed in"}</span
                   >
                   <button
                     type="button"
@@ -340,21 +396,33 @@ async function createModal(active: FeatureId[]): Promise<void> {
                     @click="${signOut}"
                   >
                     Sign out
-                  </button>`
+                  </button>
+                  <span
+                    id="hub-sync-status"
+                    class="badge badge-info badge-lg border border-base-content/20"
+                    >${formatSyncStatus(lastSync)}</span
+                  >`
               : authFailed
                 ? ""
                 : html`<button
-                    type="button"
-                    class="btn btn-error btn-sm border border-base-content/20 font-bold"
-                    @click="${connect}"
-                  >
-                    Connect with 42
-                  </button>`}
-            <span
-              id="hub-sync-status"
-              class="badge badge-info badge-lg border border-base-content/20"
-              >${formatSyncStatus(lastSync)}</span
-            >
+                      type="button"
+                      class="btn btn-primary btn-sm border border-base-content/20 font-bold"
+                      aria-describedby="hub-cloud-about"
+                      @click="${connect}"
+                    >
+                      Sign in with 42
+                    </button>
+                    <span id="hub-cloud-about" class="opacity-70 max-w-sm">
+                      Optional: syncs your settings, friends and published
+                      look through the Better Intra server (${WORKER_HOST}).
+                      <a
+                        class="underline"
+                        href="${PRIVACY_URL}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        >Privacy</a
+                      >
+                    </span>`}
             ${isConnected
               ? html`<div
                   class="join"
@@ -383,12 +451,27 @@ async function createModal(active: FeatureId[]): Promise<void> {
                         CLOUD_SYNC_ENABLED: true,
                       })}"
                   />
-                </div>`
+                </div>
+                <button
+                  type="button"
+                  id="hub-push-now"
+                  class="btn btn-sm btn-outline border-base-content/20 hidden"
+                >
+                  Push now
+                </button>`
               : ""}
             <span id="hub-push-status" class="hidden" role="status"></span>
+            <button
+              type="button"
+              id="hub-push-reconnect"
+              class="btn btn-warning btn-xs font-bold hidden"
+              @click="${connect}"
+            >
+              Sign in again
+            </button>
           </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 ms-auto">
           <span
             id="hub-reload-hint"
             class="text-sm font-semibold text-warning hidden"
@@ -397,7 +480,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
           ></span>
           <button
             id="hub-reload"
-            class="btn btn-success px-8 font-bold flex items-center gap-2"
+            class="btn btn-success px-4 sm:px-8 font-bold flex items-center gap-2"
           >
             <span class="size-5 flex items-center justify-center" aria-hidden="true">
               ${unsafeHTML(RELOAD_SVG)}
@@ -412,11 +495,37 @@ async function createModal(active: FeatureId[]): Promise<void> {
 
   bindTooltips(shadow, getIsLight);
 
+  bindTabRowsHeight(shadow);
   await bindThemeToggle(shadow);
   await bindCloudSync(shadow, dialog);
   bindTabPanels(shadow);
   bindDependents(shadow);
   bindSearch(shadow);
+}
+
+/**
+ * Keeps --hub-tabs-h, the height of the rows the tabs take, on the tab list:
+ * the open panel is the list minus that (see the style above). The rows
+ * change with the width of the window and with the search counts that widen
+ * the tabs, so every tab is watched too. A closed hub measures 0 and keeps
+ * the last value.
+ */
+export function bindTabRowsHeight(shadow: ShadowRoot): void {
+  const list = shadow.querySelector<HTMLElement>('[role="tablist"]');
+  if (!list || typeof ResizeObserver === "undefined") return;
+  const tabs = [...list.children].filter(
+    (el): el is HTMLElement => el instanceof HTMLElement && el.matches("label.tab"),
+  );
+  const measure = () => {
+    const top = list.getBoundingClientRect().top;
+    let bottom = top;
+    for (const tab of tabs) bottom = Math.max(bottom, tab.getBoundingClientRect().bottom);
+    if (bottom > top) list.style.setProperty("--hub-tabs-h", `${Math.ceil(bottom - top)}px`);
+  };
+  const observer = new ResizeObserver(measure);
+  observer.observe(list);
+  for (const tab of tabs) observer.observe(tab);
+  measure();
 }
 
 /**
@@ -456,8 +565,12 @@ async function bindThemeToggle(shadow: ShadowRoot): Promise<void> {
         : "light";
 
     hubContainer?.setAttribute("data-theme", theme);
+    // A named preset carries its own mode (theme-manager.ts presetMode): going
+    // to the other side means leaving it for that side's default.
+    const leavesPreset = preset !== "dark" && preset !== "light" && (isDark ? isLightPreset : !isLightPreset);
     await chrome.storage.local.set({
       BETTER_INTRA_THEME: isDark ? "dark" : "light",
+      ...(leavesPreset ? { PROFILE_THEME_PRESET: isDark ? "dark" : "light" } : {}),
     });
 
     if (ghIcon) {
@@ -472,6 +585,33 @@ function isUserSetting(key: string): boolean {
 }
 
 /**
+ * What the footer says about a failed push, from the reason pushSettings()
+ * gives. Every failure used to read "check the cloud connection", a 429
+ * included, which sent people looking for a network problem.
+ */
+export function pushFailureText(reason: string): string {
+  switch (reason) {
+    case "auth":
+      return "Push failed: your sign-in expired";
+    case "network":
+      return "Push failed: the Better Intra server did not answer";
+    case "busy":
+      return "Push failed: too many pushes in a minute";
+    case "too-large":
+      return "Push failed: too large for the cloud (custom CSS, presets)";
+    default:
+      return "Push failed: the server refused it";
+  }
+}
+
+/**
+ * Failures the same push can get past later: an unreachable worker, its rate
+ * limit, a server error. A lapsed sign-in or an oversized payload fails the
+ * same way until the user acts.
+ */
+const RETRY_WONT_HELP: ReadonlySet<string> = new Set(["auth", "too-large"]);
+
+/**
  * The footer's cloud and reload logic, fed by storage.onChanged while the
  * dialog is open: every control writes to storage in the end, whichever
  * module draws it, so this is the one place that sees every change.
@@ -481,8 +621,13 @@ function isUserSetting(key: string): boolean {
  * - With Auto push, a change to a synced setting schedules one push shortly
  *   after the last change; the outcome is written in the footer, and a
  *   failure keeps the settings local instead of vanishing into a reload.
- * - Reload pushes first when Auto is on and something is not pushed yet, and
- *   stays on the hub when that push fails.
+ *   A failure a later try can get past is tried again after
+ *   AUTO_PUSH_RETRY_MS; a new change replaces that wait with its own push.
+ * - With Manual push, "Push now" pushes; it stands out while this hub holds
+ *   changes it has not pushed.
+ * - Closing the hub sends what Auto has not pushed yet, a failed push
+ *   included. Reload pushes first when Auto is on and something is not
+ *   pushed yet, and stays on the hub when that push fails.
  */
 async function bindCloudSync(
   shadow: ShadowRoot,
@@ -492,6 +637,11 @@ async function bindCloudSync(
   const reloadHint = shadow.querySelector<HTMLElement>("#hub-reload-hint");
   const pushStatus = shadow.querySelector<HTMLElement>("#hub-push-status");
   const syncStatus = shadow.querySelector<HTMLElement>("#hub-sync-status");
+  const pushNow = shadow.querySelector<HTMLButtonElement>("#hub-push-now");
+  const reconnect = shadow.querySelector<HTMLElement>("#hub-push-reconnect");
+  // The banner already offers the sign-in; a second button for it would be
+  // a second login started next to the first.
+  const bannerUp = !!shadow.querySelector("[data-hub-auth-banner]");
   const autoPushRadios = shadow.querySelectorAll(
     'input[name="hub-auto-push"]',
   ) as NodeListOf<HTMLInputElement>;
@@ -507,7 +657,11 @@ async function bindCloudSync(
     )?.value === "auto";
 
   let dirty = false;
+  /** Counts the changes, so a push only clears the ones made before it read the settings. */
+  let changes = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let retries = 0;
+  let lastFailure: string | null = null;
 
   const showPushStatus = (text: string, ok: boolean) => {
     if (!pushStatus) return;
@@ -517,32 +671,62 @@ async function bindCloudSync(
       : "text-xs font-semibold text-error";
   };
 
+  const showPushNow = () => {
+    if (!pushNow) return;
+    pushNow.classList.toggle("hidden", autoSelected());
+    pushNow.classList.toggle("btn-primary", dirty);
+    pushNow.classList.toggle("btn-outline", !dirty);
+  };
+
   const push = async (): Promise<boolean> => {
     if (timer) {
       clearTimeout(timer);
       timer = null;
     }
-    let ok = false;
+    const pushed = changes;
+    // a string, not PushResult: account.ts may name more reasons than this
+    // file knows, and each one still gets a message
+    let result: string;
     try {
-      ok = await syncToCloud();
+      result = await pushSettings();
     } catch {
-      ok = false;
+      result = "network";
     }
-    if (ok) {
-      dirty = false;
+    reconnect?.classList.add("hidden");
+    if (result === "ok") {
+      if (changes === pushed) dirty = false;
+      retries = 0;
+      lastFailure = null;
       showPushStatus("Pushed to the cloud", true);
       if (syncStatus) {
         const last = (await chrome.storage.local.get("LAST_CLOUD_SYNC"))
           .LAST_CLOUD_SYNC;
         syncStatus.textContent = formatSyncStatus(last);
       }
-    } else {
-      showPushStatus(
-        "Push failed - settings kept locally, check the cloud connection",
-        false,
-      );
+      showPushNow();
+      return true;
     }
-    return ok;
+    lastFailure = result;
+    let text = `${pushFailureText(result)} - settings kept locally`;
+    if (result === "auth") {
+      // no retry: only a new sign-in can make this push go through
+      if (!bannerUp) reconnect?.classList.remove("hidden");
+    } else if (
+      !RETRY_WONT_HELP.has(result) &&
+      !timer &&
+      autoSelected() &&
+      retries < AUTO_PUSH_RETRY_MS.length
+    ) {
+      // (a change made while this push was out already has a push of its own)
+      const wait = AUTO_PUSH_RETRY_MS[retries++];
+      timer = setTimeout(() => {
+        timer = null;
+        if (autoSelected()) void push();
+      }, wait);
+      text += `, trying again in ${Math.round(wait / 60_000)} min`;
+    }
+    showPushStatus(text, false);
+    return false;
   };
 
   const schedulePush = () => {
@@ -561,26 +745,41 @@ async function bindCloudSync(
     reloadBtn.classList.add("btn-warning");
   };
 
-  chrome.storage.onChanged?.addListener((changes, area) => {
+  showPushNow();
+  autoPushRadios.forEach((r) => r.addEventListener("change", showPushNow));
+  pushNow?.addEventListener("click", async () => {
+    pushNow.disabled = true;
+    await push();
+    pushNow.disabled = false;
+  });
+
+  chrome.storage.onChanged?.addListener((changed, area) => {
     if (area !== "local" || !dialog.open) return;
-    for (const key of Object.keys(changes)) {
+    for (const key of Object.keys(changed)) {
       if (!isUserSetting(key)) continue;
       if (!isLiveKey(key)) markReloadNeeded();
       if (CLOUD_SYNC_KEYS.includes(key as never)) {
         dirty = true;
-        if (autoSelected()) schedulePush();
+        changes++;
+        // after a lapsed sign-in every push fails the same way until the
+        // user signs in again (which reloads the page)
+        if (autoSelected() && lastFailure !== "auth") schedulePush();
+        showPushNow();
       }
     }
   });
 
-  // A push still waiting when the hub closes goes out now: the user is done
-  // editing, and "Auto" must not depend on how the hub was closed.
+  // What Auto has not pushed when the hub closes goes out now, whether its
+  // push is still waiting or already failed once: the user is done editing,
+  // and "Auto" must not depend on how the hub was closed.
   dialog.addEventListener("close", () => {
-    if (timer && autoSelected()) void push();
+    if (autoSelected() && (dirty || timer) && lastFailure !== "auth") void push();
   });
 
   reloadBtn?.addEventListener("click", async () => {
-    if (autoSelected() && (dirty || timer)) {
+    // A push after a lapsed sign-in fails again: it would keep the user on
+    // the hub for good, and the settings are already kept on this browser.
+    if (autoSelected() && (dirty || timer) && lastFailure !== "auth") {
       reloadBtn.disabled = true;
       const ok = await push();
       reloadBtn.disabled = false;

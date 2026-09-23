@@ -1,5 +1,6 @@
 import { html, TemplateResult } from "lit-html";
 import { cssUrl, sanitizeCssColor } from "../../../core/security/css-sanitize.ts";
+import { localPreviewUrl } from "./local-preview.ts";
 
 const TRANSPARENT = new Set(["transparent"]);
 
@@ -23,15 +24,23 @@ export function renderAvatarEditor(
 ): TemplateResult {
   const decoBoxShadow =
     state.decoration === "solid" ? "box-shadow: 0 0 0 4px #00babc;" : "";
+  // A picked file not uploaded yet is previewed from a data: URL, which can
+  // be megabytes. It sits in a custom property on a wrapper that no drag step
+  // changes, so each step rewrites a short style instead of parsing it again.
+  const local = localPreviewUrl(state.url);
+  const image = local ? "var(--ft-avatar-local)" : cssUrl(state.url) || "none";
 
+  // touch-action:none and pointer events: a finger drag scrolled the page
+  // instead of moving the picture, which only listened to the mouse.
   return html`
-    <div
-      id="ft-avatar-preview"
-      style="width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px;border-radius:9999px;background-image:${cssUrl(state.url) ||
-      "none"};background-size:${state.scale}%;background-position:${state.posX}% ${state.posY}%;background-color:${sanitizeCssColor(state.bgColor, TRANSPARENT) || "transparent"};background-repeat:no-repeat;${decoBoxShadow}cursor:grab;flex-shrink:0;user-select:none;"
-      @mousedown="${onPreviewMouseDown(onUpdate)}"
-      @wheel="${onPreviewWheel(onUpdate, state)}"
-    ></div>
+    <div class="contents" style="${local ? `--ft-avatar-local:url("${local}")` : ""}">
+      <div
+        id="ft-avatar-preview"
+        style="width:${PREVIEW_SIZE}px;height:${PREVIEW_SIZE}px;border-radius:9999px;background-image:${image};background-size:${state.scale}%;background-position:${state.posX}% ${state.posY}%;background-color:${sanitizeCssColor(state.bgColor, TRANSPARENT) || "transparent"};background-repeat:no-repeat;${decoBoxShadow}cursor:grab;flex-shrink:0;user-select:none;touch-action:none;"
+        @pointerdown="${onPreviewPointerDown(onUpdate)}"
+        @wheel="${onPreviewWheel(onUpdate, state)}"
+      ></div>
+    </div>
     <div class="w-full flex flex-col gap-2">
       <div class="flex items-center justify-between gap-1">
         <span class="text-xs opacity-60">Zoom</span>
@@ -65,18 +74,21 @@ export function renderAvatarEditor(
   `;
 }
 
-function onPreviewMouseDown(
+function onPreviewPointerDown(
   onUpdate: (changes: Partial<AvatarEditorState>) => void,
 ) {
-  return (e: MouseEvent) => {
+  return (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    // Not stopped: the dialog's backdrop-close check has to see this press
+    // start inside the editor (profile.modal.ts).
     e.preventDefault();
-    e.stopPropagation();
 
     const el = e.currentTarget as HTMLElement;
+    const pointerId = e.pointerId;
     const startX = e.clientX;
     const startY = e.clientY;
     const rect = el.getBoundingClientRect();
-    const size = rect.width;
+    const size = rect.width || PREVIEW_SIZE;
 
     const style = el.getAttribute("style") || "";
     const scaleMatch = style.match(/background-size:\s*([\d.]+)%/);
@@ -90,7 +102,8 @@ function onPreviewMouseDown(
     const sign = startScale < 100 ? 1 : -1;
     const speed = 10000 / startScale;
 
-    const onMove = (moveEvent: MouseEvent) => {
+    const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       moveEvent.preventDefault();
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
@@ -104,15 +117,28 @@ function onPreviewMouseDown(
       });
     };
 
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+    // Captured, the pointer keeps reporting to the preview once it leaves it
+    // (a finger leaves it at once). Every way the drag can end removes the
+    // listeners, a cancelled touch included.
+    const onEnd = (endEvent: PointerEvent) => {
+      if (endEvent.pointerId !== pointerId) return;
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onEnd);
+      el.removeEventListener("pointercancel", onEnd);
+      el.removeEventListener("lostpointercapture", onEnd);
       el.style.cursor = "grab";
     };
 
     el.style.cursor = "grabbing";
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    try {
+      el.setPointerCapture?.(pointerId);
+    } catch {
+      // an id the browser no longer knows (the pointer already went up)
+    }
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onEnd);
+    el.addEventListener("pointercancel", onEnd);
+    el.addEventListener("lostpointercapture", onEnd);
   };
 }
 

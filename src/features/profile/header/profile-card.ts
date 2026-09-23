@@ -371,6 +371,13 @@ function createInfoCard(
         height: auto !important;
       }
     }
+    @media (max-width: 767px) {
+      /* the desktop overhang made the page 20 px wider than a phone */
+      #${INFO_CARD_ID} {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+    }
   `;
 
   adoptSharedStyles(shadowRoot, `${seatStyles}\n${badgeResponsiveStyles}`);

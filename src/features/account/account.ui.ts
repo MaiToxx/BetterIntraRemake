@@ -1,19 +1,101 @@
-import { html, render } from "lit-html";
+import { html, nothing, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import {
+  describeCloudFailure,
   getCloudLogin,
   getLastKnownSessions,
+  getPushFailure,
   refreshSessionCount,
 } from "./account.ts";
 import { getConfig } from "../../core/config.ts";
+import { WORKER_HOST } from "../../core/worker.ts";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { AccountState, createInitialState } from "./state.ts";
 import { createHandlers } from "./handlers.ts";
+import {
+  PRIVACY_POLICY_URL,
+  hasAcceptedSignInDisclosure,
+  signInDisclosureText,
+} from "./signin-disclosure.ts";
+
+type Handlers = ReturnType<typeof createHandlers>;
+
+/**
+ * The words used for the account, everywhere in the popup: "Sign in with 42",
+ * "Sign in again", "Sign out", and "the cloud" for the Better Intra server,
+ * named by its host so it is clear it is not 42's.
+ */
+const privacyLine = () => html`
+  <p class="text-xs opacity-70 text-center">
+    Your account lives on the Better Intra server (${WORKER_HOST}), not at 42.
+    <a
+      class="underline font-semibold"
+      href="${PRIVACY_POLICY_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+      >Privacy policy</a
+    >
+  </p>
+`;
+
+/** Why the last sign-in failed: first line bold, diagnostics below it. */
+const loginErrorLine = (state: AccountState) => {
+  if (!state.loginError) return nothing;
+  const [first, ...rest] = state.loginError.split("\n");
+  return html`
+    <div
+      role="alert"
+      data-login-error
+      class="text-sm text-error w-full max-w-sm text-left"
+    >
+      <p class="font-semibold">${first}</p>
+      ${rest.length
+        ? html`<p class="text-xs opacity-70 mt-1 break-words">
+            ${rest.join(" · ")}
+          </p>`
+        : nothing}
+    </div>
+  `;
+};
+
+function renderDisclosure(
+  state: AccountState,
+  handlers: Handlers,
+): ReturnType<typeof html> {
+  return html`
+    <div class="w-full flex flex-col gap-3 p-2 text-sm" data-disclosure>
+      <h2 class="text-lg font-bold">Before you sign in</h2>
+      <div class="flex flex-col gap-2 opacity-90">
+        ${signInDisclosureText()}
+      </div>
+      <div class="flex justify-end gap-2 mt-1">
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost"
+          @click="${handlers.cancelDisclosure}"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary font-bold"
+          data-accept
+          ?disabled="${state.signingIn}"
+          @click="${handlers.handleLogin42}"
+        >
+          Sign in
+        </button>
+      </div>
+    </div>
+  `;
+}
 
 function renderAccountTab(
   state: AccountState,
-  handlers: ReturnType<typeof createHandlers>,
+  handlers: Handlers,
 ): ReturnType<typeof html> {
+  if (state.disclosureOpen) return renderDisclosure(state, handlers);
+
   const isConnected = state.cloud === "online";
   const statusClass =
     state.cloud === "checking"
@@ -25,35 +107,53 @@ function renderAccountTab(
     state.cloud === "checking"
       ? "Checking..."
       : isConnected
-        ? "Connected"
-        : "Offline";
+        ? "Online"
+        : "Unreachable";
 
   if (!state.token) {
     return html`
       <div
-        class="w-full h-full flex flex-col items-center justify-center p-8 gap-4"
+        class="w-full h-full flex flex-col items-center justify-center p-6 gap-3"
       >
         <div class="text-center">
           ${state.needsReconnect
             ? html`<h2 class="text-2xl font-bold">Session expired</h2>
-                <p class="opacity-70 mt-1">Reconnect to restore features.</p>`
-            : html`<h2 class="text-2xl font-bold">Connect your Account</h2>
                 <p class="opacity-70 mt-1">
-                  Sync your settings across devices.
+                  Sign in again to get the cloud features back.
+                </p>`
+            : html`<h2 class="text-2xl font-bold">Sign in with 42</h2>
+                <p class="opacity-70 mt-1">
+                  Optional: shows your profile look to other students, syncs
+                  your settings between browsers and enables the calendar feed.
+                  Everything else works without it.
                 </p>`}
         </div>
         <button
-          class="btn bg-[#00babc] text-white border-none hover:bg-[#1fd2d4] w-full max-w-sm h-16 text-lg flex items-center justify-center gap-3 transition-colors duration-200 mt-4"
+          id="signin-btn"
+          class="btn bg-[#00babc] text-white border-none hover:bg-[#1fd2d4] w-full max-w-sm h-16 text-lg flex items-center justify-center gap-3 transition-colors duration-200 mt-2"
           type="button"
-          @click="${handlers.handleLogin42}"
+          aria-busy="${state.signingIn ? "true" : "false"}"
+          ?disabled="${state.signingIn}"
+          @click="${handlers.startLogin}"
         >
-          <span class="font-bold tracking-wide text-base">Connect with</span>
-          <span
-            class="size-10 flex items-center justify-center [&_polygon]:fill-current"
-          >
-            ${unsafeHTML(FORTY_TWO_SVG)}
-          </span>
+          ${state.signingIn
+            ? html`<span
+                  class="loading loading-spinner"
+                  aria-hidden="true"
+                ></span>
+                <span class="font-bold tracking-wide text-base"
+                  >Signing in...</span
+                >`
+            : html`<span class="font-bold tracking-wide text-base"
+                  >Sign in with</span
+                >
+                <span
+                  class="size-10 flex items-center justify-center [&_polygon]:fill-current"
+                >
+                  ${unsafeHTML(FORTY_TWO_SVG)}
+                </span>`}
         </button>
+        ${loginErrorLine(state)} ${privacyLine()}
       </div>
     `;
   }
@@ -62,21 +162,23 @@ function renderAccountTab(
     <div class="w-full h-full flex flex-col gap-4 overflow-y-auto">
       ${state.needsReconnect
         ? html`<div
-            class="alert alert-warning shadow-lg rounded-xl flex items-center justify-between"
+            class="alert alert-warning shadow-lg rounded-xl flex flex-col items-stretch gap-2"
           >
-            <span class="text-sm font-semibold">Session expired</span>
-            <button
-              class="btn btn-warning btn-sm font-bold"
-              type="button"
-              @click="${handlers.handleLogin42}"
-            >
-              Reconnect
-            </button>
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm font-semibold">Session expired</span>
+              <button
+                class="btn btn-warning btn-sm font-bold"
+                type="button"
+                ?disabled="${state.signingIn}"
+                @click="${handlers.startLogin}"
+              >
+                ${state.signingIn ? "Signing in..." : "Sign in again"}
+              </button>
+            </div>
+            ${loginErrorLine(state)}
           </div>`
         : ""}
-      <!-- Top Section: Status & Sync Info -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <!-- Left Card: Account Status -->
         <div
           class="bg-base-200 shadow-md p-5 rounded-xl border border-base-300"
         >
@@ -97,18 +199,17 @@ function renderAccountTab(
             <div
               class="flex items-center justify-between bg-base-100 p-3 rounded-lg border border-base-300"
             >
-              <span class="font-medium text-sm text-base-content"
-                >Cloud Status</span
-              >
+              <span class="font-medium text-sm text-base-content">Server</span>
               <div class="badge ${statusClass} font-bold">
                 ${statusText}
               </div>
             </div>
             <div
               class="flex items-center justify-between bg-base-100 p-3 rounded-lg border border-base-300"
+              title="Each sign-in counts, on any browser. Past 10, the oldest one is signed out."
             >
               <span class="font-medium text-sm text-base-content"
-                >Sessions</span
+                >Sign-ins</span
               >
               <div class="badge badge-success font-bold text-success-content">
                 ${state.activeSessions ?? "?"}/10
@@ -117,13 +218,15 @@ function renderAccountTab(
           </div>
         </div>
 
-        <!-- Right Card: Cloud Sync -->
         <div
           class="bg-base-200 shadow-md p-5 rounded-xl border border-base-300"
         >
-          <h2 class="text-lg font-bold text-base-content mb-4">Cloud Sync</h2>
+          <h2 class="text-lg font-bold text-base-content">Cloud Sync</h2>
+          <p class="text-xs opacity-70 mb-4">
+            Push copies this browser's settings to ${WORKER_HOST}; Pull
+            replaces them with that copy.
+          </p>
           <div class="grid grid-cols-2 gap-3">
-            <!-- Pull Button -->
             <button
               id="pull-cloud-btn"
               class="btn btn-info font-bold transition-all text-info-content text-base row-span-2 py-8 w-full ${state
@@ -143,7 +246,6 @@ function renderAccountTab(
                 : state.buttons.pull.text}
             </button>
 
-            <!-- Push Button -->
             <button
               id="push-cloud-btn"
               class="btn btn-success text-success-content font-bold transition-all text-base row-span-2 py-8 w-full ${state
@@ -163,17 +265,29 @@ function renderAccountTab(
                 : state.buttons.push.text}
             </button>
           </div>
+          ${state.pushFailure
+            ? html`<p
+                id="push-failure"
+                role="status"
+                class="text-xs text-error mt-3"
+              >
+                <span class="font-semibold">Last push failed:</span>
+                ${describeCloudFailure(
+                  state.pushFailure.reason,
+                  state.pushFailure.detail,
+                )}
+              </p>`
+            : nothing}
         </div>
       </div>
 
-      <!-- Bottom Section: Action Buttons -->
       <div class="flex justify-between gap-4 mt-auto pt-4">
         <button
-          class="btn btn-error text-error-content font-bold transition-all text-base"
+          class="btn btn-outline font-bold transition-all text-base"
           type="button"
           @click="${handlers.handleDelete}"
         >
-          Disconnect
+          Sign out
         </button>
         <button
           class="btn btn-error text-error-content font-bold transition-all text-base"
@@ -183,6 +297,7 @@ function renderAccountTab(
           Wipe All Data
         </button>
       </div>
+      ${privacyLine()}
     </div>
   `;
 }
@@ -198,6 +313,8 @@ export async function initAccountSettings(container: HTMLElement) {
     state.login = await getCloudLogin();
     state.token = (await getConfig("CLOUD_TOKEN")) || "";
     state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
+    state.disclosureAccepted = await hasAcceptedSignInDisclosure();
+    state.pushFailure = state.token ? await getPushFailure() : null;
     render(renderAccountTab(state, handlers), container);
   }
 
@@ -211,8 +328,8 @@ export async function initAccountSettings(container: HTMLElement) {
       state.cloud = "offline";
     }
     // Set by the request itself on a 401: read after it, or the first popup
-    // after a session expiry says "Offline" and only offers Reconnect on the
-    // next re-render.
+    // after a session expiry says "Unreachable" and only offers to sign in
+    // again on the next re-render.
     state.needsReconnect = !!(await getConfig("CLOUD_AUTH_FAILED"));
     render(renderAccountTab(state, handlers), container);
   }

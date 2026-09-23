@@ -175,9 +175,13 @@ export function renderWidget(state: WidgetState) {
           : "closed"}"
         ?inert="${!state.open}"
       >
-        <!-- Header -->
+        <!-- Header. flex-wrap: on a phone the controls need more than the
+             panel's width, and every one of them is shrink-0 (the sort group
+             hides its scrollbar, so a squeezed group loses buttons without a
+             sign): they drop to a second line instead of pushing refresh out
+             of the panel. The 480 px desktop panel keeps them on one line. -->
         <div
-          class="flex items-center gap-2 px-5 pt-3 pb-3 border-b border-base-300 bg-base-200/50 shrink-0"
+          class="friends-header flex flex-wrap items-center gap-2 px-5 pt-3 pb-3 border-b border-base-300 bg-base-200/50 shrink-0"
         >
           <div class="flex items-center gap-2.5 min-w-0 flex-none flex-wrap">
             <span class="font-bold text-lg text-base-content">Friends</span>

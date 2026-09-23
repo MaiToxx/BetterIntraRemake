@@ -25,6 +25,7 @@ npm test                # vitest (jsdom)
 npm run measure         # size of every built file, and what fills the bundles
 npm run check:size      # fails when a built file is over its budget (CI)
 npm run check:cycles    # fails on a runtime import cycle in src/ (CI)
+npm run generate:themes # themes.json + style.css theme blocks + hub list from scripts/themes/palettes.mjs
 npm run smoke:firefox -- dist-firefox                    # automated Firefox smoke + timings
 npm run smoke:firefox -- --compare <build-A> <build-B>   # side-by-side timing table
 ```

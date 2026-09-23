@@ -8,6 +8,8 @@ const outDir = process.env.BUILD_OUT_DIR || "dist";
 const repo = readRepoInfo();
 const workerUrl = readWorkerUrl();
 const authMode = readAuthMode();
+// See vite.config.ts.
+const storeBuild = process.env.CHROME_STORE === "1";
 
 export default defineConfig({
   build: {
@@ -31,5 +33,6 @@ export default defineConfig({
     __REPO_RELEASES_API__: JSON.stringify(repo.releasesApi),
     __WORKER_URL__: JSON.stringify(workerUrl),
     __AUTH_MODE__: JSON.stringify(authMode),
+    __STORE_BUILD__: JSON.stringify(storeBuild),
   },
 });

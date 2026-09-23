@@ -175,13 +175,39 @@ describe("keyboard and screen readers", () => {
     expect(dropdown(root).hasAttribute("inert")).toBe(true);
   });
 
-  it("labels the button as a reconnect prompt when the session expired", async () => {
+  // The reconnect prompt itself is oauth mode's (friends-widget-oauth.test.ts).
+  it("keeps the normal button when the Better Intra session expired", async () => {
     await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
     const root = await mount();
-    expect(fab(root).getAttribute("aria-label")).toBe(
-      "Friends: session expired, reconnect",
-    );
-    expect(fab(root).hasAttribute("aria-expanded")).toBe(false);
+    expect(fab(root).getAttribute("aria-label")).toBe("Friends");
+    expect(fab(root).getAttribute("aria-expanded")).toBe("false");
+    expect(fab(root).classList.contains("btn-error")).toBe(false);
+  });
+});
+
+describe("without a Better Intra sign-in", () => {
+  // Nothing the widget loads in intra mode uses that session: the Intra is
+  // read with the page's own session, the visuals route is public.
+  it("loads the rows and offers Add when the session expired", async () => {
+    await chrome.storage.local.set({ CLOUD_AUTH_FAILED: true });
+    const root = await mount();
+    expect(rowLogins(root)).toEqual(["alice", "bob"]);
+    fab(root).click();
+    await settled(root);
+    expect(text(root)).not.toContain("Session expired");
+    expect(root.querySelector('button[aria-label="Add friend"]')).not.toBeNull();
+  });
+
+  it("loads the rows, and adds a friend, when never signed in", async () => {
+    await chrome.storage.local.remove(["CLOUD_TOKEN", "CLOUD_LOGIN"]);
+    const root = await mount();
+    expect(rowLogins(root)).toEqual(["alice", "bob"]);
+    fab(root).click();
+    await settled(root);
+    expect(text(root)).not.toContain("Connect with");
+    await typeLogin(root, "carol");
+    await vi.waitFor(() => expect(rowLogins(root)).toContain("carol"), { timeout: 8_000 });
+    expect(await storedList()).toEqual(["alice", "bob", "carol"]);
   });
 });
 

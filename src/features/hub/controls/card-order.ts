@@ -47,6 +47,8 @@ export function renderCardOrder(
     return cardColors[cleanName.toUpperCase().trim()] || "btn-neutral";
   };
 
+  // Each visible card also gets "earlier" / "later" arrows: drag and drop
+  // is mouse only, and a keyboard or a finger had no way to reorder.
   const renderOrder = (currentOrder: string[]) => {
     render(
       html`
@@ -68,7 +70,9 @@ export function renderCardOrder(
         <div
           class="flex flex-wrap gap-3 items-center p-4 bg-base-300/30 rounded-xl border border-base-300 w-full"
         >
-          <span class="text-xs opacity-50 w-full pb-1">Drag to reorder</span>
+          <span class="text-xs opacity-50 w-full pb-1"
+            >Drag to reorder, or use the arrows</span
+          >
           ${currentOrder.map((rawName, idx) => {
             const isDisabled = rawName.startsWith("-");
             const displayName = isDisabled ? rawName.substring(1) : rawName;
@@ -100,6 +104,7 @@ export function renderCardOrder(
                   ? "cursor-grab active:cursor-grabbing"
                   : "cursor-not-allowed"}
     ${isDisabled ? "opacity-30 line-through saturate-50 scale-95" : ""}"
+                data-card-chip
                 draggable="${enabled && !isDisabled}"
                 @dragstart="${(e: DragEvent) =>
                   enabled && !isDisabled && handleDragStart(e, idx)}"
@@ -144,6 +149,28 @@ export function renderCardOrder(
                   : ""}
 
                 <span class="pointer-events-none">${displayName}</span>
+                ${enabled && !isDisabled
+                  ? html`<button
+                        type="button"
+                        class="p-1 rounded hover:bg-black/10 disabled:opacity-30 cursor-pointer"
+                        data-card-move="earlier"
+                        aria-label="Move ${displayName} card earlier"
+                        ?disabled="${idx === 0}"
+                        @click="${(e: Event) => moveCard(e, currentOrder, idx, idx - 1)}"
+                      >
+                        <span aria-hidden="true">←</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="p-1 -mr-2 rounded hover:bg-black/10 disabled:opacity-30 cursor-pointer"
+                        data-card-move="later"
+                        aria-label="Move ${displayName} card later"
+                        ?disabled="${idx === currentOrder.length - 1}"
+                        @click="${(e: Event) => moveCard(e, currentOrder, idx, idx + 1)}"
+                      >
+                        <span aria-hidden="true">→</span>
+                      </button>`
+                  : ""}
               </div>
             `;
           })}
@@ -191,6 +218,32 @@ export function renderCardOrder(
     draggedIdx = null;
     renderOrder(newOrder);
     saveSetting(def.key!, newOrder);
+  };
+
+  /**
+   * The arrows' move: the same splice as a drop. The focus follows the card
+   * (the chips are redrawn by position), onto the other arrow at either end.
+   */
+  const moveCard = (
+    e: Event,
+    currentOrder: string[],
+    from: number,
+    to: number,
+  ) => {
+    e.stopPropagation();
+    if (!enabled || to < 0 || to >= currentOrder.length) return;
+    const newOrder = [...currentOrder];
+    const [moved] = newOrder.splice(from, 1);
+    newOrder.splice(to, 0, moved);
+    renderOrder(newOrder);
+    saveSetting(def.key!, newOrder);
+    const dir = to < from ? "earlier" : "later";
+    const chip = container.querySelectorAll<HTMLElement>("[data-card-chip]")[to];
+    const same = chip?.querySelector<HTMLButtonElement>(`[data-card-move="${dir}"]`);
+    const other = chip?.querySelector<HTMLButtonElement>(
+      `[data-card-move="${dir === "earlier" ? "later" : "earlier"}"]`,
+    );
+    (same && !same.disabled ? same : other)?.focus();
   };
 
   const resetToDefault = () => {

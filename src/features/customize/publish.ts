@@ -34,3 +34,21 @@ export function publishLookIfShared(changedKey: string): void {
     // profile and immediately reloads the page
   }, forced ? 600 : 1500);
 }
+
+const DEFAULT_PUSHED = "LOOK_DEFAULT_PUBLISHED";
+
+/**
+ * 1.14.0 turned "Publish my look" on by default. The worker publishes what
+ * the last push said, and every push before carried the old default (false):
+ * accounts that never chose push once, so that their look and theme show up
+ * without waiting for their next settings change. A choice the user made
+ * (the key is in storage) is left alone.
+ */
+export async function publishDefaultLookOnce(): Promise<void> {
+  const raw = await chrome.storage.local.get([SHARE_KEY, DEFAULT_PUSHED, "CLOUD_TOKEN"]);
+  if (raw[DEFAULT_PUSHED] || !raw.CLOUD_TOKEN) return;
+  await chrome.storage.local.set({ [DEFAULT_PUSHED]: true });
+  // a stored value, not the key: some storages list missing keys as undefined
+  if (typeof raw[SHARE_KEY] === "boolean") return;
+  publishLookIfShared(SHARE_KEY);
+}

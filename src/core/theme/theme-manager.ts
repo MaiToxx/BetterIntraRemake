@@ -1,5 +1,7 @@
 import { getConfig } from "../config.ts";
 import themesJson from "./themes.json";
+import { VISITOR_PRESET_EVENT } from "./theme-events.ts";
+import { THEME_MODES } from "./theme-ids.ts";
 
 type ThemeModeVars = {
   background: string;
@@ -24,6 +26,30 @@ type ThemePreset = {
 };
 
 export const THEMES: Record<string, ThemePreset> = themesJson;
+
+/**
+ * The mode a named preset puts the page in, or null for the plain "dark" and
+ * "light" presets (and unknown keys), which follow BETTER_INTRA_THEME. A
+ * preset only has variables for one mode: before 1.14.0 a dark preset picked
+ * while the page was light (or the reverse) silently did nothing.
+ */
+export function presetMode(key: string | null | undefined): "dark" | "light" | null {
+  if (!key || key === "dark" || key === "light") return null;
+  // the small generated table, not THEMES: the popup reads the mode too and
+  // must not carry the colour table
+  return Object.hasOwn(THEME_MODES, key) ? THEME_MODES[key] : null;
+}
+
+/**
+ * The preset of the profile being visited, when its owner published one and
+ * the viewer shows other people's looks (see setVisitorPreset). Never stored.
+ */
+let visitorPreset: string | null = null;
+
+/** The preset in force on this page: the visited profile's, else the user's. */
+export async function getActivePreset(): Promise<string> {
+  return visitorPreset ?? ((await getConfig("PROFILE_THEME_PRESET")) || "dark");
+}
 
 function toKebab(str: string): string {
   return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
@@ -119,7 +145,7 @@ function useLightPresetOverrides(on: boolean, after: HTMLElement): void {
 }
 
 async function applyThemePreset() {
-  const presetKey = await getConfig("PROFILE_THEME_PRESET");
+  const presetKey = await getActivePreset();
   const isDark = document.documentElement.classList.contains("dark");
 
   let styleEl = document.getElementById(
@@ -177,7 +203,11 @@ async function applyThemePreset() {
   useLightPresetOverrides(wantsLightOverrides, styleEl);
 }
 
-function applyTheme(theme: "dark" | "light") {
+/**
+ * `remember`: keep the mode for the next page's first paint. Off while a
+ * visited profile's theme is shown, which must not follow the viewer around.
+ */
+function applyTheme(theme: "dark" | "light", remember = true) {
   const isDark = theme === "dark";
   const isV3 = window.location.hostname === "profile-v3.intra.42.fr";
 
@@ -188,7 +218,7 @@ function applyTheme(theme: "dark" | "light") {
     document.documentElement.classList.toggle("dark", isDark);
     document.documentElement.removeAttribute("data-theme");
     if (document.body) document.body.classList.toggle("dark", isDark);
-    sessionStorage.setItem("intra-theme", theme);
+    if (remember) sessionStorage.setItem("intra-theme", theme);
     return;
   }
 
@@ -202,10 +232,12 @@ function applyTheme(theme: "dark" | "light") {
 
   void applyThemePreset();
 
-  sessionStorage.setItem("intra-theme", theme);
+  if (remember) sessionStorage.setItem("intra-theme", theme);
 }
 
 export async function getEffectiveTheme(): Promise<"dark" | "light"> {
+  const fromPreset = presetMode(await getActivePreset());
+  if (fromPreset) return fromPreset;
   const savedTheme = await getConfig("BETTER_INTRA_THEME");
 
   if (savedTheme === "system") {
@@ -239,20 +271,28 @@ export async function initThemeManager() {
   if (themeManagerInitialized) return;
   themeManagerInitialized = true;
 
+  document.addEventListener(VISITOR_PRESET_EVENT, (e) => {
+    void setVisitorPreset((e as CustomEvent<string | null>).detail ?? null);
+  });
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.BETTER_INTRA_THEME) {
       sessionStorage.removeItem("intra-theme");
       void initThemeManager().then(notifyThemeChange);
     }
     if (area === "local" && changes.PROFILE_THEME_PRESET) {
-      void applyThemePreset().then(notifyThemeChange);
+      // the mode may change with the preset (it follows the preset's own)
+      void getEffectiveTheme().then((theme) => {
+        applyTheme(theme, !visitorPreset);
+        return notifyThemeChange();
+      });
     }
   });
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", async (e) => {
       const savedTheme = await getConfig("BETTER_INTRA_THEME");
-      if (savedTheme === "system") {
+      if (savedTheme === "system" && !presetMode(await getActivePreset())) {
         applyTheme(e.matches ? "dark" : "light");
         await notifyThemeChange();
       }
@@ -278,15 +318,27 @@ export interface ThemeChange {
 }
 
 async function notifyThemeChange(): Promise<void> {
-  const [theme, preset] = await Promise.all([
-    getEffectiveTheme(),
-    getConfig("PROFILE_THEME_PRESET"),
-  ]);
+  const [theme, preset] = await Promise.all([getEffectiveTheme(), getActivePreset()]);
   document.dispatchEvent(
     new CustomEvent<ThemeChange>(THEME_CHANGED_EVENT, {
       detail: { theme, preset: preset || "dark" },
     }),
   );
+}
+
+/**
+ * Show the theme a visited profile's owner published (null: back to the
+ * viewer's own). Only named presets apply: everyone who syncs publishes the
+ * default "dark", which says nothing about their taste. The page switches to
+ * the preset's mode for the visit, without remembering it for the next page,
+ * and the widgets follow through the usual theme-change event.
+ */
+export async function setVisitorPreset(key: string | null): Promise<void> {
+  const next = key && presetMode(key) ? key : null;
+  if (next === visitorPreset) return;
+  visitorPreset = next;
+  applyTheme(await getEffectiveTheme(), !next);
+  await notifyThemeChange();
 }
 
 /** Calls `cb` on every theme change; returns the unsubscribe function. */

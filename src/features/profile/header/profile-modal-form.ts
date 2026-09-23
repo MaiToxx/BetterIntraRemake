@@ -10,6 +10,7 @@
 import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { sanitizeCssUrl } from "../../../core/security/css-sanitize.ts";
+import { localPreviewUrl } from "./local-preview.ts";
 import LINK_SVG from "../../../assets/svg/link.svg?raw";
 
 export interface FormState {
@@ -39,12 +40,7 @@ export type FormUpdate = (updates: Partial<FormState>) => void;
 export type ImageKey = "avatar" | "banner" | "background";
 export type ImageHistory = { avatar: string[]; banner: string[]; background: string[] };
 
-/** Puts `url` first in a url history of at most ten distinct entries. */
-export function addToHistory(url: string, history: string[]): string[] {
-  if (!url) return history;
-  const filtered = history.filter((h) => h !== url);
-  return [url, ...filtered].slice(0, 10);
-}
+export { addToHistory } from "./image-history.ts";
 
 function renderUrlHistory(
   history: string[],
@@ -89,12 +85,41 @@ function renderUrlHistory(
 }
 /**
  * What the Upload button next to a URL field shows: nothing, a progress
- * note, or the last error. Kept by the caller between renders.
+ * note, or the last error, plus the file picked for this field and waiting
+ * for Save. Kept by the caller between renders.
  */
 export interface UploadUi {
   onFile: (file: File) => void;
   status?: string;
   busy?: boolean;
+  /** Picked, previewed, uploaded on Save: `preview` is a local data: URL. */
+  pending?: { name: string; preview: string };
+  onDiscard?: () => void;
+}
+
+function renderPendingFile(upload: UploadUi) {
+  const pending = upload.pending;
+  if (!pending) return "";
+  const local = localPreviewUrl(pending.preview);
+  const thumb = local ? `background-image: url("${local}"); ` : "";
+  return html`<div class="flex items-center gap-2 mt-1 text-xs" data-upload-pending>
+    <span
+      class="rounded border border-base-300 shrink-0"
+      style="${thumb}background-size: cover; background-position: center; width: 2rem; height: 2rem;"
+    ></span>
+    <span class="min-w-0 truncate opacity-80">${pending.name}: uploads when you save</span>
+    ${upload.onDiscard
+      ? html`<button
+          type="button"
+          class="btn btn-ghost btn-xs shrink-0"
+          aria-label="Discard ${pending.name}"
+          ?disabled="${!!upload.busy}"
+          @click="${upload.onDiscard}"
+        >
+          ✕
+        </button>`
+      : ""}
+  </div>`;
 }
 
 export function renderUrlField(
@@ -110,9 +135,9 @@ export function renderUrlField(
       <label class="label py-1">
         <span class="label-text opacity-80">${label}</span>
       </label>
-      <div class="flex gap-2 items-stretch">
+      <div class="flex flex-wrap gap-2 items-stretch">
         <label
-          class="input input-accent validator flex items-center gap-2 flex-1"
+          class="input input-accent validator flex items-center gap-2 flex-1 min-w-40"
         >
           <span class="h-[1em] opacity-50 flex items-center justify-center"
             >${unsafeHTML(LINK_SVG)}</span
@@ -131,9 +156,9 @@ export function renderUrlField(
         ${upload
           ? html`<label
               class="btn btn-sm btn-outline btn-accent self-center ${upload.busy ? "btn-disabled" : ""}"
-              title="Upload an image from this computer (2 MB at most)"
+              title="Choose an image on this computer (2 MB at most; bigger JPEG photos are shrunk). It is uploaded when you save."
             >
-              ${upload.busy ? "Uploading…" : "Upload"}
+              Upload
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
@@ -150,6 +175,7 @@ export function renderUrlField(
             </label>`
           : ""}
       </div>
+      ${upload ? renderPendingFile(upload) : ""}
       ${upload?.status
         ? html`<p class="text-xs mt-1 ${upload.busy ? "opacity-70" : "text-error"}" data-upload-status>
             ${upload.status}

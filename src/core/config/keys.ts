@@ -195,4 +195,5 @@ export const LOCAL_ONLY_KEYS: ConfigKey[] = [
   // consent given on this browser
   "SUBJECT_TRACKER_ENABLED",
   "SUBJECT_TRACKER_SEND_DATA",
+  "SIGNIN_DISCLOSURE_ACCEPTED",
 ];

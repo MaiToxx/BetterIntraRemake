@@ -11,6 +11,7 @@ import {
 } from "./account";
 import { AccountState, resetButtonState } from "./state";
 import { WORKER_ORIGIN_PATTERN } from "../../core/worker.ts";
+import { acceptSignInDisclosure } from "./signin-disclosure.ts";
 
 /** Hosts the extension must be allowed on for the login flow to complete. */
 const REQUIRED_ORIGINS = [
@@ -33,10 +34,15 @@ async function ensureHostPermissions(): Promise<void> {
   }
 }
 
-/** The button label for a failed Push or Pull; the Reconnect banner comes from updateUI. */
+/**
+ * The button label for a failed Push or Pull; the sentence under the card
+ * (describeCloudFailure) and the sign-in banner say the rest.
+ */
 function failureLabel(reason: CloudFailure): string {
   if (reason === "auth") return "Session expired";
   if (reason === "network") return "Connection Failed";
+  if (reason === "busy") return "Too many requests";
+  if (reason === "too-large") return "Too large";
   return "Sync Failed";
 }
 
@@ -44,17 +50,6 @@ function failureLabel(reason: CloudFailure): string {
  * @param updateUI Re-renders from storage and `state`; never talks to the worker.
  */
 export function createHandlers(state: AccountState, updateUI: () => void) {
-  const handleLogin42 = async () => {
-    await ensureHostPermissions();
-    loginWith42(async () => {
-      await clearAuthFailed();
-      void chrome.runtime
-        .sendMessage({ type: "FT_RELOAD_INTRA_TABS" })
-        .catch(() => reloadActiveTab());
-      window.close();
-    });
-  };
-
   const reloadActiveTab = async () => {
     const [tab] = await chrome.tabs.query({
       active: true,
@@ -63,18 +58,80 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     if (tab?.id) chrome.tabs.reload(tab.id);
   };
 
-  const reloadTab = async () => {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tab?.id) chrome.tabs.reload(tab.id);
+  const onSignedIn = async () => {
+    await clearAuthFailed();
+    void chrome.runtime
+      .sendMessage({ type: "FT_RELOAD_INTRA_TABS" })
+      .catch(() => reloadActiveTab());
+    window.close();
+  };
+
+  /**
+   * Runs the sign-in, from "Sign in" on the notice or straight from the sign-in
+   * button once the notice was accepted. The button stays disabled until it
+   * ends, so a second click cannot open a second worker session.
+   */
+  const handleLogin42 = async () => {
+    if (state.signingIn) return;
+    // Before any await: the browser only shows the permission prompt from
+    // within the click's user gesture.
+    const permission = ensureHostPermissions();
+    const accepting = state.disclosureOpen;
+    state.signingIn = true;
+    state.loginError = "";
+    state.disclosureOpen = false;
+    updateUI();
+    try {
+      if (accepting) {
+        await acceptSignInDisclosure();
+        state.disclosureAccepted = true;
+      }
+      await permission;
+      await loginWith42(onSignedIn, {
+        onFailure: (message) => {
+          state.loginError = message;
+        },
+      });
+    } catch (e) {
+      state.loginError = String(e);
+    } finally {
+      state.signingIn = false;
+      updateUI();
+    }
+  };
+
+  /**
+   * "Sign in with 42" and "Sign in again": the notice comes first, the first
+   * time on this browser. The popup shows it in place of the card (a modal
+   * would be cut off at the popup's height) and records the acceptance
+   * itself, so loginWith42 then goes straight to the sign-in.
+   */
+  const startLogin = () => {
+    if (state.signingIn) return;
+    state.loginError = "";
+    if (!state.disclosureAccepted) {
+      state.disclosureOpen = true;
+      updateUI();
+      return;
+    }
+    void handleLogin42();
+  };
+
+  const cancelDisclosure = () => {
+    state.disclosureOpen = false;
+    updateUI();
   };
 
   const handleDelete = async () => {
-    if (confirm("Disconnect and clear your cloud session data locally?")) {
+    // Revokes this browser's session only: the worker's DELETE without
+    // ?all=true keeps the pushed settings.
+    if (
+      confirm(
+        "Sign out on this browser? Your settings stay here and in the cloud.",
+      )
+    ) {
       await logoutCloud();
-      await reloadTab();
+      await reloadActiveTab();
     }
   };
 
@@ -89,7 +146,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     const success = await wipeAllCloudData();
     if (success) {
       alert("All cloud data successfully wiped.");
-      await reloadTab();
+      await reloadActiveTab();
     } else {
       alert("Failed to delete cloud data. Please try again.");
     }
@@ -153,7 +210,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
         text: "Restored!",
       } as any;
       updateUI();
-      setTimeout(() => reloadTab(), 1500);
+      setTimeout(() => reloadActiveTab(), 1500);
       return;
     }
 
@@ -172,6 +229,8 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
   };
 
   return {
+    startLogin,
+    cancelDisclosure,
     handleLogin42,
     handleDelete,
     handleWipe,

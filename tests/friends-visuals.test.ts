@@ -295,6 +295,21 @@ describe("loadFriendsData stages", () => {
     expect(result.detail).toBe("full");
     expect(worker()).toHaveLength(1);
   });
+
+  it("does not report that cache as full to the badge load either", async () => {
+    await chrome.storage.local.set({ SHOW_CUSTOM_AVATARS_IN_FRIENDS: false });
+    await loadFriendsData(["alice"]);
+    calls.length = 0;
+
+    await chrome.storage.local.set({ SHOW_CUSTOM_AVATARS_IN_FRIENDS: true });
+    // The closed widget's load runs first on a page: it still gets the fresh
+    // rows for nothing, but as "online", so the panel completes them on open.
+    const closed = await loadFriendsData(["alice"], { detail: "online" });
+    expect(closed.detail).toBe("online");
+    expect(calls).toHaveLength(0);
+    await loadFriendsData(["alice"]);
+    expect(worker()).toHaveLength(1);
+  });
 });
 
 describe("deadlines and storage failures", () => {

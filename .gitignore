@@ -29,3 +29,7 @@ tools/cluster-editor/index.html
 *.pem
 dist-chrome-store
 .browsers/
+
+# built packages (release artifacts are made by CI)
+/*.zip
+web-ext-artifacts/

@@ -1,4 +1,5 @@
 import { workerFetch } from "../../core/worker.ts";
+import { fetchOwnEvents, isOwnProfilePage } from "./own-events.ts";
 
 /** What an event of the feed is built from (a subset of the Intra event). */
 interface IcsEvent {
@@ -110,5 +111,35 @@ export async function syncCalendarIcs(
   });
   if (res.ok) {
     await chrome.storage.local.set({ CALENDAR_EVENTS_HASH: currentHash });
+  }
+}
+
+/**
+ * Refresh the feed from your subscribed events. Called by main.ts on every
+ * Intra page, whatever features are switched on: the Calendar tab promises a
+ * refresh on each visit to your own profile, and the Logtime switch has no
+ * say in that.
+ *
+ * Returns at once elsewhere than on your own profile, and before any request
+ * unless a cloud session and a calendar link both exist, so students without
+ * a link pay nothing. A failed events read leaves the feed alone; an empty
+ * list is uploaded, so unsubscribing from the last event drops it.
+ */
+export async function maybeSyncCalendar(): Promise<void> {
+  if (!isOwnProfilePage()) return;
+  try {
+    const store = await chrome.storage.local.get([
+      "CLOUD_TOKEN",
+      "CLOUD_LOGIN",
+      "CALENDAR_SYNC_TOKEN",
+    ]);
+    if (!store.CLOUD_TOKEN || !store.CLOUD_LOGIN || !store.CALENDAR_SYNC_TOKEN) {
+      return;
+    }
+    const events = await fetchOwnEvents();
+    if (!events) return;
+    await syncCalendarIcs(events.filter((e) => e.is_subscribed));
+  } catch {
+    // The feed keeps serving what it had; the next visit tries again.
   }
 }

@@ -14,6 +14,12 @@ export const PROFILE_CARD_SELECTOR = 'p[class="text-sm"]';
 export const DASHBOARD_CARD_SELECTOR = ".bg-white.md\\:h-96";
 /** The heading inside a dashboard card; its text is the card's identity. */
 export const CARD_TITLE_SELECTOR = "[class*='uppercase']";
+/**
+ * The v3 shell's sidebar column: the 42 tile and the burger menu, 80 px wide
+ * and fixed at the left edge (a direct child of `.App` in the shell bundle,
+ * `fixed top-0 flex flex-col items-center w-20 z-50`). See shell-fix.ts.
+ */
+export const INTRA_SIDEBAR_COLUMN_SELECTOR = ".App > div.fixed.top-0.w-20";
 
 export interface FindDashboardCardOptions {
   /**

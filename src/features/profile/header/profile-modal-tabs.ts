@@ -11,7 +11,8 @@ import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getTitleBadges } from "./badges.ts";
 import { renderAvatarEditor } from "./avatar-editor.ts";
-import { uploadProfileImage, type ImageSlot } from "./image-upload.ts";
+import type { ImageSlot } from "./image-upload.ts";
+import type { PendingUploads } from "./pending-uploads.ts";
 import {
   renderModeRadios,
   renderUrlField,
@@ -20,6 +21,7 @@ import {
   type ImageHistory,
   type ImageKey,
   type ProfileTab,
+  type UploadUi,
 } from "./profile-modal-form.ts";
 import GRIP_VERTICAL_SVG from "../../../assets/svg/grip-vertical.svg?raw";
 import EYE_SVG from "../../../assets/svg/eye.svg?raw";
@@ -28,31 +30,32 @@ import EYE_SLASH_SVG from "../../../assets/svg/eye-slash.svg?raw";
 /** Index of the badge being dragged in the badges tab, if any. */
 let badgeDragIdx: number | null = null;
 
-/** Upload progress per field, shown next to its URL box until the next render. */
-const uploadStatus: Partial<Record<ImageSlot, { text: string; busy: boolean }>> = {};
-
 /**
- * The Upload button of a URL field: sends the file to the worker and drops
- * the served URL into the field, as if it had been pasted.
+ * The Upload button of a URL field: the picked file waits in `uploads` with
+ * a local preview and is only sent on Save (pending-uploads.ts says why).
  */
-function uploadUi(slot: ImageSlot, onFormUpdate: FormUpdate) {
-  const st = uploadStatus[slot];
+function uploadUi(
+  slot: ImageSlot,
+  uploads: PendingUploads,
+  onFormUpdate: FormUpdate,
+): UploadUi {
+  const status = uploads.status(slot);
+  const pending = uploads.get(slot);
   return {
-    status: st?.text,
-    busy: st?.busy,
-    onFile: async (file: File) => {
-      uploadStatus[slot] = { text: `Uploading ${file.name}…`, busy: true };
+    status: status?.text,
+    busy: status?.busy,
+    pending: pending ? { name: pending.name, preview: pending.preview } : undefined,
+    onFile: (file: File) => void uploads.pick(slot, file),
+    onDiscard: () => {
+      uploads.discard(slot);
       onFormUpdate({});
-      const result = await uploadProfileImage(slot, file);
-      if (result.ok) {
-        delete uploadStatus[slot];
-        onFormUpdate({ [slot]: result.url });
-      } else {
-        uploadStatus[slot] = { text: result.error, busy: false };
-        onFormUpdate({});
-      }
     },
   };
+}
+
+/** A field whose file waits for Save shows an empty box: the file replaces its URL. */
+function fieldValue(state: FormState, slot: ImageSlot, uploads: PendingUploads): string {
+  return uploads.get(slot) ? "" : state[slot];
 }
 
 /** Every tab's panel, rendered from the current form state. */
@@ -61,15 +64,17 @@ export function renderTabPanels(
   onFormUpdate: FormUpdate,
   history: ImageHistory,
   onClearHistory: (key: ImageKey) => void,
+  uploads: PendingUploads,
 ): Record<ProfileTab, unknown> {
   return {
-    avatar: renderAvatarPanel(state, onFormUpdate, history, onClearHistory),
-    banner: renderBannerPanel(state, onFormUpdate, history, onClearHistory),
+    avatar: renderAvatarPanel(state, onFormUpdate, history, onClearHistory, uploads),
+    banner: renderBannerPanel(state, onFormUpdate, history, onClearHistory, uploads),
     background: renderBackgroundPanel(
       state,
       onFormUpdate,
       history,
       onClearHistory,
+      uploads,
     ),
     badges: renderBadgesPanel(state, onFormUpdate),
   };
@@ -80,20 +85,25 @@ function renderAvatarPanel(
   onFormUpdate: FormUpdate,
   history: ImageHistory,
   onClearHistory: (key: ImageKey) => void,
+  uploads: PendingUploads,
 ) {
   const isTransparent = state.avatarBg === "transparent";
+  const avatarUrl = uploads.get("avatar")?.preview || state.avatar;
 
+  // One column under the sm breakpoint: side by side, the 256 px preview
+  // column left the form a few pixels in a phone-sized or narrow window (a
+  // 0 px URL box, the preview over the Upload button).
   return html`
     <div class="rounded-box border border-base-300 bg-base-200/50 p-3">
-      <div class="flex gap-5 items-start">
+      <div class="flex flex-col gap-5 sm:flex-row sm:items-start" data-avatar-row>
         <div class="flex-1 min-w-0">
           ${renderUrlField(
             "Image URL",
-            state.avatar,
+            fieldValue(state, "avatar", uploads),
             (val) => onFormUpdate({ avatar: val }),
             history.avatar,
             () => onClearHistory("avatar"),
-            uploadUi("avatar", onFormUpdate),
+            uploadUi("avatar", uploads, onFormUpdate),
           )}
           <div class="flex gap-2 items-center mt-2">
             <div class="join w-full">
@@ -157,11 +167,14 @@ function renderAvatarPanel(
           </div>
         </div>
 
-        <div class="w-64 shrink-0 flex flex-col items-start">
-          ${state.avatar
+        <div
+          class="w-full sm:w-64 shrink-0 flex flex-col items-center sm:items-start"
+          data-avatar-preview-column
+        >
+          ${avatarUrl
             ? renderAvatarEditor(
                 {
-                  url: state.avatar,
+                  url: avatarUrl,
                   posX: state.avatarPosX,
                   posY: state.avatarPosY,
                   scale: state.avatarScale,
@@ -195,6 +208,7 @@ function renderBannerPanel(
   onFormUpdate: FormUpdate,
   history: ImageHistory,
   onClearHistory: (key: ImageKey) => void,
+  uploads: PendingUploads,
 ) {
   return html`
     <div class="rounded-box border border-base-300 bg-base-200/50 p-3">
@@ -207,11 +221,11 @@ function renderBannerPanel(
         ? ""
         : html`${renderUrlField(
             "Image URL",
-            state.banner,
+            fieldValue(state, "banner", uploads),
             (val) => onFormUpdate({ banner: val }),
             history.banner,
             () => onClearHistory("banner"),
-            uploadUi("banner", onFormUpdate),
+            uploadUi("banner", uploads, onFormUpdate),
           )}
           ${renderModeRadios("PROFILE_BANNER_MODE", state.bannerMode, (val) =>
             onFormUpdate({ bannerMode: val }),
@@ -262,6 +276,7 @@ function renderBackgroundPanel(
   onFormUpdate: FormUpdate,
   history: ImageHistory,
   onClearHistory: (key: ImageKey) => void,
+  uploads: PendingUploads,
 ) {
   return html`
     <div class="rounded-box border border-base-300 bg-base-200/50 p-3">
@@ -274,11 +289,11 @@ function renderBackgroundPanel(
         ? ""
         : html`${renderUrlField(
             "Image URL",
-            state.background,
+            fieldValue(state, "background", uploads),
             (val) => onFormUpdate({ background: val }),
             history.background,
             () => onClearHistory("background"),
-            uploadUi("background", onFormUpdate),
+            uploadUi("background", uploads, onFormUpdate),
           )}
           ${renderModeRadios(
             "PROFILE_BACKGROUND_MODE",

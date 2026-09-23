@@ -4,11 +4,15 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { hashLogin } from "../../core/crypto.ts";
 import { clearAuthFailed, loginWith42 } from "../account/account.ts";
 import { generateQrDataUrl } from "./qr.ts";
+import { maybeSyncCalendar } from "./calendar-sync.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
 import { WORKER_URL } from "../../core/worker.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
+
+export const REGENERATE_CONFIRM =
+  "Create a new calendar link? Calendars subscribed to the current link stop updating until you subscribe them to the new one.";
 
 function calUrl(token: string): string {
   return `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`;
@@ -67,14 +71,14 @@ function renderPanel(el: Element | undefined) {
             ${!signedIn && !token
               ? html`
                   <p class="text-sm opacity-70">
-                    Connect your 42 account to generate a calendar link.
+                    Sign in with your 42 account to generate a calendar link.
                   </p>
                   <button
                     type="button"
                     class="btn btn-primary btn-sm self-start"
                     @click="${connect}"
                   >
-                    Connect with 42
+                    Sign in with 42
                   </button>
                 `
               : token
@@ -137,9 +141,10 @@ function renderPanel(el: Element | undefined) {
 
                   <div class="flex flex-wrap items-center gap-2">
                     <button
+                      type="button"
                       class="btn btn-sm"
                       style="border: 2px solid var(--color-info)"
-                      @click="${handleGenerate}"
+                      @click="${handleRegenerate}"
                     >
                       <span class="size-4 flex items-center justify-center"
                         >${unsafeHTML(CALENDAR_PLUS_SVG)}</span
@@ -169,6 +174,13 @@ function renderPanel(el: Element | undefined) {
     );
   };
 
+  // One click used to revoke the link: every phone or Google calendar
+  // subscribed to it stopped updating, without a word.
+  const handleRegenerate = () => {
+    if (!window.confirm(REGENERATE_CONFIRM)) return;
+    void handleGenerate();
+  };
+
   const handleGenerate = async () => {
     const store = await chrome.storage.local.get([
       "CLOUD_TOKEN",
@@ -177,7 +189,7 @@ function renderPanel(el: Element | undefined) {
     const sessionToken = String(store.CLOUD_TOKEN || "");
     const cloudLogin = String(store.CLOUD_LOGIN || "");
     if (!sessionToken || !cloudLogin) {
-      error = "Sign in to Better Intra first (Connect with 42 in the footer).";
+      error = "Sign in to Better Intra first (Sign in with 42 in the footer).";
       await update();
       return;
     }
@@ -201,6 +213,8 @@ function renderPanel(el: Element | undefined) {
       await chrome.storage.local.set({ [TOKEN_KEY]: uuid });
       error = null;
       await update();
+      // fill the new feed now rather than at the next profile visit
+      void maybeSyncCalendar();
     } catch {
       // the existing link, QR and button stay: the message sits above them
       error = "Could not reach the server. Try again.";

@@ -8,14 +8,23 @@
  *    event and its 15-minute reminder;
  *  - a failed events fetch looked like an empty list, so it must never be
  *    mistaken for "no subscriptions" and wipe the feed;
- *  - a subscribed event that moves or is renamed must re-sync.
+ *  - a subscribed event that moves or is renamed must re-sync;
+ *  - the logtime widget and the feed share one events request per visit.
  *
- * One module instance for the whole file: the data listener logtime.ts
- * installs on `document` cannot be removed, so the steps run in order.
+ * A visit is what a page load of your own profile does: main.ts calls
+ * maybeSyncCalendar() and the logtime widget draws the page's
+ * locations_stats. One module instance for the whole file: the data listener
+ * logtime.ts installs on `document` cannot be removed, so the steps run in
+ * order, each one a page load later than the previous one.
  */
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import { initLogtime } from "../src/features/logtime/logtime";
-import { generateIcs, syncCalendarIcs } from "../src/features/calendar/calendar-sync";
+import {
+  generateIcs,
+  maybeSyncCalendar,
+  syncCalendarIcs,
+} from "../src/features/calendar/calendar-sync";
+import { OWN_EVENTS_FRESH_MS } from "../src/features/calendar/own-events";
 
 type EventsReply = "ok" | "500" | "network" | "error-body";
 
@@ -23,6 +32,7 @@ let subscribed = true;
 let eventsReply: EventsReply = "ok";
 const uploads: string[] = [];
 const eventAuth: string[] = [];
+let eventRequests = 0;
 
 const flush = async () => {
   for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 2));
@@ -38,15 +48,26 @@ const talk = () => ({
   is_subscribed: subscribed,
 });
 
-/** One profile visit: the page's locations_stats, then the events fetch. */
-async function visit() {
+/** The page's locations_stats reaching the logtime widget. */
+function sendStats() {
   document.dispatchEvent(
     new CustomEvent("42_LOGTIME_DATA", { detail: { "2026-09-20": "02:00:00" } }),
   );
+}
+
+/** One page load of your own profile: main.ts's feed sync and the widget. */
+async function visit() {
+  // a later page load: the previous visit's events are no longer fresh
+  vi.setSystemTime(Date.now() + OWN_EVENTS_FRESH_MS + 1);
+  const synced = maybeSyncCalendar();
+  sendStats();
+  await synced;
   await flush();
 }
 
 beforeAll(async () => {
+  // Only Date: the memo of the events read is time-based, the waits are not.
+  vi.useFakeTimers({ toFake: ["Date"] });
   (globalThis as any).ResizeObserver = class {
     observe() {}
     disconnect() {}
@@ -61,6 +82,7 @@ beforeAll(async () => {
   (globalThis as any).fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const u = String(url);
     if (u.includes("/users/me/events")) {
+      eventRequests++;
       eventAuth.push(String((init?.headers as Record<string, string>)?.Authorization));
       if (eventsReply === "network") throw new TypeError("Failed to fetch");
       if (eventsReply === "500") return new Response("oops", { status: 500 });
@@ -158,6 +180,33 @@ describe("calendar sync re-uploads a changed event", () => {
     expect(uploads.length).toBe(before); // unchanged: skipped
     await syncCalendarIcs([{ ...base, ...change }]);
     expect(uploads.length).toBe(before + 1);
+  });
+});
+
+describe("one events request per visit", () => {
+  it("is shared by the logtime markers and the feed, whichever starts first", async () => {
+    subscribed = true;
+    eventsReply = "ok";
+    const before = uploads.length;
+
+    eventRequests = 0;
+    await visit(); // both at once
+    expect(eventRequests).toBe(1);
+
+    // the widget first, the feed once that read has landed
+    vi.setSystemTime(Date.now() + OWN_EVENTS_FRESH_MS + 1);
+    eventRequests = 0;
+    sendStats();
+    await flush();
+    await maybeSyncCalendar();
+    expect(eventRequests).toBe(1);
+
+    // and the markers are drawn from that read
+    const root = document.getElementById("logtime-shadow-wrapper")!.shadowRoot!;
+    expect(root.querySelectorAll(".day-cell").length).toBeGreaterThan(0);
+    // the first visit follows the previous describe's events; the second
+    // one finds the feed already up to date
+    expect(uploads.slice(before)).toEqual(["with Talk"]);
   });
 });
 

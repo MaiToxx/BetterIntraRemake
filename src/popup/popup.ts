@@ -6,20 +6,10 @@ import { initAccountSettings } from "../features/account/account.ui.ts";
 // ~300 KB into popup.js and made the popup re-parse it on every open.
 import "../core/styles/style.css";
 import ICON_SVG from "../assets/svg/icon.svg?raw";
-import { UPDATE_KEY, type UpdateInfo } from "../core/update-check";
 import { getEffectiveTheme } from "../core/theme/theme-manager";
 import { WORKER_HOST, WORKER_ORIGIN_PATTERN } from "../core/worker";
-
-function isIntraUrl(url: string | undefined): boolean {
-  if (!url) return false;
-  try {
-    const { hostname, protocol } = new URL(url);
-    if (protocol !== "https:") return false;
-    return hostname === "intra.42.fr" || hostname.endsWith(".intra.42.fr");
-  } catch {
-    return false;
-  }
-}
+import { renderUpdateBanner } from "./update-banner.ts";
+import { isIntraUrl, probeTab, renderTabStatus } from "./tab-status.ts";
 
 function renderPlaceholder(container: HTMLElement) {
   render(
@@ -47,37 +37,6 @@ function renderPlaceholder(container: HTMLElement) {
       </div>
     `,
     container,
-  );
-}
-
-/** Banner shown above the popup content when a newer GitHub release exists. */
-async function renderUpdateBanner(root: HTMLElement) {
-  const store = await chrome.storage.local.get(UPDATE_KEY);
-  const info = store[UPDATE_KEY] as UpdateInfo | undefined;
-  if (!info?.version || !info.url) return;
-  const current = chrome.runtime.getManifest().version;
-  const banner = document.createElement("div");
-  banner.id = "update-banner";
-  root.parentElement?.insertBefore(banner, root);
-  render(
-    html`
-      <div
-        class="flex items-center justify-between gap-3 px-4 py-2 bg-[#00babc] text-white text-sm"
-      >
-        <span>
-          <strong>Better Intra ${info.version}</strong> is available
-          <span class="opacity-80">(you have ${current})</span>
-        </span>
-        <a
-          class="btn btn-xs bg-white text-[#00babc] border-none hover:bg-gray-100 font-bold"
-          href="${info.url}"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Download</a
-        >
-      </div>
-    `,
-    banner,
   );
 }
 
@@ -164,6 +123,12 @@ async function main() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (isIntraUrl(tab?.url)) {
+    // Its own slot, painted when the tab answers: the card does not wait for
+    // the ping, and the ping does not wait for the card.
+    const status = document.createElement("div");
+    status.id = "tab-status";
+    root.parentElement?.insertBefore(status, root);
+    void probeTab(tab).then((s) => renderTabStatus(status, s, tab?.id));
     await initAccountSettings(root);
   } else {
     renderPlaceholder(root);

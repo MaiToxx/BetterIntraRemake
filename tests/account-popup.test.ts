@@ -4,6 +4,18 @@
  * (worker unreachable, session gone, empty backup).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+
+// The real SubtleCrypto digest completes on Node's threadpool, not in a
+// microtask, so the first worker request of the file needs more than the one
+// setTimeout(0) the first-paint cases wait. Only the case that ran first
+// absorbed it (its loop waits for the request): run alone (-t, .only) or in
+// another order, the others still read "Checking...", leaked their request
+// into the next case, and the fake-timer Push case advanced its clock before
+// the abort timer existed. With an async stub every step is a microtask.
+vi.mock("../src/core/crypto.ts", () => ({
+  hashLogin: vi.fn(async (login: string) => `hashed-${login}`),
+}));
+
 import { initAccountSettings } from "../src/features/account/account.ui.ts";
 import { createHandlers } from "../src/features/account/handlers.ts";
 import { createInitialState } from "../src/features/account/state.ts";
@@ -62,7 +74,7 @@ describe("first paint", () => {
     expect(text(root)).toContain("Checking...");
     release[0]();
     await settle();
-    expect(text(root)).toContain("Connected");
+    expect(text(root)).toContain("Online");
     expect(text(root)).toContain("4/10");
     expect(
       (await chrome.storage.local.get("CLOUD_LAST_SESSIONS"))
@@ -91,10 +103,10 @@ describe("first paint", () => {
       calls.every((c) => c.url.pathname === "/api/v1/private/settings"),
     ).toBe(true);
     expect(text(root)).toContain("2/10");
-    expect(text(root)).toContain("Connected");
+    expect(text(root)).toContain("Online");
   });
 
-  it("shows Offline, and keeps the last known count, when the worker does not answer", async () => {
+  it("says the server is unreachable, and keeps the last known count, when the worker does not answer", async () => {
     await chrome.storage.local.set({ CLOUD_LAST_SESSIONS: 3 });
     reply = () => {
       throw new TypeError("Failed to fetch");
@@ -102,18 +114,18 @@ describe("first paint", () => {
     const root = document.createElement("div");
     await initAccountSettings(root);
     await settle();
-    expect(text(root)).toContain("Offline");
+    expect(text(root)).toContain("Unreachable");
     expect(text(root)).toContain("3/10");
     expect(text(root)).not.toContain("Session expired");
   });
 
-  it("offers Reconnect on the same open when the probe gets a 401", async () => {
+  it("offers to sign in again on the same open when the probe gets a 401", async () => {
     reply = () => new Response("Unauthorized", { status: 401 });
     const root = document.createElement("div");
     await initAccountSettings(root);
     await settle();
     expect(text(root)).toContain("Session expired");
-    expect(root.textContent).toContain("Reconnect");
+    expect(root.textContent).toContain("Sign in again");
   });
 
   it("treats a wiped account (404 on the private settings) as an expired session, keeping the token", async () => {

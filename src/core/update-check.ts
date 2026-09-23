@@ -18,8 +18,8 @@ export interface UpdateInfo {
 /**
  * chrome.storage.local key of the last completed check, whatever its answer
  * (UPDATE_KEY only exists while a newer release is known). It is what lets the
- * background skip a check made less than UPDATE_CHECK_INTERVAL_MS ago, and
- * what carries the ETag GitHub answers 304 to.
+ * background skip a check made less than UPDATE_CHECK_INTERVAL_MS ago (minus
+ * UPDATE_CHECK_SLACK_MS), and what carries the ETag GitHub answers 304 to.
  */
 export const UPDATE_CHECK_META_KEY = "UPDATE_CHECK_META";
 
@@ -35,6 +35,17 @@ export interface UpdateCheckMeta {
  */
 export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * How much younger than the interval a check may be and still count as due.
+ * The background alarm fires every UPDATE_CHECK_INTERVAL_MS, but checkedAt is
+ * stamped once GitHub has answered, a few hundred ms after the alarm: at the
+ * next alarm the check was 6 h minus that latency old, still "fresh", so every
+ * other alarm was skipped and the real cadence was 12 h. Far below the
+ * interval, so the start-up check and the alarm a minute later still share
+ * one request.
+ */
+export const UPDATE_CHECK_SLACK_MS = 10 * 60 * 1000;
+
 /** True when the last completed check is recent enough to stand. */
 export function isUpdateCheckFresh(
   meta: unknown,
@@ -43,7 +54,11 @@ export function isUpdateCheckFresh(
   if (!meta || typeof meta !== "object") return false;
   const at = (meta as { checkedAt?: unknown }).checkedAt;
   // a clock set back must not silence the check for years
-  return typeof at === "number" && now - at >= 0 && now - at < UPDATE_CHECK_INTERVAL_MS;
+  return (
+    typeof at === "number" &&
+    now - at >= 0 &&
+    now - at < UPDATE_CHECK_INTERVAL_MS - UPDATE_CHECK_SLACK_MS
+  );
 }
 
 /** Numeric dotted-version compare: <0 if a < b, 0 if equal, >0 if a > b. */

@@ -32,7 +32,25 @@ export interface IntraLoginResult {
   error?: string;
 }
 
-export async function loginWithIntraSession(): Promise<IntraLoginResult> {
+/**
+ * The sign-in running in this page, if any. Every successful POST opens a new
+ * worker session (ten per login, the oldest dropped) and spends a KV write and
+ * a sign-in slot of the rate limiter: a double click, or the popup's
+ * FT_INTRA_LOGIN landing while an in-page button is already signing in, must
+ * share the one request instead of sending a second.
+ */
+let inFlight: Promise<IntraLoginResult> | null = null;
+
+export function loginWithIntraSession(): Promise<IntraLoginResult> {
+  if (!inFlight) {
+    inFlight = signIn().finally(() => {
+      inFlight = null;
+    });
+  }
+  return inFlight;
+}
+
+async function signIn(): Promise<IntraLoginResult> {
   const token = await waitForIntrapyToken(TOKEN_WAIT_MS);
   if (!token) {
     // The token is only issued to the Intra v3 front-end: on the old v2 pages
@@ -49,7 +67,7 @@ export async function loginWithIntraSession(): Promise<IntraLoginResult> {
       ok: false,
       error: onV3
         ? "No Intra session token found on this page yet. Reload the page, wait a few seconds and try again."
-        : "Sign in from the Intra v3 profile page: open https://profile-v3.intra.42.fr/ and click Connect with 42 there.",
+        : "Sign in from the Intra v3 profile page: open https://profile-v3.intra.42.fr/ and sign in from there.",
     };
   }
 
@@ -75,10 +93,23 @@ export async function loginWithIntraSession(): Promise<IntraLoginResult> {
   }
   if (!res.ok) {
     const text = res.message ?? res.text;
-    return {
-      ok: false,
-      error: `Server refused the login (${res.status}): ${text.slice(0, 200)}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`,
-    };
+    const details = `Server refused the login (${res.status}): ${text.slice(0, 200)}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`;
+    // The client already skips an expired JWT, so a 401 means the signature,
+    // a claim or the clock did not check out, and a fresh token usually does.
+    // Say what to do first; the raw answer stays below it for bug reports.
+    if (res.status === 401) {
+      return {
+        ok: false,
+        error: `Intra did not accept this page's session token. Reload the page, then try again.\n${details}`,
+      };
+    }
+    if (res.status === 503) {
+      return {
+        ok: false,
+        error: `42's key server did not answer the Better Intra server. Try again in a minute.\n${details}`,
+      };
+    }
+    return { ok: false, error: details };
   }
 
   const data = (res.json ?? {}) as { token?: string; login?: string };
@@ -103,7 +134,7 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !/^https:\/\/profile-v3\.intra\.42\.fr\//.test(tab.url || "")) {
     // open the v3 profile (the only place the Intra token exists) and let the
-    // user click Connect with 42 in the hub there
+    // user sign in from there
     try {
       await chrome.tabs.create({ url: "https://profile-v3.intra.42.fr/" });
     } catch {
@@ -112,7 +143,7 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
     return {
       ok: false,
       error:
-        "Sign in from the Intra v3 profile page (just opened): click Connect with 42 in the Better Intra hub there.",
+        "Sign in from the Intra v3 profile page (just opened in a new tab): click the Better Intra toolbar icon again there.",
     };
   }
   // The content script stores the session before answering, and the
@@ -134,7 +165,7 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
     return {
       ok: false,
       error:
-        "Better Intra is not running on this tab yet. Reload the Intra page and try again.",
+        "Better Intra is not running on this tab yet (it was installed or updated after the tab was opened). Reload the tab, then try again.",
     };
   }
 }

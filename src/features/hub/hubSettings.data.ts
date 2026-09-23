@@ -35,7 +35,9 @@ export const HUB_INFO = {
   author: __REPO_URL__.replace(/\/[^/]+$/, ""),
   github: __REPO_URL__,
   issues: `${__REPO_URL__}/issues`,
+  privacy: `${__REPO_URL__}/blob/main/PRIVACY.md`,
   upstream: "https://github.com/nicopasla/better-intra",
+  upstreamAuthor: "nicopasla",
   license: "MIT",
 } as const;
 
@@ -50,7 +52,7 @@ export const FEATURE_DEFS = [
     id: "profile",
     name: "Profile",
     icon: USER,
-    desc: "Improves readability and allows local profile/background image customization.",
+    desc: "Improves readability; custom avatar, banner and background images once signed in.",
     cols: 2,
     toggleable: true,
   },
@@ -156,6 +158,10 @@ export type FeatureCardOption = {
   label?: string;
   value?: string;
   color?: string;
+  /** Theme swatches: the page background under the accent `color`. */
+  bg?: string;
+  /** Theme swatches: the mode the theme puts the page in. */
+  mode?: "dark" | "light";
   desc?: string;
   divider?: boolean;
   dependsOn?: ConfigKey;
@@ -239,7 +245,6 @@ export const LIVE_KEYS: ReadonlySet<string> = new Set<string>([
   "CUSTOM_SHOW_OTHERS_LOOK",
   "CLUSTERS_CAMPUS",
   "PERF_DEFER_OFFSCREEN",
-  "PERF_LAZY_IMAGES",
   "PERF_PAUSE_HIDDEN",
   "PERF_PRECONNECT",
 ]);

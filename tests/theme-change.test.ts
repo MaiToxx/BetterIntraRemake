@@ -60,8 +60,9 @@ describe("theme manager", () => {
     await tm.initThemeManager();
     const cb = vi.fn();
     const off = tm.onThemeChange(cb);
+    // Forest is a dark theme: the page follows it, whatever the stored mode
     await fireStorage({ PROFILE_THEME_PRESET: { newValue: "forest" } });
-    expect(cb).toHaveBeenCalledWith({ theme: "light", preset: "forest" });
+    expect(cb).toHaveBeenCalledWith({ theme: "dark", preset: "forest" });
     off();
     await fireStorage({ PROFILE_THEME_PRESET: { newValue: "dark" } });
     expect(cb).toHaveBeenCalledTimes(1);

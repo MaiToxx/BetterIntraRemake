@@ -68,9 +68,38 @@ describe("shortcut editor", () => {
       "Shortcut 2 name",
       "Shortcut 2 address",
       "Shortcut 2 colour",
+      "Move shortcut 2 up",
+      "Move shortcut 2 down",
       "Remove shortcut 2",
     ]);
     for (const el of controls(host)) expect(nameOf(el), el.outerHTML).not.toBe("");
+  });
+
+  it("reorders without a drag: each row moves up or down, not past either end", () => {
+    const links = [
+      { name: "A", url: "https://a.example", color: "#000000", emoji: "" },
+      { name: "B", url: "https://b.example", color: "#000000", emoji: "" },
+      { name: "C", url: "https://c.example", color: "#000000", emoji: "" },
+    ];
+    const moves: [number, number][] = [];
+    render(
+      renderShortcutsSettings(links, () => {}, () => {}, () => {}, () => {}, (from, to) =>
+        moves.push([from, to]),
+      ),
+      host,
+    );
+    const rows = [...host.querySelectorAll(".link-group")];
+    const up = (i: number) => rows[i].querySelector<HTMLButtonElement>("[data-move-up]")!;
+    const down = (i: number) => rows[i].querySelector<HTMLButtonElement>("[data-move-down]")!;
+    expect(up(0).disabled).toBe(true);
+    expect(down(2).disabled).toBe(true);
+    down(0).click();
+    up(2).click();
+    up(0).click(); // disabled: no move
+    expect(moves).toEqual([
+      [0, 1],
+      [2, 1],
+    ]);
   });
 });
 

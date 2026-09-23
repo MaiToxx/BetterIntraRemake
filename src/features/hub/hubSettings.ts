@@ -157,18 +157,25 @@ function offerReload(): void {
   }
 }
 
+/**
+ * Opens the settings hub: the gear's click, and the popup's "Open settings"
+ * (popup-bridge.ts FT_OPEN_HUB).
+ */
+export async function openHub(): Promise<void> {
+  if (extensionWasReloaded()) {
+    offerReload();
+    return;
+  }
+  const { openHubModal } = await import("./hubSettings.ui.ts");
+  const active = await getActiveFeatures();
+  await openHubModal(active);
+}
+
 export function mountGearButton(): void {
   const open = async () => {
-    if (extensionWasReloaded()) {
-      offerReload();
-      return;
-    }
-    void gearClicked();
-    const { openHubModal } = await import("./hubSettings.ui.ts");
-
-    const active = await getActiveFeatures();
-
-    await openHubModal(active);
+    // the easter egg counts gear clicks, not popup opens
+    if (!extensionWasReloaded()) void gearClicked();
+    await openHub();
   };
 
   const sidebar = findSidebarMainGroup();

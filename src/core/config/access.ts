@@ -137,6 +137,16 @@ export function isValidStoredValue(key: string, value: unknown): boolean {
   }
   if (Array.isArray(reference)) {
     if (!Array.isArray(value)) return false;
+    if (key === "CUSTOM_PRESETS") {
+      // each preset is sanitised again when read (presets.ts listPresets)
+      return value.every(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          typeof (item as { name?: unknown }).name === "string",
+      );
+    }
     if (key === "SHORTCUTS_LINKS") {
       return value.every(
         (item) =>

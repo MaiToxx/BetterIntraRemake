@@ -17,6 +17,7 @@ import {
   BACKGROUND_SELECTOR,
   TITLE_BADGE_SELECTOR,
 } from "../../../core/intra/selectors.ts";
+import { injectIntraShellFix } from "../../../core/intra/shell-fix.ts";
 import { applyThemeToProfileCard } from "./profile-card.ts";
 import { applyPublicLogtimeSettings, initLogtime } from "../../logtime/logtime.ts";
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
@@ -233,6 +234,9 @@ const AVATAR_PENDING_STYLE_ID = "ft-avatar-pending-style";
  * document_start, so the sheet goes on <html> if it has to.
  */
 export const injectAvatarPendingRule = (): void => {
+  // Rides along: main.ts calls this at document_start on the profile origin
+  // whatever the feature toggles, which is what the shell fix needs too.
+  injectIntraShellFix();
   if (document.getElementById(AVATAR_PENDING_STYLE_ID)) return;
   const host = document.head || document.documentElement;
   if (!host) return;

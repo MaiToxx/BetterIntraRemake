@@ -109,29 +109,35 @@ No single one is over 16 KB. The rest is feature code.
 
 ## "Lighten the Intra" (Advanced tab)
 
-These four settings are about the **Intra page**, not about this extension.
+These three settings are about the **Intra page**, not about this extension.
 They cannot shrink `content.js`, which loads before any setting is read; what
 they do is remove work the browser would otherwise do for the page itself. All
-four are on by default and each can be turned off on its own.
+three are on by default and each can be turned off on its own.
 
 - **Skip off-screen content** — `content-visibility: auto` on the repeated rows
-  of the long cards (projects, achievements, evaluations, logtime months), so
+  of the long cards (projects, achievements, logtime months), so
   the browser stops laying out and painting what is scrolled out of sight. On a
   synthetic page of 400 rows, 90 % of the body's elements sit inside a deferred
   block. Every target is inside a fixed-height `md:h-96` card with its own
   scrollbar, so a wrong size estimate can only move that card's scrollbar, never
   the page. Guarded by `@supports`, so Firefox before 125 simply skips it.
-- **Load images when needed** — adds `loading="lazy"` and `decoding="async"` to
-  the page's own images. The honest part: `loading` only counts for images whose
-  fetch has not started, so the win is on everything React mounts after the
-  first paint (route changes, lists that grow as you scroll), while
-  `decoding="async"` always moves the decode off the main thread.
+  The evaluation rows are left out on purpose: each hosts an inline
+  `position: fixed` tooltip that containment would clip (1.12.1).
 - **Pause when the tab is hidden** — stops the page's CSS animations and
   transitions while you are looking at another tab. It cannot pause an animated
   GIF; CSS has no say over those.
 - **Connect early to the image server** — a `preconnect` to `cdn.intra.42.fr`,
   which saves the DNS, TCP and TLS round trips on the first avatar, typically
   100 to 300 ms on a cold connection.
+
+There used to be a fourth, **Load images when needed**, which added
+`loading="lazy"` to the page's images once they were in the document. It never
+deferred a download: the browser decides lazy or eager when the request starts,
+and React sets `src` on an image before inserting it, so the request is already
+under way when any observer sees the element. Chrome 153 and Firefox 156
+fetched every late image with and without it; the attribute only works when it
+is set before `src`. It was removed in 1.14 together with its document-wide
+observer and the layout read each pass cost. The stored key is kept and ignored.
 
 The extension also does less itself than it used to: the profile pass ignores
 bursts of DOM changes that only contain its own writes, the polling timers are

@@ -57,6 +57,10 @@ const worker = () => calls.filter((c) => c.startsWith("https://worker.test"));
 /** Requests held back until release() is called. */
 let held: (() => void)[] = [];
 let holdIntrapy = false;
+/** Logins whose intrapy requests are held even when holdIntrapy is off. */
+const holdLogins = new Set<string>();
+/** Logins /users answers with a location for. */
+const online = new Set<string>();
 
 async function mount(): Promise<ShadowRoot> {
   vi.resetModules();
@@ -112,6 +116,9 @@ beforeEach(async () => {
   calls.length = 0;
   held = [];
   holdIntrapy = false;
+  holdLogins.clear();
+  online.clear();
+  online.add("alice");
   listeners.length = 0;
   (chrome.storage as unknown as Record<string, unknown>).onChanged = {
     addListener: (fn: Listener) => listeners.push(fn),
@@ -123,16 +130,17 @@ beforeEach(async () => {
       if (url.startsWith("https://worker.test")) {
         return { ok: true, status: 200, json: async () => ({ visuals: {} }) };
       }
-      if (holdIntrapy) await new Promise<void>((r) => held.push(r));
       const m = url.match(/\/users\/([^/]+)(\/.*)?$/);
       const login = m ? decodeURIComponent(m[1]) : "";
+      if (holdIntrapy || holdLogins.has(login))
+        await new Promise<void>((r) => held.push(r));
       const body =
         m?.[2] === "/cursus"
           ? [{ slug: "42cursus", level: 4.5, grade: "Learner" }]
           : {
               displayname: login,
               profile_picture: `https://cdn.intra.42.fr/${login}.jpg`,
-              location: login === "alice" ? "e1r1p1" : null,
+              location: online.has(login) ? "e1r1p1" : null,
             };
       return { ok: true, status: 200, json: async () => body };
     }),
@@ -184,6 +192,9 @@ describe("the closed widget", () => {
     input.value = "x";
     input.dispatchEvent(new Event("input", { bubbles: true }));
     expect(debug).not.toHaveBeenCalled();
+    // The open panel's load must not outlive the test: held by the next
+    // test's fetch stub, it wrote its rows over a later test's cache.
+    await settled(root);
   });
 });
 
@@ -221,6 +232,28 @@ describe("the stale cache", () => {
   });
 });
 
+describe("custom avatars turned back on", () => {
+  it("the panel loads them although the cache is fresh", async () => {
+    await chrome.storage.local.set({
+      SHOW_CUSTOM_AVATARS_IN_FRIENDS: true,
+      FRIENDS_DATA_CACHE: {
+        data: [row("alice"), row("bob")],
+        timestamp: Date.now(),
+        logins: ["alice", "bob"],
+        full: true,
+        visuals: false,
+      },
+    });
+    const root = await mount();
+    // the badge is still served from that cache
+    expect(badge(root)).toBe("1");
+    expect(calls).toHaveLength(0);
+    fab(root).click();
+    await settled(root);
+    expect(worker()).toHaveLength(1);
+  });
+});
+
 describe("the saved list changes outside the widget", () => {
   const change = (list: string[]) =>
     listeners.forEach((fn) =>
@@ -235,6 +268,50 @@ describe("the saved list changes outside the widget", () => {
     change(["alice", "bob", "carol"]);
     await vi.waitFor(() => expect(rowLogins(root)).toContain("carol"));
     expect(intra("/users/carol")).toHaveLength(1);
+  });
+
+  it("loads a friend saved while the first load runs, badge included", async () => {
+    online.add("carol");
+    holdIntrapy = true;
+    vi.resetModules();
+    const { injectFriendsWidget } = await import("../src/features/friends/friends.ui");
+    const mounted = injectFriendsWidget();
+    await vi.waitFor(() => expect(held.length).toBeGreaterThan(0), { timeout: 8_000 });
+    // the Add friend button on a profile, or another tab, during that load
+    await chrome.storage.local.set({ FRIENDS_LIST: JSON.stringify(["alice", "bob", "carol"]) });
+    change(["alice", "bob", "carol"]);
+    holdIntrapy = false;
+    held.forEach((release) => release());
+    await mounted;
+    const root = shadow();
+    await vi.waitFor(() => expect(badge(root)).toBe("2"), { timeout: 8_000 });
+    expect(intra("/users/carol")).toHaveLength(1);
+  });
+
+  it("keeps a friend added in the widget while a Refresh runs", async () => {
+    const root = await mount();
+    fab(root).click();
+    await settled(root);
+    holdLogins.add("alice");
+    holdLogins.add("bob");
+    root.querySelector<HTMLButtonElement>('button[aria-label="Refresh friends"]')!.click();
+    await vi.waitFor(() => expect(held.length).toBeGreaterThan(0), { timeout: 8_000 });
+
+    root.querySelector<HTMLButtonElement>('button[aria-label="Add friend"]')!.click();
+    const input = root.querySelector<HTMLInputElement>('input[type="text"]')!;
+    input.value = "dave";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
+    );
+    await vi.waitFor(() => expect(rowLogins(root)).toContain("dave"), { timeout: 8_000 });
+
+    // the Refresh ends with an answer built from the list before dave
+    holdLogins.clear();
+    held.forEach((release) => release());
+    await settled(root);
+    expect(rowLogins(root)).toEqual(expect.arrayContaining(["alice", "bob", "dave"]));
+    expect(intra("/users/dave")).toHaveLength(1);
   });
 
   it("drops a friend removed elsewhere without a fetch, and ignores a list it already shows", async () => {

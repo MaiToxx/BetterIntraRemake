@@ -9,12 +9,19 @@
  *      see PERF_NEVER_TARGETS) get
  *      `content-visibility: auto`, so the browser skips layout, style and
  *      paint for the ones that are off screen.
- *   2. PERF_LAZY_IMAGES - the page's own <img> elements that sit outside the
- *      viewport get `loading="lazy"` / `decoding="async"`.
- *   3. PERF_PAUSE_HIDDEN - a hidden tab stops burning CPU on animations and
+ *   2. PERF_PAUSE_HIDDEN - a hidden tab stops burning CPU on animations and
  *      transitions nobody can see.
- *   4. PERF_PRECONNECT - the avatar CDN connection is opened before the page
+ *   3. PERF_PRECONNECT - the avatar CDN connection is opened before the page
  *      asks for the first avatar, so that request does not pay DNS + TLS.
+ *
+ * There is no image pass any more (PERF_LAZY_IMAGES, 1.10 to 1.13). It added
+ * `loading="lazy"` to the page's <img> elements once they were in the
+ * document, but the browser picks lazy or eager when the request starts, which
+ * is when React sets `src` on the element, before it is inserted and before
+ * any MutationObserver callback. Measured in Chrome 153 and Firefox 156: every
+ * image marked that way was fetched anyway. What was left was a document-wide
+ * observer and a forced layout per pass. The key stays in the schema so stored
+ * settings and backups remain valid; nothing reads it.
  *
  * WHY it is written this way:
  *   - the stylesheet is built from the constants in this file only. No user
@@ -32,10 +39,9 @@
 import { getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
 import { waitForElement } from "../../core/dom/dom-wait.ts";
 
-/** The four settings of the "Lighten the Intra" block, in one storage read. */
+/** The three settings of the "Lighten the Intra" block, in one storage read. */
 export const PERF_KEYS = [
   "PERF_DEFER_OFFSCREEN",
-  "PERF_LAZY_IMAGES",
   "PERF_PAUSE_HIDDEN",
   "PERF_PRECONNECT",
 ] as const;
@@ -48,8 +54,6 @@ export const HIDDEN_CLASS = "ft-perf-hidden";
 export const PERF_STYLE_ID = "better-intra-perf";
 /** Marks the <link> elements we own, so turning the setting off removes ours only. */
 const PRECONNECT_ATTR = "data-ft-perf-preconnect";
-/** Marks an <img> we looked at and deliberately left eager (it was on screen). */
-const EAGER_ATTR = "data-ft-perf";
 
 /**
  * A block of the Intra that repeats enough to be worth deferring.
@@ -133,32 +137,6 @@ export const PERF_SHADOW_TARGETS: readonly PerfTarget[] = [
 
 /** The only image origin of the Intra we can confirm from our own code. */
 export const PRECONNECT_ORIGINS = ["https://cdn.intra.42.fr"] as const;
-
-/** Largest number of <img> elements one pass is allowed to look at. */
-export const LAZY_BUDGET = 150;
-/** An image this close to the viewport is left eager: the user is about to see it. */
-const EAGER_MARGIN = 200;
-
-/**
- * Our own widgets, by the ids they already use. Their images are ours to
- * schedule (the friends widget and the cluster map fetch avatars on purpose),
- * so the lazy pass never touches them.
- */
-const OUR_WIDGET_SELECTOR = [
-  '[id^="ft-"]',
-  '[id^="better-intra"]',
-  '[id$="-shadow-host"]',
-  '[id$="-shadow-wrapper"]',
-  '[id$="-widget-host"]',
-  '[id$="-modal-host"]',
-  "#cluster-li-container",
-  "#cluster-map-dialog",
-  "#hub-dialog",
-  "#update-banner",
-  "#permission-banner",
-  "#seat-overlay",
-  "[data-ft-nav-avatar]",
-].join(", ");
 
 /* ------------------------------------------------------------------ CSS -- */
 
@@ -374,86 +352,6 @@ function applyHiddenTab(enabled: boolean): void {
   setHiddenClass(false);
 }
 
-/* --------------------------------------------------------- lazy images -- */
-
-/**
- * Give `loading="lazy"` / `decoding="async"` to the page's own images that are
- * out of sight, and return how many were changed.
- *
- * Two phases on purpose. Reading a rect after writing an attribute forces the
- * browser to re-run layout, so 300 images would mean 300 layouts. Here every
- * rect is read first (one layout) and every attribute written after.
- *
- * An image with a zero-sized box (display:none, never laid out) counts as out
- * of sight: it is exactly the kind the page does not need yet.
- */
-export function lazifyImages(
-  root: ParentNode | null = document.body,
-  budget: number = LAZY_BUDGET,
-): number {
-  if (!root || budget <= 0) return 0;
-
-  const all = root.querySelectorAll<HTMLImageElement>(
-    `img:not([loading]):not([${EAGER_ATTR}])`,
-  );
-
-  const candidates: HTMLImageElement[] = [];
-  for (const img of all) {
-    if (candidates.length >= budget) break;
-    if (typeof ShadowRoot !== "undefined" && img.getRootNode() instanceof ShadowRoot) continue;
-    if (img.closest(OUR_WIDGET_SELECTOR)) continue;
-    candidates.push(img);
-  }
-  if (candidates.length === 0) return 0;
-
-  // phase 1: read only
-  const rects = candidates.map((img) => img.getBoundingClientRect());
-  const viewport =
-    window.innerHeight || document.documentElement?.clientHeight || 0;
-
-  // phase 2: write only
-  let changed = 0;
-  for (let i = 0; i < candidates.length; i++) {
-    const img = candidates[i];
-    const r = rects[i];
-    const hasBox = r.width > 0 || r.height > 0;
-    const visible =
-      hasBox && r.bottom > -EAGER_MARGIN && r.top < viewport + EAGER_MARGIN;
-    if (visible) {
-      // remember the verdict so the next pass does not measure it again
-      img.setAttribute(EAGER_ATTR, "eager");
-      continue;
-    }
-    img.setAttribute("loading", "lazy");
-    if (!img.hasAttribute("decoding")) img.setAttribute("decoding", "async");
-    changed++;
-  }
-  return changed;
-}
-
-let imageObserver: MutationObserver | null = null;
-let passScheduled = false;
-
-/** Test seam: the live observer, or null when the setting is off. */
-export function getImageObserver(): MutationObserver | null {
-  return imageObserver;
-}
-
-function schedulePass(): void {
-  if (passScheduled) return;
-  passScheduled = true;
-  const run = () => {
-    passScheduled = false;
-    lazifyImages(document.body);
-  };
-  // Idle time, but never starved: a timeout keeps it bounded on a busy page.
-  if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(run, { timeout: 500 });
-  } else {
-    setTimeout(run, 100);
-  }
-}
-
 /* ------------------------------------------------------------------ init -- */
 
 /** The content script is declared for *.intra.42.fr only; belt and braces. */
@@ -491,55 +389,8 @@ export async function initPerfStyles(): Promise<void> {
   });
 }
 
-/**
- * The image pass and its observer. Called after DOMContentLoaded: before that
- * there is nothing to lazify.
- */
-export async function initPerfObservers(): Promise<void> {
-  if (!isIntraPage()) return;
-  if (imageObserver) return; // a second init must not install a second observer
-
-  const { PERF_LAZY_IMAGES } = await getConfigMany(["PERF_LAZY_IMAGES"]);
-  if (!PERF_LAZY_IMAGES) return;
-  if (imageObserver) return; // another call won the await
-
-  lazifyImages(document.body);
-
-  const observer = new MutationObserver(() => schedulePass());
-  imageObserver = observer;
-  if (document.body) {
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  // The React app settles long before this; keeping a subtree observer alive
-  // for the life of the tab would cost more than the feature saves. Same
-  // budget as the profile observer (see features/profile/profile.ts).
-  const budgetMs = location.pathname === "/" ? 30000 : 10000;
-  setTimeout(() => {
-    if (imageObserver === observer) {
-      observer.disconnect();
-      imageObserver = null;
-    }
-  }, budgetMs);
-  // Only the observer: the stylesheet and the hidden-tab listener must survive
-  // a bfcache round-trip, where the same page comes back without re-running.
-  window.addEventListener(
-    "pagehide",
-    () => {
-      if (imageObserver === observer) {
-        observer.disconnect();
-        imageObserver = null;
-      }
-    },
-    { once: true },
-  );
-}
-
-/** Undo everything this feature installed. Used on pagehide and by the tests. */
+/** Undo the listener and the pending shadow-root wait. Used by the tests. */
 export function stopPerformance(): void {
-  imageObserver?.disconnect();
-  imageObserver = null;
-  passScheduled = false;
   // A pending host wait resolves to nothing (dom-wait stops on pagehide).
   shadowGen++;
   applyHiddenTab(false);

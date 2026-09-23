@@ -28,3 +28,6 @@ declare const __REPO_RELEASES_API__: string;
 declare const __WORKER_URL__: string;
 
 declare const __AUTH_MODE__: string;
+
+/** True only in the Chrome Web Store package (CHROME_STORE=1): see vite.config.ts. */
+declare const __STORE_BUILD__: boolean;

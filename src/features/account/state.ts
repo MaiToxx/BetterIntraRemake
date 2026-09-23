@@ -1,3 +1,5 @@
+import type { PushFailure } from "./account.ts";
+
 export interface ButtonState {
   loading: boolean;
   success: boolean;
@@ -19,6 +21,16 @@ export interface AccountState {
   activeSessions: number | null;
   cloud: CloudStatus;
   needsReconnect: boolean;
+  /** A sign-in started from this popup has not ended yet. */
+  signingIn: boolean;
+  /** Why the last sign-in from this popup failed, shown under its button. */
+  loginError: string;
+  /** SIGNIN_DISCLOSURE_ACCEPTED, read from storage on every render. */
+  disclosureAccepted: boolean;
+  /** The sign-in notice is on screen in place of the card. */
+  disclosureOpen: boolean;
+  /** Why the last push failed (any caller), until one succeeds. */
+  pushFailure: PushFailure | null;
   buttons: {
     push: ButtonState;
     pull: ButtonState;
@@ -32,6 +44,11 @@ export function createInitialState(): AccountState {
     activeSessions: null,
     cloud: "checking",
     needsReconnect: false,
+    signingIn: false,
+    loginError: "",
+    disclosureAccepted: false,
+    disclosureOpen: false,
+    pushFailure: null,
     buttons: {
       push: {
         loading: false,

@@ -6,6 +6,7 @@
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import { PUBLIC_PROFILE_SETTINGS } from "./profile-public.ts";
+import { THEME_OPTIONS } from "./theme-options.ts";
 
 export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
   {
@@ -16,52 +17,12 @@ export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "profile",
     key: "PROFILE_THEME_PRESET",
-    label: "Theme accent",
-    desc: "Change the accent color used across the intranet.",
+    label: "Theme",
+    desc: "Colours of the whole intranet: backgrounds, cards, text and accent. Visitors of your profile see it too, unless you turn off \"Publish my look\" (Customize tab).",
     kind: "theme-preset",
     fullWidth: true,
     defaultValue: CONFIG_DEFAULT.PROFILE_THEME_PRESET,
-    options: [
-      { label: "Dark" },
-      { label: "Default Dark", value: "dark", color: "199 89% 48%" },
-      { label: "Neon", value: "neon", color: "324 100% 50%" },
-      { label: "Synthwave", value: "synthwave", color: "327 92% 68%" },
-      { label: "Forest", value: "forest", color: "141 71% 42%" },
-      { label: "Halloween", value: "halloween", color: "34 100% 50%" },
-      { label: "Dracula", value: "dracula", color: "326 100% 74%" },
-      { label: "Night", value: "night", color: "199 93% 60%" },
-      { label: "Sunset", value: "sunset", color: "16 100% 68%" },
-      { label: "Luxury", value: "luxury", color: "0 0% 100%" },
-      { label: "Cyberpunk", value: "cyberpunk", color: "341 100% 70%" },
-      { label: "Arthur", value: "dim", color: "108 66% 73%" },
-      { label: "Black", value: "black", color: "0 0% 23%" },
-      { label: "Aubergine", value: "coffee", color: "30 66% 58%" },
-      { label: "Aqua", value: "aqua", color: "182 90% 51%" },
-      { divider: true },
-      { label: "Light" },
-      { label: "Default Light", value: "light", color: "181 100% 37%" },
-      { label: "Cupcake", value: "cupcake", color: "183 47% 59%" },
-      { label: "Bumblebee", value: "bumblebee", color: "45 100% 44%" },
-      { label: "Emerald", value: "emerald", color: "141 50% 60%" },
-      { label: "Corporate", value: "corporate", color: "223 49% 53%" },
-      { label: "Retro", value: "retro", color: "10 70% 62%" },
-      { label: "Valentine", value: "valentine", color: "346 79% 65%" },
-      { label: "Garden", value: "garden", color: "0 65% 54%" },
-      { label: "Lofi", value: "lofi", color: "0 0% 16%" },
-      { label: "Pastel", value: "pastel", color: "295 47% 82%" },
-      { label: "Fantasy", value: "fantasy", color: "285 60% 40%" },
-      { label: "Wireframe", value: "wireframe", color: "0 0% 87%" },
-      { label: "Cmyk", value: "cmyk", color: "220 62% 55%" },
-      { label: "Autumn", value: "autumn", color: "11 56% 35%" },
-      { label: "Acid", value: "acid", color: "319 57% 51%" },
-      { label: "Lemonade", value: "lemonade", color: "106 50% 42%" },
-      { label: "Winter", value: "winter", color: "226 59% 52%" },
-      { label: "Nord", value: "nord", color: "211 37% 54%" },
-      { label: "Caramellatte", value: "caramellatte", color: "0 0% 0%" },
-      { label: "Silk", value: "silk", color: "230 21% 23%" },
-      { label: "Soap", value: "soap", color: "4 68% 66%" },
-      { label: "Citrus", value: "citrus", color: "51 100% 50%" },
-    ],
+    options: THEME_OPTIONS,
   },
   {
     feature: "profile",

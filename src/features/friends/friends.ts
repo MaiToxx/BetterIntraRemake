@@ -246,23 +246,32 @@ export async function loadFriendsData(
     return { friends: [], ok: true, fetchedAt: Date.now(), detail: "full" };
   }
 
+  // Only the oauth branch asks the worker for the friends, with the Better
+  // Intra session. The intra branch reads the Intra with the page's own
+  // session and the public visuals route, which needs no sign-in: a student
+  // who never signed in, or whose Better Intra session expired, still gets
+  // the list.
   const token = await getConfig("CLOUD_TOKEN");
   const cloudLogin = await getConfig("CLOUD_LOGIN");
-  if (!token || !cloudLogin)
+  if (AUTH_MODE !== "intra" && (!token || !cloudLogin))
     return { friends: [], ok: false, fetchedAt: null, detail };
 
+  // The setting decides what a full cache must hold, whatever this request
+  // is: the closed widget's "online" load runs first on every page, and if
+  // it took a cache written with custom avatars off as full, the panel opened
+  // next skipped its load and showed the 42 pictures until the cache expired.
+  const visualsOn =
+    AUTH_MODE === "intra" &&
+    !!(await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"));
   // Only the open panel shows custom avatars: the closed widget and a user
   // who turned them off never cost the worker a request.
-  const wantVisuals =
-    AUTH_MODE === "intra" &&
-    detail === "full" &&
-    !!(await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"));
+  const wantVisuals = visualsOn && detail === "full";
 
   const cached = await getCachedData();
   /** What the cached rows, if any, can stand for. */
   const cachedDetail: FriendsDetail =
     !cached ||
-    (cached.full !== false && (!wantVisuals || cached.visuals !== false))
+    (cached.full !== false && (!visualsOn || cached.visuals !== false))
       ? "full"
       : "online";
   if (
@@ -360,9 +369,11 @@ export type FriendCheck =
 
 export async function checkFriendLogin(login: string): Promise<FriendCheck> {
   const normalized = login.trim().toLowerCase();
+  // Same split as loadFriendsData: only the oauth check needs the sign-in.
   const token = await getConfig("CLOUD_TOKEN");
   const cloudLogin = await getConfig("CLOUD_LOGIN");
-  if (!token || !cloudLogin) return { status: "error" };
+  if (AUTH_MODE !== "intra" && (!token || !cloudLogin))
+    return { status: "error" };
 
   if (AUTH_MODE === "intra") {
     const result = await fetchFriendsIntraResult([normalized]);

@@ -6,7 +6,9 @@ import "./core/lifecycle/stale-instance.ts";
 import { initLogtime } from "./features/logtime/logtime.ts";
 import { initClusters } from "./features/clusters/clusters.ts";
 import { initProfile } from "./features/profile/profile.ts";
-import { initHubSettings } from "./features/hub/hubSettings.ts";
+import { initHubSettings, openHub } from "./features/hub/hubSettings.ts";
+import { answerPopupMessage } from "./features/account/popup-bridge.ts";
+import { injectIntraShellFix } from "./core/intra/shell-fix.ts";
 import { initShortcuts } from "./features/shortcuts/shortcuts.ts";
 import { initSubjectTracker } from "./features/subjects/tracker.ts";
 import {
@@ -26,42 +28,27 @@ import { AVATAR_SELECTOR } from "./core/intra/selectors.ts";
 import { initAnnouncementBanner } from "./features/announcement/announcement.ts";
 import { consumeAuthFlow } from "./features/account/auth-callback.ts";
 import { initCustomize } from "./features/customize/customize.ts";
-import {
-  initPerfObservers,
-  initPerfStyles,
-} from "./features/performance/perf.ts";
+import { publishDefaultLookOnce } from "./features/customize/publish.ts";
+import { initPerfStyles } from "./features/performance/perf.ts";
 import { initEasterEggs } from "./features/eggs/eggs.ts";
-import {
-  INTRA_LOGIN_MESSAGE,
-  loginWithIntraSession,
-} from "./features/account/intra-login.ts";
+import { maybeSyncCalendar } from "./features/calendar/calendar-sync.ts";
 
-// The toolbar popup cannot see the Intra session token: it asks this page.
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (message?.type === INTRA_LOGIN_MESSAGE) {
-    loginWithIntraSession()
-      .then(sendResponse)
-      .catch((e) => sendResponse({ ok: false, error: String(e) }));
-    return true;
-  }
-  return undefined;
-});
+// The toolbar popup asks this page: sign in with its Intra token (the popup
+// cannot see it), "is Better Intra running here?", and open the hub.
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) =>
+  answerPopupMessage(message, sendResponse, { openHub }),
+);
 import { html, render } from "lit-html";
 
 initThemeManager();
+// the Intra's transparent fixed column eats taps on phones, on every v3 app
+injectIntraShellFix();
 // user look & feel tweaks (accent, font, size, custom CSS): always on, like the theme
 void initCustomize();
+void publishDefaultLookOnce();
 // "Lighten the Intra": the stylesheet and the preconnect hints have to be in
 // place before the React app paints, so they go here with the other styles.
-// The image pass needs a <body> to walk, so it waits for DOMContentLoaded.
 void initPerfStyles();
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => void initPerfObservers(), {
-    once: true,
-  });
-} else {
-  void initPerfObservers();
-}
 void initEasterEggs();
 void initAnnouncementBanner();
 initGlobalTooltips(getIsLight);
@@ -219,6 +206,9 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
         // The subject tracker always runs: badges/data are local. Sharing
         // with the collaborative registry is an opt-in setting instead.
         void initSubjectTracker();
+        // The .ics feed follows your own profile visits, not the Logtime
+        // switch: it returns at once on other pages and without a link.
+        void maybeSyncCalendar();
 
         // Hub settings are always initialized for the settings page.
         // initHubSettings returns the active feature list.

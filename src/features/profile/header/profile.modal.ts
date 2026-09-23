@@ -29,9 +29,23 @@ import {
   type ProfileTab,
 } from "./profile-modal-form.ts";
 import { renderTabPanels } from "./profile-modal-tabs.ts";
+import { IMAGE_SLOTS } from "./image-upload.ts";
+import {
+  createPendingUploads,
+  SLOT_LABELS,
+  type PendingUploads,
+} from "./pending-uploads.ts";
+import { deleteUnusedUploads } from "./upload-cleanup.ts";
+import { clearLocalPreview, paintLocalPreview } from "./local-preview.ts";
 import FORTY_TWO_SVG from "../../../assets/svg/42_Logo.svg?raw";
 
 let activeTab: ProfileTab = "avatar";
+
+/** The Save button's state: busy while the picked images upload and the look is stored. */
+interface SaveUi {
+  saving: boolean;
+  saveError: string;
+}
 
 function renderPanelContent(
   state: FormState,
@@ -43,6 +57,8 @@ function renderPanelContent(
   needsReconnect: boolean,
   onConnect: () => void,
   onTabChange: (tab: ProfileTab) => void,
+  uploads: PendingUploads,
+  ui: SaveUi,
 ) {
   const tabItems: { id: ProfileTab; label: string }[] = [
     { id: "avatar", label: "Avatar" },
@@ -51,7 +67,13 @@ function renderPanelContent(
     { id: "badges", label: "Badges" },
   ];
 
-  const panels = renderTabPanels(state, onFormUpdate, history, onClearHistory);
+  const panels = renderTabPanels(
+    state,
+    onFormUpdate,
+    history,
+    onClearHistory,
+    uploads,
+  );
 
   return html`
     ${sharedStylesLink()}
@@ -67,10 +89,15 @@ function renderPanelContent(
           type="button"
           id="profile-reset-btn"
           class="btn btn-outline btn-error btn-sm"
+          ?disabled="${ui.saving}"
         >
           Reset
         </button>
-        <button class="btn btn-circle btn-ghost btn-sm" id="profile-close-btn">
+        <button
+          class="btn btn-circle btn-ghost btn-sm"
+          id="profile-close-btn"
+          ?disabled="${ui.saving}"
+        >
           ✕
         </button>
       </div>
@@ -123,15 +150,22 @@ function renderPanelContent(
               role="tabpanel"
               style="min-height: 260px;"
               class="flex flex-col"
+              ?inert="${ui.saving}"
             >
               ${panels[activeTab]}
             </div>
 
+            ${ui.saveError
+              ? html`<p class="text-error text-sm" role="alert" data-save-error>
+                  ${ui.saveError}
+                </p>`
+              : ""}
             <button
               id="profile-save"
               class="btn btn-success font-bold shrink-0"
+              ?disabled="${ui.saving || uploads.reading}"
             >
-              Save Changes
+              ${ui.saving ? "Saving…" : "Save Changes"}
             </button>
           `}
     </div>
@@ -162,9 +196,11 @@ export const createSettingsModal = async (
   });
   Object.assign(dialog.style, {
     marginTop: "auto",
-    marginBottom: "5vh",
+    // dvh: with the browser's toolbar at the bottom (Firefox for Android) a
+    // vh-sized dialog could put Save under it.
+    marginBottom: "5dvh",
     width: "min(820px, calc(100dvw - 1.5rem))",
-    maxHeight: "92vh",
+    maxHeight: "92dvh",
     borderRadius: "1.5rem",
     overflowY: "auto",
     padding: "0",
@@ -217,12 +253,19 @@ export const createSettingsModal = async (
   // counts. dialog.close() rather than `close`, which is declared further
   // down: the backdrop can be clicked while the settings are still loading.
   let downOnBackdrop = false;
+  // While Save uploads and stores, the editor stays open: the X is disabled,
+  // and the backdrop and Escape are ignored. A close that still happens (a
+  // second Escape in Chrome) drops the results: see uploads.closed below.
+  let saving = false;
   dialog.addEventListener("pointerdown", (e) => {
     downOnBackdrop = e.target === dialog;
   });
   dialog.addEventListener("click", (e) => {
-    if (downOnBackdrop && e.target === dialog) dialog.close();
+    if (downOnBackdrop && e.target === dialog && !saving) dialog.close();
     downOnBackdrop = false;
+  });
+  dialog.addEventListener("cancel", (e) => {
+    if (saving) e.preventDefault();
   });
 
   if (isConnected) {
@@ -272,8 +315,19 @@ export const createSettingsModal = async (
   // too, and repainting then would put the old look over the new one.
   let dirty = false;
   let committed = false;
+  let saveError = "";
+  const savedUrls = [saved.avatar, saved.banner, saved.background];
+  const uploads = createPendingUploads(() => handleFormUpdate({}));
   dialog.addEventListener("close", () => {
+    uploads.close();
+    clearLocalPreview();
     if (dirty && !committed) liveApplyBannerBg(saved);
+    // An image uploaded by a Save that did not finish (another slot failed,
+    // then Cancel) is public but used by nothing. While a Save is still
+    // running, it cleans up itself once its upload lands.
+    if (!committed && !saving && uploads.uploaded.size > 0) {
+      void deleteUnusedUploads([], uploads.uploaded, savedUrls);
+    }
   });
 
   const imgHistory = {
@@ -292,13 +346,16 @@ export const createSettingsModal = async (
       imgHistory.background,
     );
 
-  const close = () => {
+  const closeDialog = () => {
     dialog.close();
     dialog.remove();
   };
+  const close = () => {
+    if (!saving) closeDialog();
+  };
 
   const reset = async () => {
-    if (!confirm("Reset visuals?")) return;
+    if (saving || !confirm("Reset visuals?")) return;
     await chrome.storage.local.remove([
       "PROFILE_IMAGE_URL",
       "PROFILE_BANNER_URL",
@@ -327,7 +384,10 @@ export const createSettingsModal = async (
     } catch (e) {
       console.error("Failed to sync reset:", e);
     }
-    close();
+    // After the push (the check reads the cloud copy back), awaited: the
+    // reload would cut the requests off.
+    await deleteUnusedUploads(savedUrls, uploads.uploaded, []);
+    closeDialog();
     location.reload();
   };
 
@@ -339,9 +399,12 @@ export const createSettingsModal = async (
   };
 
   const handleFormUpdate = (updates: Partial<FormState>) => {
+    // A new value for an image field (typed, picked from the history, Color
+    // mode) replaces the file waiting for Save.
+    for (const slot of IMAGE_SLOTS) if (slot in updates) uploads.discard(slot);
     Object.assign(state, updates);
     dirty = true;
-    liveApplyBannerBg(state);
+    liveApplyBannerBg(state, uploads.previews());
     rerender();
   };
 
@@ -374,6 +437,8 @@ export const createSettingsModal = async (
           activeTab = tab;
           rerender();
         },
+        uploads,
+        { saving, saveError },
       ),
       shadow,
     );
@@ -387,6 +452,29 @@ export const createSettingsModal = async (
     shadow
       .querySelector("#profile-save")
       ?.addEventListener("click", async () => {
+        // A file still being read would be left out of this Save.
+        if (saving || uploads.closed || uploads.reading) return;
+        saving = true;
+        saveError = "";
+        rerender();
+
+        // The picked images go up first: the look is stored only with the
+        // URLs the worker answered, and a failure leaves everything as it was.
+        const upload = await uploads.uploadAll();
+        if (!upload.ok) {
+          if (upload.closed) {
+            saving = false;
+            void deleteUnusedUploads([], uploads.uploaded, savedUrls);
+            return;
+          }
+          saving = false;
+          saveError = `${SLOT_LABELS[upload.slot]}: ${upload.error}`;
+          rerender();
+          return;
+        }
+        Object.assign(state, upload.urls);
+        uploads.clear();
+
         const batchData: Record<string, string | number | boolean | string[]> =
           {};
         const keysToRemove: string[] = [];
@@ -483,12 +571,27 @@ export const createSettingsModal = async (
           console.error("Failed to sync visuals:", e);
         }
         onSaveCallback(updatedVisuals);
-        close();
+        saving = false;
+        closeDialog();
+        // After the push: the check reads the cloud copy back.
+        void deleteUnusedUploads(savedUrls, uploads.uploaded, [
+          state.avatar,
+          state.banner,
+          state.background,
+        ]);
       });
   }
 };
 
-function liveApplyBannerBg(state: FormState) {
+/**
+ * Paints the look being edited on the page. `previews` are the images picked
+ * and not uploaded yet (local data: URLs), painted over the field's current
+ * value for the banner and the background; applyImgs() refuses them.
+ */
+function liveApplyBannerBg(
+  state: FormState,
+  previews: { banner?: string; background?: string } = {},
+) {
   applyImgs({
     avatar: "",
     banner: state.bannerColor ? "" : state.banner,
@@ -504,6 +607,12 @@ function liveApplyBannerBg(state: FormState) {
   applyBadgeLayout(document, {
     order: state.badgeOrder,
     wrap: state.badgeWrap,
+  });
+  paintLocalPreview({
+    banner: state.bannerColor ? "" : previews.banner,
+    bannerMode: state.bannerMode,
+    background: state.backgroundColor ? "" : previews.background,
+    backgroundMode: state.backgroundMode,
   });
 }
 

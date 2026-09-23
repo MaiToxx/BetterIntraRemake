@@ -15,8 +15,10 @@ import {
   HUB_SETTING_DEFS,
   type FeatureId,
 } from "../hubSettings.data.ts";
+import { getStoredLinks } from "../../shortcuts/shortcuts.ui.ts";
 import { removeSettings, type LiveOptions } from "./context.ts";
 import { renderSetting } from "./setting.ts";
+import { SHORTCUTS_RELOAD_EVENT } from "./shortcuts.ts";
 
 const GRID_COLS_CLASSES = ["", "", "md:grid-cols-2", "md:grid-cols-3"] as const;
 
@@ -84,6 +86,10 @@ export function renderTabsContent(
     const tabId = `hub-tab-${f.id}`;
     const panelId = `hub-panel-${f.id}`;
     const selected = f.id === initialTab;
+    // On a phone the tab names are for screen readers only (nine named tabs
+    // took four rows there), and the header drops its description (wrapped,
+    // it made the sticky header 119 px tall; the switch keeps it as its
+    // aria-describedby).
     return html`<label class="tab flex items-center gap-2">
         <input
           type="radio"
@@ -98,7 +104,7 @@ export function renderTabsContent(
         <span class="size-4 flex items-center justify-center" aria-hidden="true">
           ${unsafeHTML(f.icon)}
         </span>
-        <span id="${tabId}">${f.name}</span>
+        <span id="${tabId}" class="max-sm:sr-only">${f.name}</span>
         <!-- how many settings of this tab match the search, empty otherwise -->
         <span class="badge badge-xs badge-primary hidden" data-tab-count></span>
       </label>
@@ -117,11 +123,14 @@ export function renderTabsContent(
           ${!isAlwaysEnabled
             ? html`
                 <div
-                  class="sticky top-0 z-20 flex items-center justify-between bg-base-200 px-6 py-4 border-b border-base-300 shadow-sm"
+                  class="sticky top-0 z-20 flex items-center justify-between gap-2 bg-base-200 px-4 py-2 sm:px-6 sm:py-4 border-b border-base-300 shadow-sm"
                 >
-                  <div class="flex flex-col">
+                  <div class="flex flex-col min-w-0">
                     <h2 class="text-lg font-bold leading-tight">${f.name}</h2>
-                    <p class="text-xs opacity-70" id="hub-feature-desc-${f.id}">
+                    <p
+                      class="text-xs opacity-70 max-sm:hidden"
+                      id="hub-feature-desc-${f.id}"
+                    >
                       ${f.desc}
                     </p>
                   </div>
@@ -210,18 +219,44 @@ export function bindTabPanels(shadow: ShadowRoot): void {
     });
   });
 
+  // The Reset button sits next to the tab's switch and used to act on the
+  // first click; on Shortcuts that erased every hand-typed link, and Auto
+  // push then replaced the cloud copy a second later.
   shadow.querySelectorAll("[data-reset-feature]").forEach((btn: any) => {
     btn.addEventListener("click", async () => {
       const feature = btn.dataset.resetFeature as FeatureId;
-      if (feature === "profile" && (await hasPublicProfileContent())) {
-        const ok = window.confirm(
-          "Reset the Profile tab? This also clears your public profile (bio, status, links, name style, effect) for everyone who visits your page.",
-        );
-        if (!ok) return;
-      }
+      if (!window.confirm(await resetConfirmMessage(feature))) return;
       await resetFeatureSettings(shadow, feature);
     });
   });
+}
+
+/**
+ * The question a tab's Reset asks: what it deletes that the user made
+ * (published profile texts, typed shortcuts), and the cloud copy an Auto
+ * push would replace with the empty list.
+ */
+export async function resetConfirmMessage(feature: FeatureId): Promise<string> {
+  const name = FEATURE_DEFS.find((f) => f.id === feature)?.name ?? feature;
+  if (feature === "profile" && (await hasPublicProfileContent())) {
+    return "Reset the Profile tab? This also clears your public profile (bio, status, links, name style, effect) for everyone who visits your page.";
+  }
+  if (feature === "shortcuts") {
+    const saved = (await getStoredLinks()).filter((l) => l.name && l.url).length;
+    if (saved > 0) {
+      const cloud = (await autoPushOn())
+        ? " Auto push is on: the copy in the cloud is replaced too."
+        : "";
+      return `Reset the Shortcuts tab? This deletes your ${saved} shortcut${saved === 1 ? "" : "s"} (names, addresses, colours).${cloud}`;
+    }
+  }
+  return `Reset the ${name} tab to its default settings?`;
+}
+
+/** Signed in with Auto push: a change reaches the cloud copy a second later. */
+async function autoPushOn(): Promise<boolean> {
+  const stored = await chrome.storage.local.get(["CLOUD_SYNC_ENABLED", "CLOUD_TOKEN"]);
+  return stored.CLOUD_SYNC_ENABLED === true && !!stored.CLOUD_TOKEN;
 }
 
 /** True when the user published anything on their profile (text, links). */
@@ -243,6 +278,13 @@ export async function resetFeatureSettings(
     .filter((k): k is ConfigKey => k !== undefined);
   // removeSettings also republishes a reset public setting (look, extras)
   if (keysToRemove.length > 0) await removeSettings(keysToRemove);
+  // The link editor keeps its own list: left alone it went on showing the
+  // deleted links, and the next keystroke saved them back.
+  if (keysToRemove.includes("SHORTCUTS_LINKS")) {
+    root
+      .querySelectorAll("[data-shortcuts-panel]")
+      .forEach((panel) => panel.dispatchEvent(new CustomEvent(SHORTCUTS_RELOAD_EVENT)));
+  }
   (HUB_SETTING_DEFS[featureId] ?? []).forEach((def) => {
     const controls = root.querySelectorAll<HTMLInputElement>(
       `[data-setting-key="${def.key}"]`,

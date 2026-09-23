@@ -88,7 +88,8 @@ function formatDate(dateStr: string): string {
     d.getMonth(),
     d.getDate(),
   ).getTime();
-  const days = Math.floor((todayMidnight - eventMidnight) / 86400000);
+  // round, not floor: two local midnights are 23 or 25 h apart across DST
+  const days = Math.round((todayMidnight - eventMidnight) / 86400000);
   const relative =
     days < 1 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
   const real = d.toLocaleDateString("en-US", {

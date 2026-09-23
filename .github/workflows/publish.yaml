@@ -23,12 +23,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Same gate as build-and-sign (see there).
+      - name: Tests
+        run: npm test
+
+      - name: Generated theme files are up to date
+        run: npm run check:themes
+
+      - name: No runtime import cycles
+        run: npm run check:cycles
+
       - name: Build Extension (Firefox)
         run: npm run build:firefox
 
       - name: web-ext build (Firefox)
         id: web-ext-build-ff
-        uses: kewisch/action-web-ext@main
+        uses: kewisch/action-web-ext@v2
         with:
           cmd: build
           source: dist-firefox
@@ -39,7 +49,7 @@ jobs:
 
       - name: web-ext build (Chrome)
         id: web-ext-build-chrome
-        uses: kewisch/action-web-ext@main
+        uses: kewisch/action-web-ext@v2
         with:
           cmd: build
           source: dist-chrome
@@ -47,6 +57,9 @@ jobs:
 
       - name: Move Chrome artifact
         run: mv web-ext-artifacts/better-intra-chrome.zip .
+
+      - name: Bundle size budgets
+        run: npm run check:size
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
@@ -69,8 +82,12 @@ jobs:
       # key matching the "key" field of manifests/manifest.chrome.json.
       HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
       # Chrome Web Store publishing (the only automatic update path on
-      # Windows/macOS). See docs/CHROME-WEB-STORE.md for the four secrets.
-      HAS_CWS: ${{ secrets.CWS_EXTENSION_ID != '' && secrets.CWS_CLIENT_ID != '' && secrets.CWS_CLIENT_SECRET != '' && secrets.CWS_REFRESH_TOKEN != '' }}
+      # Windows/macOS). See docs/CHROME-WEB-STORE.md for the five secrets.
+      # Without all five the store steps are skipped.
+      HAS_CWS: ${{ secrets.CWS_EXTENSION_ID != '' && secrets.CWS_PUBLISHER_ID != '' && secrets.CWS_CLIENT_ID != '' && secrets.CWS_CLIENT_SECRET != '' && secrets.CWS_REFRESH_TOKEN != '' }}
+      # The four secrets of the API v1.1 setup without the publisher id that
+      # v2 needs: warn instead of skipping in silence.
+      CWS_NO_PUBLISHER: ${{ secrets.CWS_EXTENSION_ID != '' && secrets.CWS_PUBLISHER_ID == '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -83,6 +100,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # The release gate. A release is published from a commit whose CI run
+      # may not have finished (or may have been skipped), and what follows
+      # signs the build and pushes updates.json/updates.xml, which every
+      # Firefox and Linux Chrome install follows within a day. A failure here
+      # leaves a release without files, which the in-extension update check
+      # ignores (parseLatestRelease in src/core/update-check.ts).
+      - name: Tests
+        run: npm test
+
+      - name: Generated theme files are up to date
+        run: npm run check:themes
+
+      - name: No runtime import cycles
+        run: npm run check:cycles
 
       - name: Build Extension (Firefox)
         run: npm run build:firefox
@@ -109,13 +141,16 @@ jobs:
       - name: Move Chrome artifact
         run: mv web-ext-artifacts/better-intra-chrome.zip .
 
+      - name: Bundle size budgets
+        run: npm run check:size
+
       - name: Pack Chrome .crx (self-hosted updates)
         if: env.HAS_CRX == 'true'
         env:
           CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
         run: |
           printf '%s\n' "$CRX_PRIVATE_KEY" > crx-key.pem
-          npx --yes crx@5 pack dist-chrome -o better-intra.crx -p crx-key.pem
+          npx --yes crx@5.0.1 pack dist-chrome -o better-intra.crx -p crx-key.pem
           rm -f crx-key.pem
           ls -la better-intra.crx
 
@@ -154,20 +189,16 @@ jobs:
             better-intra-chrome.zip
             better-intra.crx
 
+      # Built here, before the next step checks out main: later it would
+      # package main's HEAD instead of the release tag. A failure must not
+      # hold back updates.json/updates.xml, hence continue-on-error.
       - name: Build Extension (Chrome Web Store)
+        id: cws-build
         if: env.HAS_CWS == 'true'
+        continue-on-error: true
         run: |
           npm run build:chrome-store
           (cd dist-chrome-store && zip -qr ../better-intra-chrome-store.zip .)
-
-      - name: Publish to Chrome Web Store
-        if: env.HAS_CWS == 'true'
-        env:
-          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
-          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
-          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-        run: npx --yes chrome-webstore-upload-cli@3 upload --source better-intra-chrome-store.zip --auto-publish
 
       # Auto-update manifests live on the main branch (the browsers fetch them
       # from raw.githubusercontent.com): publish the new version there once
@@ -189,3 +220,33 @@ jobs:
           for f in updates.json updates.xml; do [ -f "$f" ] && git add "$f"; done
           git commit -m "chore: update manifests for ${RELEASE_TAG}" || exit 0
           git push origin main
+
+      # Last, and allowed to fail: the Web Store refuses an upload while the
+      # previous version is still in review, which is common at this release
+      # pace, and a store or credential hiccup must not stop Firefox and
+      # Linux Chrome updates (committed just above).
+      # chrome-webstore-upload-cli 4 speaks the Web Store API v2 (v1.1 stops
+      # on 15 October 2026) and needs PUBLISHER_ID. No subcommand on purpose:
+      # in v4 only the bare command uploads AND submits; `upload` never
+      # publishes and --auto-publish no longer exists.
+      - name: Publish to Chrome Web Store
+        id: cws
+        if: env.HAS_CWS == 'true' && steps.cws-build.outcome == 'success'
+        continue-on-error: true
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: npx --yes chrome-webstore-upload-cli@4.0.1 --source better-intra-chrome-store.zip
+
+      - name: Chrome Web Store step failed
+        if: steps.cws-build.outcome == 'failure' || steps.cws.outcome == 'failure'
+        run: |
+          echo "::warning::Chrome Web Store build or upload failed (previous version still in review, or bad or expired CWS credentials). updates.json/updates.xml were updated anyway; upload this version by hand or let the next release carry it (docs/CHROME-WEB-STORE.md)."
+
+      - name: Chrome Web Store publisher id missing
+        if: env.CWS_NO_PUBLISHER == 'true'
+        run: |
+          echo "::warning::CWS_EXTENSION_ID is set but CWS_PUBLISHER_ID is not: the Chrome Web Store upload was skipped (API v2 needs it, see docs/CHROME-WEB-STORE.md)."

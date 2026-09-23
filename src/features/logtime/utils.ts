@@ -76,7 +76,8 @@ export const getLastSeenFormatted = (
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   lastDate.setHours(0, 0, 0, 0);
-  const diffDays = Math.floor(
+  // round, not floor: two local midnights are 23 or 25 h apart across DST
+  const diffDays = Math.round(
     (today.getTime() - lastDate.getTime()) / 86400000,
   );
 

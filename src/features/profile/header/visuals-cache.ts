@@ -10,6 +10,7 @@
  */
 import { getCloudLogin } from "../../account/account.ts";
 import type { VisualUrls } from "./visuals-types.ts";
+import { addToHistory } from "./image-history.ts";
 
 // ---------------------------------------------------------------------------
 // The signed-in login
@@ -48,12 +49,6 @@ export const readOwnLogin = async (): Promise<string | null> => {
 // ---------------------------------------------------------------------------
 
 let historyListenerInstalled = false;
-
-function addToHistory(url: string, history: string[]): string[] {
-  if (!url) return history;
-  const filtered = history.filter((h) => h !== url);
-  return [url, ...filtered].slice(0, 10);
-}
 
 export function installHistoryListener(): void {
   if (historyListenerInstalled) return;

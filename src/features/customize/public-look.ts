@@ -4,8 +4,8 @@
  * profile page the way they styled it.
  *
  * Only presentation values that are safe to receive from a stranger are
- * included: colours (strict hex), enumerated presets, clamped numbers and an
- * http(s) image URL. Fonts, font scale, scrollbars, density and above all
+ * included: the theme preset (a known key), colours (strict hex), enumerated
+ * presets, clamped numbers and an http(s) image URL. Fonts, font scale, scrollbars, density and above all
  * the free-form CSS stay with their author.
  */
 import { CONFIG_DEFAULT } from "../../core/config.ts";
@@ -21,8 +21,10 @@ import {
   sanitizeCardMap,
   type CustomizeConfig,
 } from "./customize.ts";
+import { THEME_IDS } from "../../core/theme/theme-ids.ts";
 
 export const PUBLIC_LOOK_KEYS = [
+  "PROFILE_THEME_PRESET",
   "CUSTOM_ACCENT_ENABLED",
   "CUSTOM_ACCENT_COLOR",
   "CUSTOM_ACCENT_GRADIENT",
@@ -104,6 +106,9 @@ export function sanitizePublicLook(raw: unknown): PublicLook | null {
     } else if (HEX_KEYS.has(key)) {
       const hex = sanitizeHexColor(v);
       if (hex) out[key] = hex;
+    } else if (key === "PROFILE_THEME_PRESET") {
+      // a preset this build knows, nothing else reaches the theme manager
+      if (THEME_IDS.has(v)) out[key] = v;
     } else if (key === "CUSTOM_PAGE_BG_URL") {
       out[key] = sanitizeCssUrl(v);
     } else if (ENUMS[key]) {

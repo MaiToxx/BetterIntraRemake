@@ -22,14 +22,14 @@ Ready-made builds are attached to every [GitHub release](https://github.com/MaiT
 
 **Chrome on Linux**: drag `better-intra.crx` onto `chrome://extensions` (Developer mode on). This build updates itself.
 
-Then open your profile on https://profile-v3.intra.42.fr, click the extension icon and **Connect with 42**: the extension signs you in with your current Intra session (no password, no OAuth page). Cloud features (settings sync, friends, shared visuals and looks) need this sign-in; everything else works without it.
+Then open your profile on https://profile-v3.intra.42.fr, click the extension icon and **Sign in with 42**: the extension signs you in with your current Intra session (no password, no OAuth page), after showing what it sends. Cloud features (settings sync, shared visuals and looks, image upload, calendar link) need this sign-in; everything else, friends included, works without it.
 
 ### Updates
 
 - **Firefox**: automatic, checked about once a day. *about:addons* → gear → *Check for Updates* forces it.
 - **Chrome on Linux** (`.crx`): automatic through `updates.xml`.
 - **Chrome on Windows/macOS**: only the Chrome Web Store can auto-update. The release workflow can publish there by itself once a developer account exists: see [docs/CHROME-WEB-STORE.md](docs/CHROME-WEB-STORE.md).
-- Every build also checks GitHub every 6 hours and shows a **NEW** badge on the toolbar icon.
+- The builds from GitHub (`.xpi`, zip, `.crx`) also check GitHub every 6 hours and show a **NEW** badge on the toolbar icon. The Chrome Web Store build has no such check: Chrome updates it by itself once Google has reviewed the version.
 
 ### Build it yourself
 
@@ -54,7 +54,7 @@ Data that upstream fetched through the 42 API is rebuilt from what the Intra alr
 - correction statistics and Thursday Roulette history are parsed from the v2 Intra pages;
 - cluster occupancy comes from `meta.intra.42.fr`.
 
-The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it and `*.intra.42.fr`, the extension only contacts `api.github.com` (release check, About tab) and the image hosts other students chose for their visuals.
+The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it and `*.intra.42.fr`, the extension only contacts `api.github.com` (release check, not in the Chrome Web Store build), the image hosts other students chose for their visuals, and, for a shortcut without an emoji, that site's favicon (or DuckDuckGo's icon service when it has none).
 
 ---
 
@@ -101,7 +101,7 @@ Only presentation values and short texts travel: never your custom CSS, fonts, s
 
 A **Customize** tab in the hub restyles every Intra page live, and syncs with your cloud settings.
 
-* **Show your look to others ☁️** — *Publish my look on my profile* and every Better Intra user who opens your profile sees your accent, palette, background, card styles and per-card colours. A small badge says whose look it is, with a button to get your own style back for that visit. Fonts, size, density, scrollbar and custom CSS never leave your browser; every received value is validated before it touches the page. *Show other people's looks* turns it off on the viewer side.
+* **Show your look to others ☁️** — on by default: every Better Intra user who opens your profile sees your theme, accent, palette, background, card styles and per-card colours (turn off *Publish my look on my profile* to keep them to yourself). A small badge says whose look it is, with a button to get your own style back for that visit. Fonts, size, density, scrollbar and custom CSS never leave your browser; every received value is validated before it touches the page. *Show other people's looks* turns it off on the viewer side.
 * **Accent colour** — any colour for buttons, links, highlights and progress bars, with an optional two-colour gradient.
 * **Colours** — your own page, card and text colours; borders, muted text and inputs are derived.
 * **Background** — an image behind every page with a dark overlay and card opacity, or one of 13 built-in gradients (Aurora, Sunset, Ocean, Forest, Monochrome, Midnight, Candy, Lava, Nord, Dracula, 42 teal, Space, Mesh), optionally animated.
@@ -110,7 +110,7 @@ A **Customize** tab in the hub restyles every Intra page live, and syncs with yo
 * **Typography & layout** — system, humanist, rounded, serif, monospace or any font family; 70–140 % size; compact or comfortable density; rounded corners; scrollbar style; hide the footer.
 * **Presets & theme codes** — save looks under a name, switch in one click, copy a theme code for a friend. Codes never carry custom CSS; a code that loads a background image asks first.
 * **Custom CSS** — a free-form stylesheet applied last.
-* **Themes** — dark / light and 30+ presets (synthwave, dracula, cyberpunk, nord, garden, cupcake…) for badges, sidebar and accents.
+* **Themes** — 58 presets that colour the whole Intra (backgrounds, cards, borders, text and accent), each with surfaces in its own hue: editor classics (Catppuccin, Tokyo Night, Gruvbox, Rosé Pine, Nord, Everforest, Kanagawa, One Dark, Solarized, in dark and light versions) and our own (42 Deep, Aurora, Espresso, Sakura, Sage, Lavender, Dune, Mist…), plus the daisyUI set. The page switches to the theme's mode, theme codes and presets carry it, and visitors of your profile see it.
 * **Easter eggs** — nine secrets hidden in the Intra; the About tab counts the ones you found. Off in Advanced if you prefer a quiet Intra.
 
 ### 📅 Logtime
@@ -135,7 +135,7 @@ Up to 8 quick links on the profile page with name, colour and emoji (or the site
 
 ### 👥 Friends ☁️
 
-A panel in the bottom-right corner: add friends by login, see avatar, level, wallet, correction points, location and online status; follow/unfollow from any profile; sort by name, level, wallet, points or online; medal borders for the top 3; a badge with the number of friends online. Data refreshes every 3 minutes, or on demand.
+A panel in the bottom-right corner: add friends by login, see avatar, level, wallet, correction points, location and online status; follow/unfollow from any profile; sort by name, level, wallet, points or online; medal borders for the top 3; a badge with the number of friends online. Data refreshes every 5 minutes, or on demand. No sign-in needed: the data comes from the Intra with your own session.
 
 ### ☁️ Account
 
@@ -143,10 +143,9 @@ From the extension popup: connect with 42 (Intra session, no password), push/pul
 
 ### ⚡ Lighten the Intra
 
-Four switches in the Advanced tab that make the **Intra page itself** cheaper, all on by default:
+Three switches in the Advanced tab that make the **Intra page itself** cheaper, all on by default:
 
 * **Skip off-screen blocks** — the browser stops laying out and painting the rows you have scrolled past in the long cards (projects, achievements, logtime).
-* **Load images when needed** — images the page mounts after the first paint are fetched lazily and decoded off the main thread.
 * **Pause when the tab is hidden** — the page's animations and transitions stop while you are in another tab.
 * **Connect early to the image server** — saves the connection setup on the first avatar, usually 100 to 300 ms.
 
@@ -188,10 +187,10 @@ The **transcript download** is still in the extension but only shows up on campu
 See [PRIVACY.md](./PRIVACY.md).
 
 - Settings live in `chrome.storage.local`. Signed out, the extension only talks to the worker for the public visuals of the profiles you open (by login hash), campus and announcement data, and to GitHub for the update check.
-- With the cloud account, the settings you push (friends list included), custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login, plus a users row (login hash, country, first sign-in) for the public counters. *Wipe All Data* deletes all of it.
+- With the cloud account, the settings you push (friends list included), custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login, plus a users row (login hash, first sign-in date) for the public counters. *Wipe All Data* deletes all of it.
 - Signing in sends your current Intra session token to the worker once, for verification against 42's public keys. It is not stored.
 - Other users' profiles: their public visuals and look are fetched from the worker when they use Better Intra; their images load from wherever they are hosted.
-- No analytics, tracking or advertising. Permissions: `storage`, `alarms`, `activeTab`, and access to `*.intra.42.fr` and the worker. No host permission is needed for `api.github.com`: the update check is an ordinary cross-origin request.
+- No analytics, tracking or advertising. Permissions: `storage`, `alarms` (not in the Chrome Web Store build), `activeTab` (Firefox only), and access to `*.intra.42.fr` and the worker. No host permission is needed for `api.github.com`: the update check is an ordinary cross-origin request.
 
 ## Self-hosting
 
@@ -221,4 +220,4 @@ Upstream project by [nicopasla](https://github.com/nicopasla/better-intra). Intr
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE). Every package also ships [THIRD_PARTY_NOTICES.txt](./THIRD_PARTY_NOTICES.txt), the licences of the code and icons it bundles (lit-html, qrcode-generator, daisyUI, Tailwind CSS, Improved Intra, Lucide, Font Awesome).

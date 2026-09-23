@@ -1,7 +1,9 @@
 /**
- * Theme accent (Profile tab): one swatch per daisyUI theme. Picking one saves
- * it, repaints the hub in that theme at once, and flips the hub's light/dark
- * switch when the theme sits on the other side.
+ * Theme (Profile tab): one swatch per preset, painted with the page background
+ * and a band of the accent, so that two themes with the same accent can be
+ * told apart. Picking one saves it, repaints the hub in that theme at once,
+ * and flips the hub's light/dark switch when the theme sits on the other side
+ * (the page follows the theme's own mode, see theme-manager.ts).
  */
 import { html, nothing } from "lit-html";
 import { THEMES } from "../../../core/theme/theme-manager.ts";
@@ -33,11 +35,12 @@ export function renderThemePreset(def: HubSettingDef, value: unknown) {
         </div>`;
       }
       const hsl = (o as { color?: string }).color ?? "199 89% 48%";
+      const bg = (o as { bg?: string }).bg ?? hsl;
       const selected = String(o.value) === String(value);
-      const parts = hsl.split(" ");
-      const lightness = parseInt(parts[2] ?? "50");
+      // the label sits on the background half of the swatch
+      const lightness = parseInt(bg.split(" ")[2] ?? "50");
       const textColor =
-        lightness > 50 ? "hsl(0 0% 10%)" : "hsl(0 0% 100%)";
+        lightness > 55 ? "hsl(0 0% 12%)" : "hsl(0 0% 96%)";
       return html`<input
         type="radio"
         name="${def.key}"
@@ -45,7 +48,7 @@ export function renderThemePreset(def: HubSettingDef, value: unknown) {
         aria-label="${o.label}"
         value="${o.value}"
         data-hsl="${hsl}"
-        style="background-color: hsl(${hsl}); color: ${textColor}; border: 2px solid ${selected
+        style="background: linear-gradient(to top, hsl(${hsl}) 0 5px, hsl(${bg}) 5px); color: ${textColor}; border: 2px solid ${selected
           ? "#fff"
           : "transparent"}; outline: ${selected
           ? "2px solid hsl(" + hsl + ")"

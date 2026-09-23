@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { finalizeManifest, type ManifestBuild } from "../vite.config.ts";
+import { finalizeManifest, copyLicenseFiles, LICENSE_FILES, type ManifestBuild } from "../vite.config.ts";
 import { DEFAULT_WORKER_URL } from "../scripts/repo-info.js";
 
 const ROOT = path.resolve(__dirname, "..");
@@ -35,8 +36,18 @@ describe("manifest templates", () => {
     });
   }
 
-  it("both browsers ask the same permissions", () => {
-    expect(read("chrome").permissions).toEqual(read("firefox").permissions);
+  it("both browsers ask the same permissions, except activeTab (Firefox only)", () => {
+    // Chrome grants host permissions at install: the popup reads the Intra
+    // tab's URL through the *.intra.42.fr one, tabs.sendMessage/reload/create
+    // need no permission, and nothing calls chrome.scripting. The store
+    // reviews an unused permission as an excessive one. Firefox keeps it:
+    // there the host permission can be refused, and activeTab is what lets
+    // the popup see it is on an Intra tab and show the account panel.
+    expect(read("chrome").permissions).not.toContain("activeTab");
+    expect(read("firefox").permissions).toContain("activeTab");
+    expect(read("chrome").permissions).toEqual(
+      read("firefox").permissions.filter((p: string) => p !== "activeTab"),
+    );
     expect(read("chrome").host_permissions).toEqual(read("firefox").host_permissions);
   });
 
@@ -89,5 +100,38 @@ describe("finalizeManifest", () => {
     });
     expect(finalizeManifest(read("chrome"), build({})).update_url).toBe("https://example.test/updates.xml");
     expect(finalizeManifest(read("chrome"), build({ chromeStore: true })).update_url).toBeUndefined();
+  });
+
+  it("the store build asks no alarms permission: its only user, the release check, is not compiled in", () => {
+    const store = finalizeManifest(read("chrome"), build({ chromeStore: true }));
+    expect(store.permissions).toEqual(["storage"]);
+    expect(finalizeManifest(read("chrome"), build({})).permissions).toContain("alarms");
+    expect(finalizeManifest(read("firefox"), build({ target: "firefox" })).permissions).toContain("alarms");
+  });
+});
+
+describe("licence files", () => {
+  it("every build copies LICENSE and the third-party notices next to manifest.json", () => {
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), "bi-licences-"));
+    try {
+      expect(copyLicenseFiles(ROOT, out)).toEqual([...LICENSE_FILES]);
+      expect(fs.readFileSync(path.join(out, "LICENSE"), "utf8")).toContain("Copyright (c) 2026 nicopasla");
+    } finally {
+      fs.rmSync(out, { recursive: true, force: true });
+    }
+  });
+
+  it("the notices name every bundled library and asset whose licence asks for it", () => {
+    const notices = fs.readFileSync(path.join(ROOT, "THIRD_PARTY_NOTICES.txt"), "utf8");
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+    // Runtime dependencies end up in content.js/popup.js; @tailwindcss/vite
+    // is the build plugin, the stylesheet it compiles is Tailwind's.
+    const bundled = Object.keys(pkg.dependencies).map((d) => (d === "@tailwindcss/vite" ? "tailwindcss" : d));
+    for (const dep of [...bundled, "daisyui"]) expect(notices).toContain(dep);
+    expect(notices).toContain("Copyright (c) 2022 Freek Bes"); // theme-dark-v2.css
+    expect(notices).toContain("Copyright (c) 2017 Google LLC"); // lit-html, BSD-3-Clause
+    expect(notices).toContain("Copyright (c) 2009 Kazuhiko Arase"); // qrcode-generator
+    expect(notices).toContain("Lucide");
+    expect(notices).toContain("Font Awesome");
   });
 });

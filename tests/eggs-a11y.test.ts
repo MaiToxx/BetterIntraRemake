@@ -58,6 +58,10 @@ const KONAMI = [
 
 beforeEach(() => {
   vi.useFakeTimers();
+  // A Monday at noon, local time: the fake clock otherwise starts at the real
+  // one, and between 02:00 and 05:00 startEggs() records the night secret,
+  // which the first case then finds in EGGS_FOUND (a Thursday adds a wait).
+  vi.setSystemTime(new Date(2026, 8, 21, 12, 0));
   document.body.replaceChildren();
   document.head.replaceChildren();
   document.documentElement.removeAttribute("style");
@@ -78,6 +82,11 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const fn of added.splice(0)) document.removeEventListener("keydown", fn);
+  // Every startEggs() arms the 42h badge watcher (jsdom's path is "/"); the
+  // fake deadline dies with useRealTimers(), and the observers would fire
+  // after the environment is torn down ("document is not defined").
+  window.dispatchEvent(new Event("pagehide"));
+  localStorage.clear();
   vi.restoreAllMocks();
   vi.useRealTimers();
   delete (window as unknown as { matchMedia?: unknown }).matchMedia;

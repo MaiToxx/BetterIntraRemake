@@ -40,17 +40,17 @@
     "primaryForeground": "0 0% 0%",
     "ring": "141 71% 42%",
     "dark": {
-      "background": "0 10% 10%",
-      "card": "0 11% 8%",
-      "foreground": "1 1% 79%",
-      "muted": "161 37% 15%",
-      "mutedForeground": "157 6% 82%",
-      "popover": "0 11% 8%",
-      "popoverForeground": "1 1% 79%",
-      "accent": "161 37% 15%",
-      "accentForeground": "1 1% 79%",
-      "border": "0 14% 6%",
-      "input": "0 11% 8%"
+      "background": "143 14% 11%",
+      "card": "132 12% 8%",
+      "foreground": "140 13% 86%",
+      "muted": "136 14% 15%",
+      "mutedForeground": "140 8% 64%",
+      "popover": "132 12% 8%",
+      "popoverForeground": "140 13% 86%",
+      "accent": "136 14% 15%",
+      "accentForeground": "140 13% 86%",
+      "border": "143 14% 18%",
+      "input": "132 12% 8%"
     }
   },
   "halloween": {
@@ -292,17 +292,17 @@
     "primaryForeground": "42 100% 15%",
     "ring": "45 100% 44%",
     "light": {
-      "background": "0 0% 100%",
-      "card": "0 0% 97%",
-      "foreground": "0 0% 20%",
-      "muted": "0 0% 92%",
-      "mutedForeground": "0 0% 20%",
-      "popover": "0 0% 97%",
-      "popoverForeground": "0 0% 20%",
-      "accent": "0 0% 92%",
-      "accentForeground": "0 0% 20%",
-      "border": "0 0% 92%",
-      "input": "0 0% 97%"
+      "background": "47 60% 97%",
+      "card": "48 48% 94%",
+      "foreground": "47 30% 15%",
+      "muted": "49 48% 91%",
+      "mutedForeground": "48 14% 36%",
+      "popover": "48 48% 94%",
+      "popoverForeground": "47 30% 15%",
+      "accent": "49 48% 91%",
+      "accentForeground": "47 30% 15%",
+      "border": "48 41% 84%",
+      "input": "48 48% 94%"
     }
   },
   "emerald": {
@@ -310,17 +310,17 @@
     "primaryForeground": "139 33% 26%",
     "ring": "141 50% 60%",
     "light": {
-      "background": "0 0% 100%",
-      "card": "0 0% 93%",
-      "foreground": "223 23% 26%",
-      "muted": "0 0% 86%",
-      "mutedForeground": "223 23% 26%",
-      "popover": "0 0% 93%",
-      "popoverForeground": "223 23% 26%",
-      "accent": "0 0% 86%",
-      "accentForeground": "223 23% 26%",
-      "border": "0 0% 86%",
-      "input": "0 0% 93%"
+      "background": "150 37% 97%",
+      "card": "153 29% 94%",
+      "foreground": "149 30% 15%",
+      "muted": "150 26% 91%",
+      "mutedForeground": "150 14% 36%",
+      "popover": "153 29% 94%",
+      "popoverForeground": "149 30% 15%",
+      "accent": "150 26% 91%",
+      "accentForeground": "149 30% 15%",
+      "border": "150 22% 84%",
+      "input": "153 29% 94%"
     }
   },
   "corporate": {
@@ -328,17 +328,17 @@
     "primaryForeground": "0 0% 100%",
     "ring": "223 49% 53%",
     "light": {
-      "background": "0 0% 100%",
-      "card": "0 0% 93%",
-      "foreground": "219 37% 19%",
-      "muted": "0 0% 86%",
-      "mutedForeground": "219 37% 19%",
-      "popover": "0 0% 93%",
-      "popoverForeground": "219 37% 19%",
-      "accent": "0 0% 86%",
-      "accentForeground": "219 37% 19%",
-      "border": "0 0% 86%",
-      "input": "0 0% 93%"
+      "background": "220 37% 97%",
+      "card": "220 29% 94%",
+      "foreground": "222 30% 15%",
+      "muted": "220 26% 91%",
+      "mutedForeground": "219 14% 36%",
+      "popover": "220 29% 94%",
+      "popoverForeground": "222 30% 15%",
+      "accent": "220 26% 91%",
+      "accentForeground": "222 30% 15%",
+      "border": "220 22% 84%",
+      "input": "220 29% 94%"
     }
   },
   "retro": {
@@ -364,17 +364,17 @@
     "primaryForeground": "0 0% 100%",
     "ring": "0 65% 54%",
     "light": {
-      "background": "0 0% 93%",
-      "card": "0 0% 86%",
-      "foreground": "0 0% 17%",
-      "muted": "0 0% 80%",
-      "mutedForeground": "0 0% 17%",
-      "popover": "0 0% 86%",
-      "popoverForeground": "0 0% 17%",
-      "accent": "0 0% 80%",
-      "accentForeground": "0 0% 17%",
-      "border": "0 0% 80%",
-      "input": "0 0% 86%"
+      "background": "348 33% 97%",
+      "card": "343 23% 94%",
+      "foreground": "344 30% 15%",
+      "muted": "342 22% 91%",
+      "mutedForeground": "346 14% 36%",
+      "popover": "343 23% 94%",
+      "popoverForeground": "344 30% 15%",
+      "accent": "342 22% 91%",
+      "accentForeground": "344 30% 15%",
+      "border": "345 15% 84%",
+      "input": "343 23% 94%"
     }
   },
   "lofi": {
@@ -418,17 +418,17 @@
     "primaryForeground": "283 32% 85%",
     "ring": "285 60% 40%",
     "light": {
-      "background": "0 0% 100%",
-      "card": "0 0% 93%",
-      "foreground": "218 22% 21%",
-      "muted": "0 0% 86%",
-      "mutedForeground": "218 22% 21%",
-      "popover": "0 0% 93%",
-      "popoverForeground": "218 22% 21%",
-      "accent": "0 0% 86%",
-      "accentForeground": "218 22% 21%",
-      "border": "0 0% 86%",
-      "input": "0 0% 93%"
+      "background": "280 37% 97%",
+      "card": "280 29% 94%",
+      "foreground": "279 30% 15%",
+      "muted": "280 26% 91%",
+      "mutedForeground": "279 14% 36%",
+      "popover": "280 29% 94%",
+      "popoverForeground": "279 30% 15%",
+      "accent": "280 26% 91%",
+      "accentForeground": "279 30% 15%",
+      "border": "281 20% 84%",
+      "input": "280 29% 94%"
     }
   },
   "wireframe": {
@@ -454,17 +454,17 @@
     "primaryForeground": "222 51% 10%",
     "ring": "220 62% 55%",
     "light": {
-      "background": "0 0% 100%",
-      "card": "0 0% 95%",
-      "foreground": "0 0% 20%",
-      "muted": "0 0% 90%",
-      "mutedForeground": "0 0% 20%",
-      "popover": "0 0% 95%",
-      "popoverForeground": "0 0% 20%",
-      "accent": "0 0% 90%",
-      "accentForeground": "0 0% 20%",
-      "border": "0 0% 90%",
-      "input": "0 0% 95%"
+      "background": "190 37% 97%",
+      "card": "193 29% 94%",
+      "foreground": "196 30% 15%",
+      "muted": "195 26% 91%",
+      "mutedForeground": "196 14% 36%",
+      "popover": "193 29% 94%",
+      "popoverForeground": "196 30% 15%",
+      "accent": "195 26% 91%",
+      "accentForeground": "196 30% 15%",
+      "border": "193 22% 84%",
+      "input": "193 29% 94%"
     }
   },
   "autumn": {
@@ -472,17 +472,17 @@
     "primaryForeground": "16 28% 86%",
     "ring": "11 56% 35%",
     "light": {
-      "background": "0 0% 96%",
-      "card": "0 0% 89%",
-      "foreground": "0 0% 19%",
-      "muted": "0 0% 82%",
-      "mutedForeground": "0 0% 19%",
-      "popover": "0 0% 89%",
-      "popoverForeground": "0 0% 19%",
-      "accent": "0 0% 82%",
-      "accentForeground": "0 0% 19%",
-      "border": "0 0% 82%",
-      "input": "0 0% 89%"
+      "background": "26 47% 97%",
+      "card": "27 35% 94%",
+      "foreground": "23 30% 15%",
+      "muted": "26 35% 91%",
+      "mutedForeground": "25 14% 36%",
+      "popover": "27 35% 94%",
+      "popoverForeground": "23 30% 15%",
+      "accent": "26 35% 91%",
+      "accentForeground": "23 30% 15%",
+      "border": "25 27% 84%",
+      "input": "27 35% 94%"
     }
   },
   "acid": {
@@ -490,17 +490,17 @@
     "primaryForeground": "319 53% 9%",
     "ring": "319 57% 51%",
     "light": {
-      "background": "0 0% 98%",
-      "card": "0 0% 95%",
-      "foreground": "0 0% 0%",
-      "muted": "0 0% 91%",
-      "mutedForeground": "0 0% 0%",
-      "popover": "0 0% 95%",
-      "popoverForeground": "0 0% 0%",
-      "accent": "0 0% 91%",
-      "accentForeground": "0 0% 0%",
-      "border": "0 0% 91%",
-      "input": "0 0% 95%"
+      "background": "77 47% 97%",
+      "card": "75 40% 94%",
+      "foreground": "76 30% 15%",
+      "muted": "77 39% 91%",
+      "mutedForeground": "76 14% 36%",
+      "popover": "75 40% 94%",
+      "popoverForeground": "76 30% 15%",
+      "accent": "77 39% 91%",
+      "accentForeground": "76 30% 15%",
+      "border": "74 32% 84%",
+      "input": "75 40% 94%"
     }
   },
   "lemonade": {
@@ -645,6 +645,402 @@
       "accentForeground": "164 100% 50%",
       "border": "0 0% 15%",
       "input": "0 0% 5%"
+    }
+  },
+  "deep42": {
+    "primary": "181 100% 37%",
+    "primaryForeground": "184 67% 5%",
+    "ring": "181 100% 37%",
+    "dark": {
+      "background": "191 35% 9%",
+      "card": "194 37% 7%",
+      "foreground": "180 37% 88%",
+      "muted": "190 34% 13%",
+      "mutedForeground": "183 20% 64%",
+      "popover": "194 37% 7%",
+      "popoverForeground": "180 37% 88%",
+      "accent": "190 34% 13%",
+      "accentForeground": "180 37% 88%",
+      "border": "190 34% 17%",
+      "input": "194 37% 7%"
+    }
+  },
+  "catppuccin": {
+    "primary": "267 84% 81%",
+    "primaryForeground": "240 21% 15%",
+    "ring": "267 84% 81%",
+    "dark": {
+      "background": "240 21% 15%",
+      "card": "240 21% 12%",
+      "foreground": "226 64% 88%",
+      "muted": "237 16% 23%",
+      "mutedForeground": "228 24% 72%",
+      "popover": "240 21% 12%",
+      "popoverForeground": "226 64% 88%",
+      "accent": "237 16% 23%",
+      "accentForeground": "226 64% 88%",
+      "border": "237 16% 23%",
+      "input": "240 21% 12%"
+    }
+  },
+  "tokyonight": {
+    "primary": "221 89% 72%",
+    "primaryForeground": "240 15% 10%",
+    "ring": "221 89% 72%",
+    "dark": {
+      "background": "235 19% 13%",
+      "card": "240 15% 10%",
+      "foreground": "229 73% 86%",
+      "muted": "228 23% 21%",
+      "mutedForeground": "229 35% 75%",
+      "popover": "240 15% 10%",
+      "popoverForeground": "229 73% 86%",
+      "accent": "228 23% 21%",
+      "accentForeground": "229 73% 86%",
+      "border": "228 23% 21%",
+      "input": "240 15% 10%"
+    }
+  },
+  "gruvbox": {
+    "primary": "42 95% 58%",
+    "primaryForeground": "0 0% 16%",
+    "ring": "42 95% 58%",
+    "dark": {
+      "background": "0 0% 16%",
+      "card": "195 6% 12%",
+      "foreground": "43 59% 81%",
+      "muted": "20 5% 22%",
+      "mutedForeground": "35 17% 59%",
+      "popover": "195 6% 12%",
+      "popoverForeground": "43 59% 81%",
+      "accent": "20 5% 22%",
+      "accentForeground": "43 59% 81%",
+      "border": "20 5% 22%",
+      "input": "195 6% 12%"
+    }
+  },
+  "rosepine": {
+    "primary": "2 55% 83%",
+    "primaryForeground": "249 22% 12%",
+    "ring": "2 55% 83%",
+    "dark": {
+      "background": "249 22% 12%",
+      "card": "247 23% 15%",
+      "foreground": "245 50% 91%",
+      "muted": "248 25% 18%",
+      "mutedForeground": "248 15% 61%",
+      "popover": "247 23% 15%",
+      "popoverForeground": "245 50% 91%",
+      "accent": "248 25% 18%",
+      "accentForeground": "245 50% 91%",
+      "border": "249 15% 28%",
+      "input": "247 23% 15%"
+    }
+  },
+  "nordnight": {
+    "primary": "193 43% 67%",
+    "primaryForeground": "220 16% 22%",
+    "ring": "193 43% 67%",
+    "dark": {
+      "background": "220 16% 22%",
+      "card": "221 16% 19%",
+      "foreground": "218 27% 94%",
+      "muted": "222 16% 28%",
+      "mutedForeground": "218 16% 73%",
+      "popover": "221 16% 19%",
+      "popoverForeground": "218 27% 94%",
+      "accent": "222 16% 28%",
+      "accentForeground": "218 27% 94%",
+      "border": "222 16% 28%",
+      "input": "221 16% 19%"
+    }
+  },
+  "everforest": {
+    "primary": "83 34% 63%",
+    "primaryForeground": "202 14% 16%",
+    "ring": "83 34% 63%",
+    "dark": {
+      "background": "206 13% 20%",
+      "card": "205 13% 18%",
+      "foreground": "41 32% 75%",
+      "muted": "199 13% 24%",
+      "mutedForeground": "132 6% 66%",
+      "popover": "205 13% 18%",
+      "popoverForeground": "41 32% 75%",
+      "accent": "199 13% 24%",
+      "accentForeground": "41 32% 75%",
+      "border": "199 12% 27%",
+      "input": "205 13% 18%"
+    }
+  },
+  "kanagawa": {
+    "primary": "220 54% 67%",
+    "primaryForeground": "240 14% 10%",
+    "ring": "220 54% 67%",
+    "dark": {
+      "background": "240 13% 14%",
+      "card": "240 14% 10%",
+      "foreground": "51 33% 80%",
+      "muted": "240 13% 19%",
+      "mutedForeground": "60 5% 63%",
+      "popover": "240 14% 10%",
+      "popoverForeground": "51 33% 80%",
+      "accent": "240 13% 19%",
+      "accentForeground": "51 33% 80%",
+      "border": "240 13% 24%",
+      "input": "240 14% 10%"
+    }
+  },
+  "onedark": {
+    "primary": "207 82% 66%",
+    "primaryForeground": "210 13% 12%",
+    "ring": "207 82% 66%",
+    "dark": {
+      "background": "220 13% 18%",
+      "card": "216 13% 15%",
+      "foreground": "220 12% 81%",
+      "muted": "219 14% 20%",
+      "mutedForeground": "218 10% 64%",
+      "popover": "216 13% 15%",
+      "popoverForeground": "220 12% 81%",
+      "accent": "219 14% 20%",
+      "accentForeground": "220 12% 81%",
+      "border": "221 13% 28%",
+      "input": "216 13% 15%"
+    }
+  },
+  "solarized": {
+    "primary": "175 59% 40%",
+    "primaryForeground": "194 100% 7%",
+    "ring": "175 59% 40%",
+    "dark": {
+      "background": "192 100% 11%",
+      "card": "194 100% 8%",
+      "foreground": "180 8% 78%",
+      "muted": "192 81% 14%",
+      "mutedForeground": "188 11% 61%",
+      "popover": "194 100% 8%",
+      "popoverForeground": "180 8% 78%",
+      "accent": "192 81% 14%",
+      "accentForeground": "180 8% 78%",
+      "border": "192 76% 18%",
+      "input": "194 100% 8%"
+    }
+  },
+  "espresso": {
+    "primary": "30 60% 63%",
+    "primaryForeground": "24 19% 10%",
+    "ring": "30 60% 63%",
+    "dark": {
+      "background": "24 19% 10%",
+      "card": "30 25% 8%",
+      "foreground": "33 42% 86%",
+      "muted": "24 21% 14%",
+      "mutedForeground": "29 21% 63%",
+      "popover": "30 25% 8%",
+      "popoverForeground": "33 42% 86%",
+      "accent": "24 21% 14%",
+      "accentForeground": "33 42% 86%",
+      "border": "26 22% 19%",
+      "input": "30 25% 8%"
+    }
+  },
+  "aurora": {
+    "primary": "247 100% 74%",
+    "primaryForeground": "247 40% 8%",
+    "ring": "247 100% 74%",
+    "dark": {
+      "background": "246 36% 11%",
+      "card": "247 40% 8%",
+      "foreground": "251 74% 93%",
+      "muted": "246 33% 16%",
+      "mutedForeground": "249 32% 72%",
+      "popover": "247 40% 8%",
+      "popoverForeground": "251 74% 93%",
+      "accent": "246 33% 16%",
+      "accentForeground": "251 74% 93%",
+      "border": "246 36% 23%",
+      "input": "247 40% 8%"
+    }
+  },
+  "latte": {
+    "primary": "266 85% 58%",
+    "primaryForeground": "0 0% 100%",
+    "ring": "266 85% 58%",
+    "light": {
+      "background": "220 23% 95%",
+      "card": "220 22% 92%",
+      "foreground": "235 16% 28%",
+      "muted": "224 21% 90%",
+      "mutedForeground": "233 13% 41%",
+      "popover": "220 22% 92%",
+      "popoverForeground": "235 16% 28%",
+      "accent": "224 21% 90%",
+      "accentForeground": "235 16% 28%",
+      "border": "223 16% 83%",
+      "input": "220 22% 92%"
+    }
+  },
+  "solarlight": {
+    "primary": "205 71% 39%",
+    "primaryForeground": "44 87% 94%",
+    "ring": "205 71% 39%",
+    "light": {
+      "background": "44 87% 94%",
+      "card": "46 42% 88%",
+      "foreground": "195 17% 28%",
+      "muted": "45 47% 88%",
+      "mutedForeground": "194 13% 37%",
+      "popover": "46 42% 88%",
+      "popoverForeground": "195 17% 28%",
+      "accent": "45 47% 88%",
+      "accentForeground": "195 17% 28%",
+      "border": "45 32% 81%",
+      "input": "46 42% 88%"
+    }
+  },
+  "gruvlight": {
+    "primary": "33 85% 33%",
+    "primaryForeground": "48 87% 88%",
+    "ring": "33 85% 33%",
+    "light": {
+      "background": "48 87% 88%",
+      "card": "46 67% 84%",
+      "foreground": "20 5% 22%",
+      "muted": "46 63% 83%",
+      "mutedForeground": "27 10% 36%",
+      "popover": "46 67% 84%",
+      "popoverForeground": "20 5% 22%",
+      "accent": "46 63% 83%",
+      "accentForeground": "20 5% 22%",
+      "border": "40 38% 73%",
+      "input": "46 67% 84%"
+    }
+  },
+  "dawn": {
+    "primary": "343 33% 47%",
+    "primaryForeground": "35 100% 98%",
+    "ring": "343 33% 47%",
+    "light": {
+      "background": "32 57% 95%",
+      "card": "34 42% 93%",
+      "foreground": "248 19% 32%",
+      "muted": "32 37% 90%",
+      "mutedForeground": "249 13% 42%",
+      "popover": "34 42% 93%",
+      "popoverForeground": "248 19% 32%",
+      "accent": "32 37% 90%",
+      "accentForeground": "248 19% 32%",
+      "border": "10 9% 86%",
+      "input": "34 42% 93%"
+    }
+  },
+  "everlight": {
+    "primary": "68 100% 21%",
+    "primaryForeground": "44 87% 94%",
+    "ring": "68 100% 21%",
+    "light": {
+      "background": "44 87% 94%",
+      "card": "51 55% 90%",
+      "foreground": "201 12% 28%",
+      "muted": "51 45% 88%",
+      "mutedForeground": "155 6% 40%",
+      "popover": "51 55% 90%",
+      "popoverForeground": "201 12% 28%",
+      "accent": "51 45% 88%",
+      "accentForeground": "201 12% 28%",
+      "border": "50 29% 83%",
+      "input": "51 55% 90%"
+    }
+  },
+  "sakura": {
+    "primary": "337 56% 49%",
+    "primaryForeground": "342 100% 98%",
+    "ring": "337 56% 49%",
+    "light": {
+      "background": "342 71% 97%",
+      "card": "341 61% 94%",
+      "foreground": "338 33% 18%",
+      "muted": "340 55% 91%",
+      "mutedForeground": "338 21% 41%",
+      "popover": "341 61% 94%",
+      "popoverForeground": "338 33% 18%",
+      "accent": "340 55% 91%",
+      "accentForeground": "338 33% 18%",
+      "border": "340 49% 85%",
+      "input": "341 61% 94%"
+    }
+  },
+  "sage": {
+    "primary": "110 31% 34%",
+    "primaryForeground": "96 24% 96%",
+    "ring": "110 31% 34%",
+    "light": {
+      "background": "96 24% 96%",
+      "card": "96 24% 92%",
+      "foreground": "109 20% 16%",
+      "muted": "92 24% 89%",
+      "mutedForeground": "106 12% 36%",
+      "popover": "96 24% 92%",
+      "popoverForeground": "109 20% 16%",
+      "accent": "92 24% 89%",
+      "accentForeground": "109 20% 16%",
+      "border": "95 20% 82%",
+      "input": "96 24% 92%"
+    }
+  },
+  "lavender": {
+    "primary": "254 55% 53%",
+    "primaryForeground": "255 57% 97%",
+    "ring": "254 55% 53%",
+    "light": {
+      "background": "255 57% 97%",
+      "card": "257 50% 95%",
+      "foreground": "255 35% 21%",
+      "muted": "256 51% 93%",
+      "mutedForeground": "252 22% 42%",
+      "popover": "257 50% 95%",
+      "popoverForeground": "255 35% 21%",
+      "accent": "256 51% 93%",
+      "accentForeground": "255 35% 21%",
+      "border": "255 48% 87%",
+      "input": "257 50% 95%"
+    }
+  },
+  "dune": {
+    "primary": "23 69% 39%",
+    "primaryForeground": "32 100% 97%",
+    "ring": "23 69% 39%",
+    "light": {
+      "background": "36 52% 94%",
+      "card": "35 44% 89%",
+      "foreground": "31 27% 18%",
+      "muted": "36 43% 86%",
+      "mutedForeground": "31 19% 35%",
+      "popover": "35 44% 89%",
+      "popoverForeground": "31 27% 18%",
+      "accent": "36 43% 86%",
+      "accentForeground": "31 27% 18%",
+      "border": "35 35% 78%",
+      "input": "35 44% 89%"
+    }
+  },
+  "mist": {
+    "primary": "196 71% 31%",
+    "primaryForeground": "195 36% 96%",
+    "ring": "196 71% 31%",
+    "light": {
+      "background": "195 36% 96%",
+      "card": "196 37% 92%",
+      "foreground": "197 34% 16%",
+      "muted": "199 36% 90%",
+      "mutedForeground": "199 19% 37%",
+      "popover": "196 37% 92%",
+      "popoverForeground": "197 34% 16%",
+      "accent": "199 36% 90%",
+      "accentForeground": "197 34% 16%",
+      "border": "198 31% 83%",
+      "input": "196 37% 92%"
     }
   }
 }

@@ -201,7 +201,14 @@ function buildRouletteSection(
   const { dateLabel } = getNextRoulette();
 
   const counters = document.createElement("div");
-  counters.className = "flex flex-row justify-around items-stretch my-2 gap-3";
+  counters.className = "flex flex-row items-stretch my-2 gap-3";
+  // Wraps: the three tiles need about 510 px, more than the card has inside
+  // on a phone and at common desktop widths too (1024-1290 px in two columns,
+  // 1536-1890 px in three), where the Next countdown was cut at the edge.
+  // Inline, as the tiles are: this card sits in the page, whose utility
+  // classes are whatever the Intra's own build kept.
+  counters.style.flexWrap = "wrap";
+  counters.style.justifyContent = "center";
 
   const winCol = document.createElement("span");
   winCol.style.cssText =

@@ -49,7 +49,7 @@ describe("uploadProfileImage", () => {
     await chrome.storage.local.remove(["CLOUD_TOKEN"]);
     const out = await uploadProfileImage("avatar", png());
     expect(out.ok).toBe(false);
-    expect((out as { error: string }).error).toMatch(/Connect with 42/);
+    expect((out as { error: string }).error).toMatch(/Sign in with 42/);
 
     await chrome.storage.local.set({ CLOUD_TOKEN: "sess" });
     vi.stubGlobal("fetch", vi.fn(async () => new Response("too big", { status: 413 })));

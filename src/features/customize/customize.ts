@@ -14,6 +14,7 @@
  * public-look.ts), which is validated key by key before reaching this file.
  */
 import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../core/config.ts";
+import { requestVisitorPreset } from "../../core/theme/theme-events.ts";
 import { sanitizeCssUrl, sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import { AVATAR_SELECTOR, DASHBOARD_CARD_SELECTOR } from "../../core/intra/selectors.ts";
 
@@ -39,6 +40,9 @@ export const AVATAR_RADIUS: Record<string, string> = {
 };
 
 export const CUSTOMIZE_KEYS = [
+  // The theme preset (Profile tab) belongs to the look: presets and theme
+  // codes carry it, and visitors of a profile see it (public-look.ts).
+  "PROFILE_THEME_PRESET",
   "CUSTOM_ACCENT_ENABLED",
   "CUSTOM_ACCENT_COLOR",
   "CUSTOM_ACCENT_GRADIENT",
@@ -595,6 +599,7 @@ export async function applyVisitorLook(look: Partial<CustomizeConfig> | null): P
   if (!visitorLook) {
     visitorLookKey = "";
     setStyle(VISITOR_STYLE_ID, "");
+    requestVisitorPreset(null);
     return;
   }
   // Called on every mutation pass of the profile page: skip the storage
@@ -609,8 +614,14 @@ export async function applyVisitorLook(look: Partial<CustomizeConfig> | null): P
   if (CUSTOM_SHOW_OTHERS_LOOK === false) {
     visitorLookKey = "";
     setStyle(VISITOR_STYLE_ID, "");
+    requestVisitorPreset(null);
     return;
   }
+  // their theme preset first (it may switch the page to its mode), then
+  // their colours on top
+  requestVisitorPreset(
+    typeof visitorLook.PROFILE_THEME_PRESET === "string" ? visitorLook.PROFILE_THEME_PRESET : null,
+  );
   setStyle(
     VISITOR_STYLE_ID,
     buildLookCss(visitorLook, { disableAnimations: DISABLE_ANIMATIONS === true }),

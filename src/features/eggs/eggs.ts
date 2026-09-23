@@ -446,10 +446,22 @@ function isTypingEvent(e: Event): boolean {
   return isTypingTarget(path[0] ?? e.target);
 }
 
+/**
+ * "YYYY-MM-DD" of the local day. Not toISOString(): that is the UTC day, while
+ * the checks below read the local hour and weekday. In Paris between 00:00
+ * and 02:00 a Thursday was keyed under Wednesday's date, so its toast came
+ * back later that day.
+ */
+function localDayKey(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 function checkTimeAndDay(): void {
   const now = new Date();
   const h = now.getHours();
-  const dayKey = now.toISOString().slice(0, 10);
+  const dayKey = localDayKey(now);
   if (h >= 2 && h < 5 && localStorage.getItem("ft-egg-night") !== dayKey) {
     localStorage.setItem("ft-egg-night", dayKey);
     void found("night", `${h}h. The cluster never closes, but you could 😴`);
@@ -486,7 +498,7 @@ function checkFortyTwoHours(): void {
     const hit = badges.some((b) => /^\s*42h00\b/.test(b.textContent ?? ""));
     if (!hit) return false;
     celebrated = true;
-    const monthKey = new Date().toISOString().slice(0, 7);
+    const monthKey = localDayKey(new Date()).slice(0, 7);
     if (localStorage.getItem("ft-egg-42") !== monthKey) {
       localStorage.setItem("ft-egg-42", monthKey);
       if (!prefersStill()) confetti();

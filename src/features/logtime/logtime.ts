@@ -25,17 +25,13 @@ import {
   THEMES,
 } from "../../core/theme/theme-manager.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
-import { syncCalendarIcs } from "../calendar/calendar-sync.ts";
+import { fetchOwnEvents } from "../calendar/own-events.ts";
 import type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
 // Declared in types.ts so the renderers need not import this module back.
 export type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
-const INTRAPY_BASE = "https://intrapy.intra.42.fr";
-/** How long the events fetch waits for a fresh token when the cached one expired. */
-const EVENTS_TOKEN_WAIT_MS = 10_000;
 import { WORKER_URL, AUTH_MODE } from "../../core/worker.ts";
-import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
 import { sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 const historyCache = new Map<string, Record<string, number>>();
 const fetchPromiseMap = new Map<string, Promise<void>>();
@@ -262,27 +258,13 @@ function groupEventsByDate(
 }
 
 /**
- * Your Intra events by day, or null when they could not be read (no intrapy
- * token, HTTP error, network error, or a body that is not a list of events:
- * {"error": ...} throws in groupEventsByDate). null is not "no events": the
- * calendar sync must never take a failed read for an empty list and wipe the
- * feed.
+ * Your Intra events by day, or null when they could not be read. The read is
+ * shared with the calendar feed (calendar/own-events.ts), which uploads them
+ * on its own: this widget only draws them.
  */
 async function fetchEvents(): Promise<EventsByDate | null> {
-  try {
-    // Not the raw sessionStorage value: after a tab was left open it is an
-    // expired JWT, and the 401 would read as "events unknown" for the visit.
-    const token = await waitForIntrapyToken(EVENTS_TOKEN_WAIT_MS);
-    if (!token) return null;
-    const res = await fetch(`${INTRAPY_BASE}/api/v1/users/me/events`, {
-      headers: { Authorization: token },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as Record<string, CalendarEvent>;
-    return groupEventsByDate(Object.values(data));
-  } catch {
-    return null;
-  }
+  const events = await fetchOwnEvents();
+  return events ? groupEventsByDate(events) : null;
 }
 
 const HEADER_OVERFLOW_TOLERANCE = 2;
@@ -705,20 +687,12 @@ function installFetchHook() {
           : detail;
         renderLogtime(stats);
 
-        fetchEvents().then((events) => {
-          // A failed read is not "no events": keep what is drawn and leave
-          // the calendar feed alone.
+        void fetchEvents().then((events) => {
+          // A failed read is not "no events": keep what is drawn.
           if (!events) return;
           // The student may have opened another profile meanwhile: these
           // events are their own and must not land on someone else's days.
           if (isOwnProfile()) renderLogtime(lastStats || detail, events);
-
-          const subscribed = Object.values(events)
-            .flat()
-            .filter((e) => e.is_subscribed);
-          // Also when empty: unsubscribing from the last event must drop it
-          // from the feed. An unchanged list is skipped by syncCalendarIcs.
-          syncCalendarIcs(subscribed);
         });
         return;
       }

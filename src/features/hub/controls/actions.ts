@@ -5,6 +5,7 @@
  */
 import { html, nothing } from "lit-html";
 import { getConfig } from "../../../core/config.ts";
+import { logoutCloud } from "../../account/account.ts";
 import { fetchCampusList } from "../../clusters/clusters.data.ts";
 import { loadCampusData } from "../../campus/campus.ts";
 import {
@@ -75,7 +76,7 @@ export function renderAction(def: HubSettingDef) {
     class="btn btn-sm btn-error font-bold"
     aria-labelledby="${ids.label}"
     aria-describedby="${desc}"
-    @click="${resetAllData}"
+    @click="${() => void resetAllData()}"
   >
     ${actionLabel || "Reset"}
   </button>`;
@@ -210,14 +211,30 @@ export async function reloadCampusConfig(
   }
 }
 
-/** Clears every Better Intra setting, after a confirmation, and reloads. */
-function resetAllData(): void {
-  if (
-    confirm("This will clear ALL Better Intra settings and reload. Continue?")
-  ) {
-    void (async () => {
-      await chrome.storage.local.clear();
-      location.reload();
-    })();
+/**
+ * Clears every Better Intra setting, after a confirmation, and reloads.
+ *
+ * The question used to say "settings" only: the reset also signs out, and
+ * the shortcuts, friends list and calendar link that were never pushed are
+ * gone for good. Signed in, the session is revoked on the worker first
+ * (logoutCloud keeps the cloud copy), instead of being left to hold one of
+ * the account's ten session slots.
+ */
+export async function resetAllData(
+  ask: (message: string) => boolean = (m) => window.confirm(m),
+): Promise<void> {
+  const signedIn = !!(await chrome.storage.local.get("CLOUD_TOKEN")).CLOUD_TOKEN;
+  const message = signedIn
+    ? "Reset all data? This clears every Better Intra setting on this browser and signs you out. What was never pushed to the cloud (shortcuts, friends list, calendar link) is lost; your cloud copy stays, and is offered back when you sign in again."
+    : "Reset all data? This clears every Better Intra setting on this browser, shortcuts, friends list and calendar link included. Export first to keep a copy.";
+  if (!ask(message)) return;
+  if (signedIn) {
+    try {
+      await logoutCloud();
+    } catch {
+      /* the local reset goes on: the worker drops the session in time */
+    }
   }
+  await chrome.storage.local.clear();
+  location.reload();
 }

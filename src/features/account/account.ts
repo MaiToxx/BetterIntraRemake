@@ -10,6 +10,7 @@ export { hashLogin };
 
 import {
   WORKER_URL,
+  WORKER_HOST,
   AUTH_MODE,
   markAuthFailed,
   workerFetch,
@@ -19,7 +20,9 @@ import {
 import {
   loginWithIntraSession,
   requestIntraLoginFromActiveTab,
+  type IntraLoginResult,
 } from "./intra-login.ts";
+import { confirmSignInDisclosure } from "./signin-disclosure.ts";
 
 const PRIVATE_SETTINGS = "/api/v1/private/settings";
 
@@ -43,21 +46,74 @@ async function cloudCredentials(): Promise<WorkerCredentials | null> {
 async function privateFailure(res: WorkerResult): Promise<CloudFailure> {
   if (res.status === 404) await markAuthFailed();
   if (res.status === 401 || res.status === 404) return "auth";
-  return res.status === 0 ? "network" : "rejected";
+  if (res.status === 0) return "network";
+  // The worker's write limiter (10 a minute per login, shared with sign-in,
+  // calendar sync and image upload): nothing wrong with the connection.
+  if (res.status === 429) return "busy";
+  // A value over 8 KB or a record over 64 KB: retrying cannot help until the
+  // custom CSS or the saved presets shrink.
+  if (res.status === 413) return "too-large";
+  return "rejected";
 }
 
 export async function clearAuthFailed(): Promise<void> {
   await chrome.storage.local.remove("CLOUD_AUTH_FAILED");
 }
 
+/** How a sign-in ended. `cancelled`: the user declined the sign-in notice. */
+export interface LoginOutcome extends IntraLoginResult {
+  cancelled?: boolean;
+}
+
+export interface LoginOptions {
+  /**
+   * Show a failure where the button is instead of in alert(). Callers that
+   * pass nothing keep the alert, so none of them loses its error message.
+   */
+  onFailure?: (message: string) => void;
+}
+
 /**
- * Initiates the 42 OAuth login flow by opening a popup window.
- * It listens for a message from the popup to receive the session token upon success.
+ * The intra-mode sign-in running in this context. A second click on any
+ * sign-in button (or two buttons at once) joins it instead of opening a
+ * second notice and a second worker session.
+ */
+let intraLoginInFlight: Promise<LoginOutcome> | null = null;
+
+async function runIntraLogin(
+  isExtension: boolean,
+  onSuccess: (() => void | Promise<void>) | undefined,
+  options: LoginOptions,
+): Promise<LoginOutcome> {
+  // Nothing leaves the page before the notice was accepted on this browser.
+  if (!(await confirmSignInDisclosure())) return { ok: false, cancelled: true };
+  const result = isExtension
+    ? await requestIntraLoginFromActiveTab()
+    : await loginWithIntraSession();
+  if (!result.ok) {
+    const message = result.error || "Unknown error.";
+    if (options.onFailure) options.onFailure(message);
+    else alert(`Better Intra sign-in failed.\n${message}`);
+    return result;
+  }
+  if (onSuccess) await onSuccess();
+  else window.location.reload();
+  return result;
+}
+
+/**
+ * Signs in to the Better Intra server. In intra mode (this deployment) it
+ * shows the sign-in notice once per browser, then sends the page's Intra
+ * token (see intra-login.ts); in oauth mode it opens the worker's 42 OAuth
+ * window and listens for its answer.
  * @param onSuccess Optional callback to run after a successful login.
+ * @returns How an intra-mode sign-in ended; undefined in oauth mode, where
+ *   the outcome arrives later through the auth window.
  */
 export async function loginWith42(
   onSuccess?: () => void | Promise<void>,
-): Promise<void> {
+  options: LoginOptions = {},
+): Promise<LoginOutcome | undefined> {
   const extensionFakeCallback = window.location.href;
   const authUrl = `${WORKER_URL}/login?redirect_uri=${encodeURIComponent(extensionFakeCallback)}`;
 
@@ -70,16 +126,14 @@ export async function loginWith42(
     // Self-hosted worker without a 42 OAuth application: sign in with the
     // Intra session token, straight from the page (or via the active Intra
     // tab when called from the toolbar popup). No popup window at all.
-    const result = isExtension
-      ? await requestIntraLoginFromActiveTab()
-      : await loginWithIntraSession();
-    if (!result.ok) {
-      alert(`Better Intra login failed.\n${result.error ?? ""}`);
-      return;
+    if (!intraLoginInFlight) {
+      intraLoginInFlight = runIntraLogin(isExtension, onSuccess, options).finally(
+        () => {
+          intraLoginInFlight = null;
+        },
+      );
     }
-    if (onSuccess) await onSuccess();
-    else window.location.reload();
-    return;
+    return intraLoginInFlight;
   }
 
   if (isExtension) {
@@ -289,13 +343,114 @@ export async function testCloudConnection(): Promise<number> {
   return (await refreshSessionCount()) ?? 0;
 }
 
-export type CloudFailure = "auth" | "network" | "rejected";
+/**
+ * Why a private call failed: "auth" the session is gone (CLOUD_AUTH_FAILED is
+ * set, the UI offers to sign in again); "network" no answer in time; "busy"
+ * the worker's rate limit (429); "too-large" a value or the record is over the
+ * worker's size limits (413); "rejected" any other worker error.
+ */
+export type CloudFailure =
+  | "auth"
+  | "network"
+  | "busy"
+  | "too-large"
+  | "rejected";
 export type PushResult = "ok" | CloudFailure;
 
 /**
+ * chrome.storage.local key, not a setting: why the last push failed, until a
+ * push succeeds. Friends, the public profile, the look and auto push all push
+ * without waiting for the answer, so their failures used to vanish into the
+ * console while other devices and visitors kept the stale copy. The popup
+ * shows it; the hub can too.
+ */
+export const PUSH_FAILURE_KEY = "CLOUD_PUSH_FAILURE";
+
+export interface PushFailure {
+  /** "auth" is left to CLOUD_AUTH_FAILED and its sign-in prompt. */
+  reason: Exclude<CloudFailure, "auth">;
+  /** The worker's own words (e.g. "Setting CUSTOM_CSS too long (max 8 KB)"). */
+  detail: string;
+  at: number;
+}
+
+const PUSH_FAILURE_REASONS: ReadonlySet<string> = new Set([
+  "network",
+  "busy",
+  "too-large",
+  "rejected",
+]);
+
+async function recordPushFailure(
+  reason: CloudFailure,
+  res: WorkerResult,
+): Promise<void> {
+  if (reason === "auth") return;
+  const failure: PushFailure = {
+    reason,
+    detail: (res.message ?? res.text ?? "").trim().slice(0, 200),
+    at: Date.now(),
+  };
+  try {
+    await chrome.storage.local.set({ [PUSH_FAILURE_KEY]: failure });
+  } catch {
+    /* the push result still reaches the caller */
+  }
+}
+
+async function clearPushFailure(): Promise<void> {
+  try {
+    await chrome.storage.local.remove(PUSH_FAILURE_KEY);
+  } catch {
+    /* best effort */
+  }
+}
+
+/** Why the last push failed, or null when the last one went through. */
+export async function getPushFailure(): Promise<PushFailure | null> {
+  try {
+    const value = (await chrome.storage.local.get(PUSH_FAILURE_KEY))[
+      PUSH_FAILURE_KEY
+    ] as Partial<PushFailure> | undefined;
+    if (!value || typeof value !== "object") return null;
+    if (!PUSH_FAILURE_REASONS.has(String(value.reason))) return null;
+    return {
+      reason: value.reason as PushFailure["reason"],
+      detail: typeof value.detail === "string" ? value.detail : "",
+      at: typeof value.at === "number" ? value.at : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One sentence for a failed cloud call, the same in the popup and the hub.
+ * `detail` is the worker's text when there is one.
+ */
+export function describeCloudFailure(
+  reason: CloudFailure,
+  detail = "",
+): string {
+  const said = detail.trim();
+  switch (reason) {
+    case "auth":
+      return "Your session expired: sign in again.";
+    case "network":
+      return `The Better Intra server (${WORKER_HOST}) did not answer. Your settings are kept on this browser.`;
+    case "busy":
+      return "Too many pushes in a short time. Wait a minute, then push again.";
+    case "too-large":
+      return `Too large for the cloud${said ? ` (${said})` : ""}. Shorten your custom CSS or delete saved presets, then push again.`;
+    default:
+      return `The server refused the push${said ? `: ${said}` : "."}`;
+  }
+}
+
+/**
  * Gathers all local settings (except cloud credentials) and pushes them to the cloud.
- * "network": no answer in time; "auth": the session is gone (CLOUD_AUTH_FAILED
- * is set, the popup offers Reconnect); "rejected": any other worker error.
+ * The reason of a failure other than "auth" is also kept under
+ * PUSH_FAILURE_KEY until a push succeeds.
  */
 export async function pushSettings(): Promise<PushResult> {
   const auth = await cloudCredentials();
@@ -313,17 +468,22 @@ export async function pushSettings(): Promise<PushResult> {
   });
   if (res.ok) {
     await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
+    await clearPushFailure();
     return "ok";
   }
   const reason = await privateFailure(res);
-  if (reason === "rejected") {
+  if (reason !== "auth" && reason !== "network") {
     console.error("Cloud sync failed:", res.status, res.message ?? res.text);
   }
+  await recordPushFailure(reason, res);
   return reason;
 }
 
 /**
- * Gathers all local settings (except cloud credentials) and pushes them to the cloud.
+ * pushSettings() as a boolean, for the callers that only need to know whether
+ * it went through. It stays a boolean on purpose: a string reason would be
+ * truthy in their `if (await syncToCloud())`. Use pushSettings() for the
+ * reason, and getPushFailure() for the worker's words.
  * @returns A promise that resolves to true on success, false on failure.
  */
 export async function syncToCloud(): Promise<boolean> {
@@ -378,8 +538,10 @@ export async function syncMyVisuals(visuals: {
       },
     },
   });
+  // Recorded when it fails, never cleared when it succeeds: these few visual
+  // keys fitting says nothing about the full push (custom CSS, presets).
   if (!res.ok) {
-    await privateFailure(res);
+    await recordPushFailure(await privateFailure(res), res);
     console.error("Cloud Quick Sync Error:", res.status, res.message ?? res.text);
   }
 }
@@ -463,6 +625,7 @@ export async function logoutCloud(): Promise<boolean> {
     "CLOUD_LOGIN",
     "CLOUD_AUTH_FAILED",
     LAST_SESSIONS_KEY,
+    PUSH_FAILURE_KEY,
   ]);
   return true;
 }
@@ -488,6 +651,7 @@ export async function wipeAllCloudData(): Promise<boolean> {
       "CLOUD_LOGIN",
       "CLOUD_AUTH_FAILED",
       LAST_SESSIONS_KEY,
+      PUSH_FAILURE_KEY,
       "CALENDAR_SYNC_TOKEN",
       "CALENDAR_EVENTS_HASH",
     ]);

@@ -195,6 +195,23 @@
   opacity: 1 !important;
 }
 
+/* Below 480 px the 280 px card and the two arrows (2 x 34 px + gaps) do not
+   fit side by side: the slider clipped the arrows and the months could not be
+   changed. The card takes a line of its own and the arrows sit under it. Only
+   the visual order moves: Previous stays first in the DOM and the Tab order. */
+@media (max-width: 479px) {
+  .lt-carousel {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .lt-carousel-stage {
+    order: -1;
+    flex-basis: 100%;
+    justify-content: center;
+  }
+}
+
 .lt-view-switcher {
   position: relative;
   display: flex;

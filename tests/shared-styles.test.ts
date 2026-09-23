@@ -971,12 +971,13 @@ describe("shared-styles.css contents", () => {
 
   it("applies every hub preset through its own [data-theme] rule", async () => {
     const themes = hubThemes();
-    expect(themes).toHaveLength(36);
+    // every preset of the hub (scripts/themes/palettes.mjs), 58 in 1.14.0
+    expect(themes.length).toBeGreaterThanOrEqual(58);
     const selectorText = [...real].join("\n");
     for (const theme of themes) expect(selectorText).toContain(`[data-theme=${theme}]`);
   });
 
-  it("keeps light and dark in shared-styles.css and moves the other 34 presets out", () => {
+  it("keeps light and dark in shared-styles.css and moves every other preset out", () => {
     const named = (css: string) =>
       [...new Set([...css.matchAll(/\[data-theme=([a-z0-9-]+)\]/g)].map((m) => m[1]))].sort();
     expect(named(coreCss)).toEqual(["dark", "light"]);
@@ -985,7 +986,8 @@ describe("shared-styles.css contents", () => {
     expect(themesCss.startsWith("@layer base{")).toBe(true);
     expect(themesCss.endsWith("}}")).toBe(true);
     const themeRules = rulesOf(themesCss);
-    expect(themeRules).toHaveLength(34);
+    // one rule per preset: a retint merges into the built-in theme's rule
+    expect(themeRules).toHaveLength(hubThemes().length - 2);
     for (const rule of themeRules) expect(rule.body).toMatch(/--color-base-100\s*:/);
     // Nothing lost, nothing added: the two files are the one sheet, cut in two.
     expect(coreCss.length + themesCss.length - "@layer base{}".length).toBe(fullCss.length);

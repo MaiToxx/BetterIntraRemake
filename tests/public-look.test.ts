@@ -91,8 +91,8 @@ describe("sanitizeVisualUrls with a look", () => {
 });
 
 describe("share flags", () => {
-  it("default to private, and to showing other people's looks", () => {
-    expect(CONFIG_DEFAULT.CUSTOM_SHARE_LOOK).toBe(false);
+  it("default to public (1.14.0), and to showing other people's looks", () => {
+    expect(CONFIG_DEFAULT.CUSTOM_SHARE_LOOK).toBe(true);
     expect(CONFIG_DEFAULT.CUSTOM_SHOW_OTHERS_LOOK).toBe(true);
   });
 });

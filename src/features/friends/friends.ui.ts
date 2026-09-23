@@ -61,6 +61,16 @@ function neededDetail(state: WidgetState): FriendsDetail {
 }
 
 /**
+ * The login verifyAddedLogin() is checking right now, if any: that check adds
+ * its own row. onAdd clears addPending and keeps the login in the (disabled)
+ * input; onRetryAdd checks addPending.
+ */
+function loginBeingAdded(state: WidgetState): string | null {
+  if (!state.addLoading) return null;
+  return state.addPending ?? (state.addInput.trim().toLowerCase() || null);
+}
+
+/**
  * Load the friends list into the state. `force` skips the fresh cache (the
  * refresh button). lastFetch only moves on a real success, so the refresh
  * tooltip no longer says "Updated just now" after a failure.
@@ -80,6 +90,8 @@ async function loadList(force: boolean, detail?: FriendsDetail) {
   state.loading = true;
   state.loadError = false;
   renderWidgetUI();
+  /** Logins saved while this load ran, which its answer has no row for. */
+  let arrived = false;
   try {
     const list = await getFriendsList();
     if (state.friends.length === 0) {
@@ -97,7 +109,26 @@ async function loadList(force: boolean, detail?: FriendsDetail) {
     // answer must not bring the login back.
     const keep = new Set(await getFriendsList());
     if (!current()) return;
-    state.friends = result.friends.filter((f) => keep.has(f.login));
+    // Added while the load ran: the answer was built from the older list.
+    // A row the widget's own Add already put in (verifyAddedLogin) stays,
+    // or the friend just added vanished when a Refresh ended. Any other new
+    // login is loaded next: onFriendsListChanged skips changes made while a
+    // load runs, so nothing else would until the next page load.
+    const added = state.friends.filter(
+      (f) => keep.has(f.login) && !list.includes(f.login),
+    );
+    const adding = loginBeingAdded(state);
+    arrived = [...keep].some(
+      (l) =>
+        !list.includes(l) &&
+        l !== adding &&
+        l !== state.addPending &&
+        !added.some((f) => f.login === l),
+    );
+    state.friends = [
+      ...result.friends.filter((f) => keep.has(f.login)),
+      ...added,
+    ];
     state.detailed = result.detail === "full";
     state.loadError = !result.ok;
     // Everyone answered, yet a saved login has no row: the Intra does not
@@ -119,10 +150,13 @@ async function loadList(force: boolean, detail?: FriendsDetail) {
     if (current()) {
       state.loading = false;
       renderWidgetUI();
+      // The next load reads the list again and asks for what the panel needs
+      // then, so it also stands for the completion below.
+      if (arrived) void loadList(false);
       // Opened while the badge-only load ran: complete the rows now. Only
       // after an "online" load: a full one that fell back on old rows must
       // not start another.
-      if (requested === "online" && state.open && !state.detailed && !state.loadError)
+      else if (requested === "online" && state.open && !state.detailed && !state.loadError)
         void loadList(false, "full");
     }
   }
@@ -418,18 +452,20 @@ export async function injectFriendsWidget() {
     }
   }
 
-  if (!_state.notConnected && !_state.needsReconnect) {
-    await loadList(false);
-  }
-
-  renderWidgetUI();
-
+  // Before the first load, so that a friend removed while it runs loses the
+  // row at once (loadList itself picks up the ones added meanwhile).
   // Optional chaining: a page with a partial chrome API shim has no onChanged.
   chrome.storage.onChanged?.addListener((changes, area) => {
     if (area !== "local" || !("FRIENDS_LIST" in changes)) return;
     const list = parseFriendsList(changes.FRIENDS_LIST.newValue);
     if (list) onFriendsListChanged(list);
   });
+
+  if (!_state.notConnected && !_state.needsReconnect) {
+    await loadList(false);
+  }
+
+  renderWidgetUI();
 
   const closeOnOutsideClick = (e: Event) => {
     if (!_state || !_state.open) return;

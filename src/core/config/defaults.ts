@@ -20,6 +20,7 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CLOUD_TOKEN: "",
   CLOUD_LOGIN: "",
   CLOUD_AUTH_FAILED: false,
+  SIGNIN_DISCLOSURE_ACCEPTED: false,
   ACCOUNT: null,
 
   LOGTIME_GOAL_HOURS: 140,
@@ -141,7 +142,7 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CUSTOM_CARD_TITLE_COLOR: "#00babc",
   CUSTOM_CARDS: {},
   CUSTOM_PRESETS: [],
-  CUSTOM_SHARE_LOOK: false,
+  CUSTOM_SHARE_LOOK: true,
   CUSTOM_SHOW_OTHERS_LOOK: true,
 
   PROFILE_PUB_ENABLED: true,

@@ -2,9 +2,9 @@
  * @vitest-environment-options { "url": "https://profile-v3.intra.42.fr/" }
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import * as perf from "../src/features/performance/perf";
 import {
   HIDDEN_CLASS,
-  LAZY_BUDGET,
   PERF_KEYS,
   PERF_SHADOW_TARGETS,
   PERF_STYLE_ID,
@@ -14,44 +14,24 @@ import {
   applyPreconnect,
   buildPerfCss,
   buildShadowPerfCss,
-  getImageObserver,
-  initPerfObservers,
   initPerfStyles,
-  lazifyImages,
   setHiddenClass,
   stopPerformance,
   type PerfFlags,
 } from "../src/features/performance/perf";
 import { CONFIG_DEFAULT } from "../src/core/config";
+import { ADVANCED_SETTINGS } from "../src/features/hub/settings/advanced";
 
 const ALL_OFF: PerfFlags = {
   PERF_DEFER_OFFSCREEN: false,
-  PERF_LAZY_IMAGES: false,
   PERF_PAUSE_HIDDEN: false,
   PERF_PRECONNECT: false,
 };
 const ALL_ON: PerfFlags = {
   PERF_DEFER_OFFSCREEN: true,
-  PERF_LAZY_IMAGES: true,
   PERF_PAUSE_HIDDEN: true,
   PERF_PRECONNECT: true,
 };
-
-/** jsdom gives every element a zero rect; this makes one look on screen. */
-function putOnScreen(el: Element, top = 10) {
-  el.getBoundingClientRect = () =>
-    ({
-      top,
-      bottom: top + 40,
-      left: 0,
-      right: 40,
-      width: 40,
-      height: 40,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    }) as DOMRect;
-}
 
 function setStore(values: Partial<PerfFlags>) {
   return chrome.storage.local.set(values as Record<string, unknown>);
@@ -69,11 +49,20 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("the four settings exist", () => {
+describe("the three settings exist", () => {
   it("are declared with a default of on", () => {
     for (const key of PERF_KEYS) {
       expect(CONFIG_DEFAULT[key]).toBe(true);
     }
+  });
+
+  it("are exactly the switches the hub offers under Lighten the Intra", () => {
+    // "Load images when needed" promised deferred downloads that never
+    // happened (loading=lazy set after React set src): it must not come back
+    // as a switch that does nothing.
+    const offered = ADVANCED_SETTINGS.map((d) => d.key).filter((k) => k?.startsWith("PERF_"));
+    expect(offered.sort()).toEqual([...PERF_KEYS].sort());
+    expect(offered).not.toContain("PERF_LAZY_IMAGES");
   });
 });
 
@@ -142,125 +131,6 @@ describe("buildPerfCss", () => {
   });
 });
 
-describe("lazifyImages", () => {
-  it("sets both attributes on an off-screen image", () => {
-    const img = document.createElement("img");
-    img.src = "https://cdn.intra.42.fr/users/a.jpg";
-    document.body.appendChild(img);
-
-    expect(lazifyImages(document.body)).toBe(1);
-    expect(img.getAttribute("loading")).toBe("lazy");
-    expect(img.getAttribute("decoding")).toBe("async");
-  });
-
-  it("never touches an image that already sets loading", () => {
-    const eager = document.createElement("img");
-    eager.setAttribute("loading", "eager");
-    const lazy = document.createElement("img");
-    lazy.setAttribute("loading", "lazy");
-    document.body.append(eager, lazy);
-
-    expect(lazifyImages(document.body)).toBe(0);
-    expect(eager.getAttribute("loading")).toBe("eager");
-    expect(eager.hasAttribute("decoding")).toBe(false);
-    expect(lazy.hasAttribute("decoding")).toBe(false);
-  });
-
-  it("keeps a decoding value the page already chose", () => {
-    const img = document.createElement("img");
-    img.setAttribute("decoding", "sync");
-    document.body.appendChild(img);
-
-    expect(lazifyImages(document.body)).toBe(1);
-    expect(img.getAttribute("loading")).toBe("lazy");
-    expect(img.getAttribute("decoding")).toBe("sync");
-  });
-
-  it("never touches images inside our own widgets", () => {
-    const hosts = [
-      "ft-marks-injected",
-      "friends-widget-host",
-      "logtime-shadow-wrapper",
-      "cluster-shadow-host",
-      "better-intra-sort-host",
-    ];
-    const ours: HTMLImageElement[] = [];
-    for (const id of hosts) {
-      const host = document.createElement("div");
-      host.id = id;
-      const img = document.createElement("img");
-      host.appendChild(img);
-      document.body.appendChild(host);
-      ours.push(img);
-    }
-    // the nav avatar is the page's own <img>, but visuals.ts owns it
-    const nav = document.createElement("img");
-    nav.dataset.ftNavAvatar = "1";
-    document.body.appendChild(nav);
-
-    const theirs = document.createElement("img");
-    document.body.appendChild(theirs);
-
-    expect(lazifyImages(document.body)).toBe(1);
-    for (const img of [...ours, nav]) {
-      expect(img.hasAttribute("loading")).toBe(false);
-      expect(img.hasAttribute("decoding")).toBe(false);
-    }
-    expect(theirs.getAttribute("loading")).toBe("lazy");
-  });
-
-  it("never touches images inside a shadow root", () => {
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = host.attachShadow({ mode: "open" });
-    const img = document.createElement("img");
-    root.appendChild(img);
-
-    expect(lazifyImages(document.body)).toBe(0);
-    expect(lazifyImages(root)).toBe(0);
-    expect(img.hasAttribute("loading")).toBe(false);
-  });
-
-  it("leaves images that are already on screen eager, and does not re-measure them", () => {
-    const visible = document.createElement("img");
-    const below = document.createElement("img");
-    document.body.append(visible, below);
-    putOnScreen(visible, 10);
-
-    expect(lazifyImages(document.body)).toBe(1);
-    expect(visible.hasAttribute("loading")).toBe(false);
-    expect(below.getAttribute("loading")).toBe("lazy");
-
-    // second pass: nothing left to look at
-    const spy = vi.fn(visible.getBoundingClientRect.bind(visible));
-    visible.getBoundingClientRect = spy;
-    expect(lazifyImages(document.body)).toBe(0);
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it("still lazifies an image far below the fold", () => {
-    const img = document.createElement("img");
-    document.body.appendChild(img);
-    putOnScreen(img, window.innerHeight + 5000);
-    expect(lazifyImages(document.body)).toBe(1);
-    expect(img.getAttribute("loading")).toBe("lazy");
-  });
-
-  it("stops after its budget", () => {
-    for (let i = 0; i < 50; i++) document.body.appendChild(document.createElement("img"));
-    expect(lazifyImages(document.body, 10)).toBe(10);
-    expect(document.querySelectorAll("img[loading]").length).toBe(10);
-    // the rest is picked up by the following passes
-    expect(lazifyImages(document.body, 10)).toBe(10);
-    expect(document.querySelectorAll("img[loading]").length).toBe(20);
-  });
-
-  it("is a no-op without a root", () => {
-    expect(lazifyImages(null)).toBe(0);
-    expect(lazifyImages(document.body, 0)).toBe(0);
-  });
-});
-
 describe("preconnect", () => {
   it("adds the hints once and removes only its own", () => {
     const foreign = document.createElement("link");
@@ -324,62 +194,57 @@ describe("hidden tab", () => {
 });
 
 describe("init", () => {
-  it("installs the stylesheet, the hints and the observer when everything is on", async () => {
+  it("installs the stylesheet and the hints when everything is on", async () => {
     await setStore(ALL_ON);
-    const img = document.createElement("img");
-    document.body.appendChild(img);
 
     await initPerfStyles();
-    await initPerfObservers();
 
     const style = document.getElementById(PERF_STYLE_ID);
     expect(style?.textContent).toContain("content-visibility: auto");
     expect(document.head.querySelectorAll("link[data-ft-perf-preconnect]").length).toBe(3);
-    expect(getImageObserver()).not.toBeNull();
-    expect(img.getAttribute("loading")).toBe("lazy");
   });
 
-  it("is a complete no-op when the four settings are off", async () => {
+  it("is a complete no-op when the three settings are off", async () => {
     await setStore(ALL_OFF);
-    const img = document.createElement("img");
-    document.body.appendChild(img);
 
     await initPerfStyles();
-    await initPerfObservers();
 
     expect(document.getElementById(PERF_STYLE_ID)).toBeNull();
     expect(document.head.querySelectorAll("link[data-ft-perf-preconnect]").length).toBe(0);
     expect(document.documentElement.classList.contains(HIDDEN_CLASS)).toBe(false);
-    expect(getImageObserver()).toBeNull();
-    expect(img.hasAttribute("loading")).toBe(false);
   });
 
-  it("does not install a second observer on a second init", async () => {
-    await setStore(ALL_ON);
-    await initPerfObservers();
-    const first = getImageObserver();
-    expect(first).not.toBeNull();
+  it("leaves the page's images alone, even with the old image switch still stored on", async () => {
+    // Every start-up entry point the module exports, as main.ts would call
+    // them, with a store written by 1.13 (PERF_LAZY_IMAGES: true).
+    await chrome.storage.local.set({ ...ALL_ON, PERF_LAZY_IMAGES: true });
+    const early = document.createElement("img");
+    early.src = "https://cdn.intra.42.fr/users/early.jpg";
+    document.body.appendChild(early);
 
-    await initPerfObservers();
-    expect(getImageObserver()).toBe(first);
+    for (const [name, fn] of Object.entries(perf)) {
+      if (name.startsWith("init") && typeof fn === "function") await (fn as () => unknown)();
+    }
+    const late = document.createElement("img");
+    late.src = "https://cdn.intra.42.fr/users/late.jpg";
+    document.body.appendChild(late);
+    // longer than the old idle pass (requestIdleCallback timeout 500 ms,
+    // setTimeout 100 ms without it)
+    await new Promise((r) => setTimeout(r, 150));
 
-    // and concurrently, where both calls pass the first guard before awaiting
-    stopPerformance();
-    await Promise.all([initPerfObservers(), initPerfObservers(), initPerfObservers()]);
-    const only = getImageObserver();
-    expect(only).not.toBeNull();
-    await initPerfObservers();
-    expect(getImageObserver()).toBe(only);
+    for (const img of [early, late]) {
+      expect(img.hasAttribute("loading")).toBe(false);
+      expect(img.hasAttribute("decoding")).toBe(false);
+      expect(img.hasAttribute("data-ft-perf")).toBe(false);
+    }
   });
 
-  it("stopPerformance disconnects and clears the hidden class", async () => {
+  it("stopPerformance clears the hidden class", async () => {
     await setStore(ALL_ON);
     await initPerfStyles();
-    await initPerfObservers();
     setHiddenClass(true);
 
     stopPerformance();
-    expect(getImageObserver()).toBeNull();
     expect(document.documentElement.classList.contains(HIDDEN_CLASS)).toBe(false);
   });
 });
@@ -388,29 +253,11 @@ describe("init", () => {
  * A page the size of a real Intra dashboard, to put numbers on the feature.
  *
  * jsdom has no layout and no paint, so what is MEASURED here is only the reach
- * of the two passes: how many <img> elements get the lazy attributes and how
- * many elements the content-visibility rules cover. The rendering saving those
- * two numbers buy is reasoned about in the report, not measured here.
+ * of the content-visibility rules: how many elements they cover. The rendering
+ * saving that number buys is reasoned about in the report, not measured here.
  */
 describe("benchmark on an Intra-sized page", () => {
   it("reports how much of the page the feature reaches", () => {
-    const IMAGES = 300;
-    const ON_SCREEN = 12;
-
-    const wall = document.createElement("div");
-    document.body.appendChild(wall);
-    for (let i = 0; i < IMAGES; i++) {
-      const img = document.createElement("img");
-      img.src = `https://cdn.intra.42.fr/users/u${i}.jpg`;
-      wall.appendChild(img);
-      if (i < ON_SCREEN) putOnScreen(img, i * 60);
-    }
-    // eight of them belong to our own widgets and must be left alone
-    const ourHost = document.createElement("div");
-    ourHost.id = "friends-widget-host";
-    for (let i = 0; i < 8; i++) ourHost.appendChild(document.createElement("img"));
-    document.body.appendChild(ourHost);
-
     // 400 list rows, built with the classes our own features already read.
     // Each row carries the handful of children a real one has (link, date,
     // score, star span), because what the browser saves is proportional to the
@@ -445,14 +292,6 @@ describe("benchmark on an Intra-sized page", () => {
     document.body.append(marks, native, achievements, evals);
 
     // ---- measure ----
-    let lazified = 0;
-    let passes = 0;
-    // the observer runs the same bounded pass until the page is exhausted
-    for (let n = lazifyImages(document.body); n > 0; n = lazifyImages(document.body)) {
-      lazified += n;
-      passes++;
-    }
-
     // A deferred block costs the browser nothing while it is off screen, so
     // the useful number is the DOM weight inside the covered blocks, not the
     // number of blocks.
@@ -475,23 +314,16 @@ describe("benchmark on an Intra-sized page", () => {
         "",
         "  Better Intra - Lighten the Intra, synthetic jsdom page",
         "  ---------------------------------------------------------------",
-        `  images on the page ............ ${IMAGES + 8} (${IMAGES} the Intra's, 8 ours)`,
-        `  lazified ...................... ${lazified} in ${passes} pass(es) of ${LAZY_BUDGET}`,
-        `  left eager (on screen) ........ ${document.querySelectorAll("img[data-ft-perf]").length}`,
-        `  ours, untouched ............... ${ourHost.querySelectorAll("img:not([loading])").length}`,
         `  list rows on the page ......... ${covered}`,
         `  elements in <body> ............ ${totalNodes}`,
         `  inside a deferred block ....... ${coveredNodes}  (${pct}% of the page)`,
         ...Object.entries(perTarget).map(([sel, n]) => `      ${n}  ${sel}`),
-        "  measured: reach of the two passes. Not measured: paint and layout",
+        "  measured: reach of the deferral rules. Not measured: paint and layout",
         "  time - jsdom has neither.",
         "",
       ].join("\n"),
     );
 
-    expect(lazified).toBe(IMAGES - ON_SCREEN);
-    expect(passes).toBe(Math.ceil((IMAGES - ON_SCREEN) / LAZY_BUDGET));
-    expect(ourHost.querySelectorAll("img:not([loading])").length).toBe(8);
     // 150 + 100 + 100: the 50 evaluation rows are on purpose left out
     expect(covered).toBe(350);
     // the rows are the bulk of the page: that is the point of the feature
