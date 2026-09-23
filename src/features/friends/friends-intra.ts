@@ -17,7 +17,7 @@ import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import { hashLogin } from "../../core/crypto.ts";
 import { MAX_REMOTE_URL_LENGTH } from "../../core/security/safe-url.ts";
-import { allowedImageUrl } from "../../core/security/css-sanitize.ts";
+import { sanitizeCssUrl } from "../../core/security/css-sanitize.ts";
 import {
   sanitizeCssColor,
   sanitizeVisualUrls,
@@ -69,7 +69,9 @@ export function pickMainCursus(cursus: unknown): Raw | null {
 
 function poolLabel(user: Raw): string | null {
   const month = str(user.pool_month);
-  const year = str(user.pool_year) ?? (typeof user.pool_year === "number" ? String(user.pool_year) : null);
+  const year =
+    str(user.pool_year) ??
+    (typeof user.pool_year === "number" ? String(user.pool_year) : null);
   if (!month || !year) return null;
   const m = new Date(`${month} 1, 2000`).getMonth();
   if (Number.isNaN(m)) return null;
@@ -88,7 +90,7 @@ export function hasProfilePicture(user: Raw | null): boolean {
 /**
  * Apply the worker's public visuals (another user's settings) to a friend.
  * The values end up in an inline style, so anything that is not a plain
- * colour or an https image on an allowlisted host is dropped, like the
+ * colour or an http(s) image is dropped, like the
  * profile page does (this widget loads the avatars on every Intra page).
  */
 export function applyIntraVisuals(
@@ -97,7 +99,7 @@ export function applyIntraVisuals(
 ): FriendData {
   if (!input) return friend;
   const visuals = input as Raw;
-  friend.customAvatar = allowedImageUrl(bounded(visuals.avatar)) || null;
+  friend.customAvatar = sanitizeCssUrl(bounded(visuals.avatar)) || null;
   friend.avatarBg =
     sanitizeCssColor(bounded(visuals.avatarBg), AVATAR_BG_KEYWORDS) ||
     "transparent";
@@ -179,32 +181,29 @@ function toVisualUrls(data: Raw): VisualUrls {
     const x = bounded(v);
     return typeof x === "string" && x ? x : fallback;
   };
-  // The worker answers for OTHER logins: images off the host allowlist are dropped.
-  return sanitizeVisualUrls(
-    {
-      avatar: b(data.avatar, ""),
-      banner: b(data.banner, ""),
-      bannerMode: b(data.bannerMode, "fill"),
-      bannerColor: b(data.bannerColor, ""),
-      background: b(data.background, ""),
-      backgroundMode: b(data.backgroundMode, "fill"),
-      backgroundColor: b(data.backgroundColor, ""),
-      avatarBg: b(data.avatarBg, "transparent"),
-      decoration: b(data.decoration, "none"),
-      avatarPosX: num(data.avatarPosX, 50),
-      avatarPosY: num(data.avatarPosY, 50),
-      avatarScale: num(data.avatarScale, 100),
-      badgeBg: b(data.badgeBg, ""),
-      theme: (data.theme as { profileColor?: string }) || null,
-      logtime: (data.logtime as Record<string, unknown>) || null,
-      look: (data.look as Record<string, unknown>) || null,
-      extras: (data.extras as Record<string, unknown>) || null,
-    },
-    { images: "allowlist" },
-  );
+  return sanitizeVisualUrls({
+    avatar: b(data.avatar, ""),
+    banner: b(data.banner, ""),
+    bannerMode: b(data.bannerMode, "fill"),
+    bannerColor: b(data.bannerColor, ""),
+    background: b(data.background, ""),
+    backgroundMode: b(data.backgroundMode, "fill"),
+    backgroundColor: b(data.backgroundColor, ""),
+    avatarBg: b(data.avatarBg, "transparent"),
+    decoration: b(data.decoration, "none"),
+    avatarPosX: num(data.avatarPosX, 50),
+    avatarPosY: num(data.avatarPosY, 50),
+    avatarScale: num(data.avatarScale, 100),
+    badgeBg: b(data.badgeBg, ""),
+    theme: (data.theme as { profileColor?: string }) || null,
+    logtime: (data.logtime as Record<string, unknown>) || null,
+    look: (data.look as Record<string, unknown>) || null,
+    extras: (data.extras as Record<string, unknown>) || null,
+  });
 }
 
-const isRaw = (v: unknown): v is Raw => !!v && typeof v === "object" && !Array.isArray(v);
+const isRaw = (v: unknown): v is Raw =>
+  !!v && typeof v === "object" && !Array.isArray(v);
 
 /** One `?login=` request: what every worker answers. null when it failed. */
 async function fetchVisualsSingle(hashed: string): Promise<Raw | null> {
@@ -276,7 +275,11 @@ export async function fetchFriendsVisuals(
   const hashList = [...hashes.keys()];
   const fetched = new Map<string, Raw | null>();
   let batchSupported = true;
-  for (let i = 0; i < hashList.length && batchSupported; i += VISUALS_BATCH_MAX) {
+  for (
+    let i = 0;
+    i < hashList.length && batchSupported;
+    i += VISUALS_BATCH_MAX
+  ) {
     const chunk = hashList.slice(i, i + VISUALS_BATCH_MAX);
     const answer = await fetchVisualsBatch(chunk);
     if (answer === undefined) batchSupported = false;
@@ -353,7 +356,10 @@ export interface IntraFetchOptions {
 }
 
 /** Carry over what an "online" fetch did not ask for from the last known row. */
-function inheritDetails(fresh: FriendData, old: FriendData | undefined): FriendData {
+function inheritDetails(
+  fresh: FriendData,
+  old: FriendData | undefined,
+): FriendData {
   if (!old) return fresh;
   return {
     ...fresh,
@@ -379,7 +385,8 @@ export async function fetchFriendsIntraResult(
   let lastOnline: Record<string, number> = {};
   try {
     const store = await chrome.storage.local.get(LAST_ONLINE_KEY);
-    lastOnline = (store[LAST_ONLINE_KEY] as Record<string, number> | undefined) ?? {};
+    lastOnline =
+      (store[LAST_ONLINE_KEY] as Record<string, number> | undefined) ?? {};
   } catch {
     // Unreadable "last seen" stamps only lose the relative times for a load.
   }
@@ -388,7 +395,8 @@ export async function fetchFriendsIntraResult(
   // One worker request for the whole list, alongside the intrapy calls.
   const wantVisuals =
     opts.visuals ?? !!(await getConfig("SHOW_CUSTOM_AVATARS_IN_FRIENDS"));
-  const visualsPromise = full && wantVisuals ? fetchFriendsVisuals(logins) : null;
+  const visualsPromise =
+    full && wantVisuals ? fetchFriendsVisuals(logins) : null;
 
   const results = await mapLimit(logins, CONCURRENCY, async (login) => {
     const base = `${INTRAPY}/users/${encodeURIComponent(login)}`;
@@ -443,7 +451,9 @@ export async function fetchFriendsIntraResult(
   for (const r of results) {
     if (r.status === "ok") {
       out.friends.push(
-        visuals ? applyIntraVisuals(r.friend, visuals.get(r.login) ?? null) : r.friend,
+        visuals
+          ? applyIntraVisuals(r.friend, visuals.get(r.login) ?? null)
+          : r.friend,
       );
     } else if (r.status === "not-found") out.notFound.push(r.login);
     else out.failed.push(r.login);

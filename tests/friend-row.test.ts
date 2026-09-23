@@ -10,7 +10,7 @@ import type { FriendData } from "../src/features/friends/friends-types";
 
 // A friend's avatar URL is chosen by that student and reaches the widget
 // unchanged through the worker and sanitizeCssUrl(), which keeps ')' and ';'
-// (the host allowlist only says where it is fetched from, imgur here).
+// (imgur here, but any http(s) host is accepted).
 const PAYLOAD =
   "https://i.imgur.com/a.png);position:fixed!important;left:-100vw!important;top:-100vh!important;width:300vw!important;height:300vh!important;z-index:2147483647!important;pointer-events:auto!important;background-image:url(https://evil.example/fake.png";
 const WIKIMEDIA =

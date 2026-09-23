@@ -159,28 +159,4 @@ describe("sanitizeVisualUrls", () => {
     expect(sanitizeVisualUrls(once)).toEqual(once);
   });
 
-  // Another user's images are fetched by the viewer's browser from the host
-  // the author chose: at ingestion they must be on the host allowlist. The
-  // default (the author's own settings, applyImgs) keeps any http(s) URL.
-  it("with images: \"allowlist\", drops images off the host allowlist and http ones", () => {
-    const input = {
-      ...base,
-      avatar: "https://i.imgur.com/me.png",
-      banner: "https://my-site.example/banner.png",
-      background: "http://i.imgur.com/bg.png",
-      look: { CUSTOM_PAGE_BG_URL: "https://my-site.example/bg.png", CUSTOM_PAGE_BG_DIM: 55 },
-    };
-    const strict = sanitizeVisualUrls(input, { images: "allowlist" });
-    expect(strict.avatar).toBe("https://i.imgur.com/me.png");
-    expect(strict.banner).toBe("");
-    expect(strict.background).toBe("");
-    expect(strict.look).toEqual({ CUSTOM_PAGE_BG_URL: "", CUSTOM_PAGE_BG_DIM: 55 });
-
-    const own = sanitizeVisualUrls(input);
-    expect(own.banner).toBe("https://my-site.example/banner.png");
-    expect(own.background).toBe("http://i.imgur.com/bg.png");
-    expect(own.look?.CUSTOM_PAGE_BG_URL).toBe("https://my-site.example/bg.png");
-    // applyImgs() re-sanitises with the default and must get the same object back
-    expect(sanitizeVisualUrls(strict)).toEqual(strict);
-  });
 });

@@ -10,7 +10,6 @@
  */
 import { CONFIG_DEFAULT } from "../../core/config.ts";
 import {
-  allowedImageUrl,
   sanitizeCssUrl,
   sanitizeHexColor,
 } from "../../core/security/css-sanitize.ts";
@@ -78,21 +77,11 @@ const RANGES: Partial<Record<PublicLookKey, [number, number]>> = {
 };
 
 /**
- * "allowlist": the page background must be on the image host allowlist
- * (a visitor look, see image-hosts.ts); "any": any http(s) URL (the
- * author's own look).
- */
-export type ImagePolicy = "any" | "allowlist";
-
-/**
  * Validate a look received from the cloud. Unknown keys and invalid values
  * are dropped; returns null when nothing visible remains (every kept value
  * equals its default).
  */
-export function sanitizePublicLook(
-  raw: unknown,
-  images: ImagePolicy = "any",
-): PublicLook | null {
+export function sanitizePublicLook(raw: unknown): PublicLook | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const src = raw as Record<string, unknown>;
   const out: Record<string, unknown> = {};
@@ -116,7 +105,7 @@ export function sanitizePublicLook(
       const hex = sanitizeHexColor(v);
       if (hex) out[key] = hex;
     } else if (key === "CUSTOM_PAGE_BG_URL") {
-      out[key] = images === "allowlist" ? allowedImageUrl(v) : sanitizeCssUrl(v);
+      out[key] = sanitizeCssUrl(v);
     } else if (ENUMS[key]) {
       if (v in ENUMS[key]!) out[key] = v;
     }

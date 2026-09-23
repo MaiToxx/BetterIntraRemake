@@ -45,7 +45,7 @@ The worker is a Cloudflare Worker with Workers Logs enabled. Every request is lo
 
 ## Images other students chose
 
-A custom avatar, banner or background is a URL the profile owner pasted. The extension loads such images only from an allowlist of image hosts; a URL on any other host is ignored. The host serving the image sees the request your browser makes for it (your IP address, as for any picture on a web page).
+A custom avatar, banner or background is a URL the profile owner pasted. The extension loads it from wherever it is hosted (any http(s) URL). The host serving the image sees the request your browser makes for it (your IP address, as for any picture on a web page).
 
 ## Data retention and deletion
 

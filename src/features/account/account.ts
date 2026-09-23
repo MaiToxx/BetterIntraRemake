@@ -402,8 +402,7 @@ export async function fetchUserVisuals(
     const data = response.json as Record<string, unknown>;
 
     // Another user's values: validate them once here so that every consumer
-    // (cache, comparisons, applyImgs) sees the same sanitised object. Their
-    // images are only shown from the allowlisted hosts (image-hosts.ts).
+    // (cache, comparisons, applyImgs) sees the same sanitised object.
     return sanitizeVisualUrls({
       avatar: String(data.avatar || ""),
       banner: String(data.banner || ""),
@@ -422,7 +421,7 @@ export async function fetchUserVisuals(
       logtime: (data.logtime as Record<string, unknown>) || null,
       look: (data.look as Record<string, unknown>) || null,
       extras: (data.extras as Record<string, unknown>) || null,
-    }, { images: "allowlist" });
+    });
   } catch (error) {
     console.error(error);
     return null;

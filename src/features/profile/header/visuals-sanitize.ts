@@ -1,15 +1,13 @@
 import type { VisualUrls } from "./visuals-types.ts";
 import {
-  allowedImageUrl,
   sanitizeCssColor,
   sanitizeCssUrl,
   sanitizeHexColor,
 } from "../../../core/security/css-sanitize.ts";
-import { sanitizePublicLook, type ImagePolicy } from "../../customize/public-look.ts";
+import { sanitizePublicLook } from "../../customize/public-look.ts";
 import { pickRawExtras } from "../extras/extras-apply.ts";
 
 export { sanitizeCssColor, sanitizeCssUrl, sanitizeHexColor };
-export type { ImagePolicy };
 
 /**
  * Visual settings come from other users through the cloud API and are
@@ -33,23 +31,8 @@ function sanitizeMode(value: unknown): string {
   return typeof value === "string" && BANNER_MODES.has(value) ? value : "fill";
 }
 
-export interface SanitizeVisualOptions {
-  /**
-   * "allowlist" for ANOTHER user's values at ingestion (cloud fetch, cached
-   * visuals of another login, friends): images off the host allowlist are
-   * dropped, so that the viewer's browser never contacts an arbitrary host.
-   * The default "any" is for the author's own settings and for applyImgs(),
-   * which re-sanitises already-ingested values and must give back the same
-   * object (needsReapply/getVisualKey compare the two).
-   */
-  images?: ImagePolicy;
-}
-
-export function sanitizeVisualUrls(
-  urls: VisualUrls,
-  options: SanitizeVisualOptions = {},
-): VisualUrls {
-  const image = options.images === "allowlist" ? allowedImageUrl : sanitizeCssUrl;
+export function sanitizeVisualUrls(urls: VisualUrls): VisualUrls {
+  const image = sanitizeCssUrl;
   const theme =
     urls.theme && typeof urls.theme === "object"
       ? { profileColor: sanitizeHexColor(urls.theme.profileColor) || undefined }
@@ -96,7 +79,7 @@ export function sanitizeVisualUrls(
     badgeBg: sanitizeCssColor(urls.badgeBg),
     theme,
     logtime,
-    look: sanitizePublicLook(urls.look, options.images),
+    look: sanitizePublicLook(urls.look),
     // raw PROFILE_PUB_* values, bounded here and validated when applied
     extras: pickRawExtras(urls.extras),
   };

@@ -122,16 +122,6 @@ describe("applyIntraVisuals", () => {
     expect(applyIntraVisuals(base(), { avatarBg: "url(https://evil/x)" }).avatarBg).toBe("transparent");
   });
 
-  // The friends widget loads these avatars on every Intra page: an avatar on
-  // a host outside the allowlist would show the viewer's IP to that host.
-  it("drops an avatar hosted off the image host allowlist, or served over http", () => {
-    expect(applyIntraVisuals(base(), { avatar: "https://my-site.example/bob.png" }).customAvatar).toBeNull();
-    expect(applyIntraVisuals(base(), { avatar: "http://i.imgur.com/bob.png" }).customAvatar).toBeNull();
-    expect(applyIntraVisuals(base(), { avatar: "https://i.imgur.com/bob.png" }).customAvatar).toBe(
-      "https://i.imgur.com/bob.png",
-    );
-  });
-
   it("leaves the friend untouched without visuals", () => {
     const f = base();
     expect(applyIntraVisuals(f, null)).toBe(f);

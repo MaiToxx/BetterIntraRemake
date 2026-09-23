@@ -223,8 +223,7 @@ export const updateVisuals = async () => {
           cached.look ||
           cached.extras)
       ) {
-        // A cache entry written before the host allowlist is filtered on read
-        visualCache = sanitizeVisualUrls(cached, { images: "allowlist" });
+        visualCache = sanitizeVisualUrls(cached);
         applyImgs(visualCache);
         lastAppliedUser = targetLogin;
         lastAppliedKey = getVisualKey(visualCache);
