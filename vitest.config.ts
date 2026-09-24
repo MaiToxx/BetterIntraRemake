@@ -24,5 +24,9 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./tests/setup.ts"],
+    // Above the longest vi.waitFor (8 s, for the slow CI runner): at the
+    // default 5 s a case was cut short while its own wait still ran, and the
+    // 1.15.0 release stopped at its tests.
+    testTimeout: 20_000,
   },
 });
