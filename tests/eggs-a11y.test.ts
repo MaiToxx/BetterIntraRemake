@@ -10,6 +10,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 type Listener = EventListenerOrEventListenerObject;
 /** keydown listeners each fresh module instance adds, removed after each case. */
 const added: Listener[] = [];
+/** storage.onChanged listeners, and a way to fire them like the browser does. */
+const storageListeners: ((changes: object, area: string) => void)[] = [];
+function storageChanged(values: Record<string, unknown>) {
+  const changes = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, { newValue: v }]));
+  for (const fn of storageListeners) fn(changes, "local");
+}
 
 async function startEggs(stored: Record<string, unknown> = {}) {
   await chrome.storage.local.clear();
@@ -65,13 +71,16 @@ beforeEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
   document.documentElement.removeAttribute("style");
-  const real = document.addEventListener.bind(document);
-  vi.spyOn(document, "addEventListener").mockImplementation(
+  const real = window.addEventListener.bind(window);
+  vi.spyOn(window, "addEventListener").mockImplementation(
     (type: string, fn: Listener, opts?: boolean | AddEventListenerOptions) => {
       if (type === "keydown") added.push(fn);
       real(type, fn, opts);
     },
   );
+  (chrome.storage as unknown as { onChanged: unknown }).onChanged = {
+    addListener: (fn: (changes: object, area: string) => void) => storageListeners.push(fn),
+  };
   // jsdom has no 2D context; a stub lets the canvas effects mount.
   const ctx = new Proxy({}, { get: () => () => {}, set: () => true });
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
@@ -81,7 +90,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const fn of added.splice(0)) document.removeEventListener("keydown", fn);
+  for (const fn of added.splice(0)) window.removeEventListener("keydown", fn, true);
+  storageListeners.splice(0);
+  delete (chrome.storage as unknown as { onChanged?: unknown }).onChanged;
   // Every startEggs() arms the 42h badge watcher (jsdom's path is "/"); the
   // fake deadline dies with useRealTimers(), and the observers would fire
   // after the environment is torn down ("document is not defined").
@@ -116,6 +127,78 @@ describe("typing in Better Intra's own fields", () => {
     document.body.appendChild(input);
     typeInto(input, "barrel");
     expect(document.documentElement.style.transform).toBe("");
+  });
+});
+
+describe("the key listener", () => {
+  it("sees a key the page stops on its way (it listens first, on the window)", async () => {
+    await startEggs();
+    const stopper = (e: Event) => e.stopPropagation();
+    document.body.addEventListener("keydown", stopper, true);
+    try {
+      typeInto(document.body, "barrel");
+    } finally {
+      document.body.removeEventListener("keydown", stopper, true);
+    }
+    expect(document.documentElement.style.transform).toBe("rotate(360deg)");
+  });
+
+  it("follows the switch without a reload, both ways", async () => {
+    await startEggs({ EASTER_EGGS_ENABLED: false });
+    typeInto(document.body, "barrel");
+    expect(document.documentElement.style.transform).toBe("");
+
+    storageChanged({ EASTER_EGGS_ENABLED: true });
+    typeInto(document.body, "barrel");
+    expect(document.documentElement.style.transform).toBe("rotate(360deg)");
+    expect(await foundEggs()).toEqual(["barrel"]);
+
+    await vi.advanceTimersByTimeAsync(1400);
+    storageChanged({ EASTER_EGGS_ENABLED: false });
+    typeInto(document.body, "barrel");
+    expect(document.documentElement.style.transform).toBe("");
+  });
+
+  it("counts keys pressed on a switch or a button, and skips a key-less autofill event", async () => {
+    await startEggs();
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.appendChild(box);
+    box.dispatchEvent(new Event("keydown", { bubbles: true }));
+    typeInto(box, "barrel");
+    expect(document.documentElement.style.transform).toBe("rotate(360deg)");
+  });
+
+  it("still shows the secret when storage is gone (an orphaned script)", async () => {
+    await startEggs();
+    const get = vi.spyOn(chrome.storage.local, "get").mockRejectedValue(new Error("Extension context invalidated."));
+    typeInto(document.body, "maxwell");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById("ft-egg-maxwell")).not.toBeNull();
+    expect(document.getElementById("ft-egg-toast")?.textContent).toContain("Maxwell");
+    get.mockRestore();
+  });
+});
+
+describe("the hub gear secret", () => {
+  it("takes seven clicks in a row, each under five seconds after the last", async () => {
+    const { gearClicked } = await startEggs();
+    for (let i = 0; i < 6; i++) {
+      await gearClicked();
+      await vi.advanceTimersByTimeAsync(4000);
+    }
+    expect(await foundEggs()).toBeUndefined();
+    await gearClicked();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await foundEggs()).toEqual(["hacker"]);
+  });
+
+  it("starts over after a longer pause", async () => {
+    const { gearClicked } = await startEggs();
+    for (let i = 0; i < 6; i++) await gearClicked();
+    await vi.advanceTimersByTimeAsync(5001);
+    await gearClicked();
+    expect(await foundEggs()).toBeUndefined();
   });
 });
 

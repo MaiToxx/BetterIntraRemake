@@ -6,6 +6,7 @@
  *   barrel    type "barrel"                 the page does a barrel roll
  *   matrix    type "matrix"                 digital rain for a few seconds
  *   hacker    click the hub gear 7 times    unlocks the "🐇 Hacker" preset
+ *             in a row (under 5 s apart)
  *   night     open the Intra between 2 and 5 am
  *   thursday  visit the dashboard on a Thursday (roulette day)
  *   fortytwo  a month at exactly 42h of logtime
@@ -391,20 +392,35 @@ export function maxwellInvasion(seconds = 12, count = 48, still = false): void {
 const TOTAL = EGG_IDS.length;
 
 async function found(id: EggId, message: string): Promise<void> {
-  const first = await recordEgg(id);
-  const n = (await listFoundEggs()).length;
+  let first = false;
+  let n = 0;
+  try {
+    first = await recordEgg(id);
+    n = (await listFoundEggs()).length;
+  } catch {
+    // Storage gone: Chrome keeps an updated extension's old script running in
+    // the open tabs, without its APIs. The secret still shows.
+  }
   toast(first ? `${message} · secret ${n}/${TOTAL} found` : message);
 }
 
-let gearClicks: number[] = [];
+/** Longest pause between two gear clicks that still counts as "in a row". */
+const GEAR_PAUSE_MS = 5000;
+let gearClicks = 0;
+let lastGearClick = 0;
 
-/** Called from the hub gear: seven clicks in four seconds unlock a preset. */
+/**
+ * Called from the hub gear: seven clicks in a row unlock a preset. Each click
+ * opens the hub, a modal the gear sits behind, so every click is an open and
+ * an Escape: seven of those within four seconds (the old rule) was out of
+ * reach. A pause of up to five seconds between two clicks is allowed.
+ */
 export async function gearClicked(): Promise<void> {
   const now = Date.now();
-  gearClicks = gearClicks.filter((t) => now - t < 4000);
-  gearClicks.push(now);
-  if (gearClicks.length < 7) return;
-  gearClicks = [];
+  gearClicks = now - lastGearClick <= GEAR_PAUSE_MS ? gearClicks + 1 : 1;
+  lastGearClick = now;
+  if (gearClicks < 7) return;
+  gearClicks = 0;
   const { EASTER_EGGS_ENABLED, DISABLE_ANIMATIONS } = await getConfigMany([
     "EASTER_EGGS_ENABLED",
     "DISABLE_ANIMATIONS",
@@ -428,11 +444,15 @@ export async function gearClicked(): Promise<void> {
   await found("hacker", "Wake up, Neo… the 🐇 Hacker preset is in Customize > Presets");
 }
 
+/** Inputs that take no text: a key pressed on one of them is not typing. */
+const NON_TEXT_INPUTS = ["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"];
+
 function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
   const tag = el.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  if (tag === "INPUT") return !NON_TEXT_INPUTS.includes((el as HTMLInputElement).type);
+  return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true;
 }
 
 /**
@@ -544,16 +564,12 @@ function checkFortyTwoHours(): void {
 }
 
 let initialised = false;
+/** The "Easter eggs" switch, followed live; off until the setting is read. */
+let enabled = false;
 
 export async function initEasterEggs(): Promise<void> {
   if (initialised) return;
   initialised = true;
-  const { EASTER_EGGS_ENABLED, DISABLE_ANIMATIONS } = await getConfigMany([
-    "EASTER_EGGS_ENABLED",
-    "DISABLE_ANIMATIONS",
-  ]);
-  if (EASTER_EGGS_ENABLED === false) return;
-  animationsDisabled = DISABLE_ANIMATIONS === true;
 
   const feed = createSequenceMatcher(SEQUENCES, (id) => {
     // Asked at each hit: the OS preference can change while the page is open.
@@ -582,11 +598,35 @@ export async function initEasterEggs(): Promise<void> {
       }
     }
   });
-  document.addEventListener("keydown", (e) => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (isTypingEvent(e)) return;
-    feed(e.key);
+  // On the window, in the capture phase, and before the settings are read:
+  // the first listener to see a key, so no handler of the page can stop it
+  // on the way, and the switch below decides at each key. It used to be a
+  // document listener added after the read, and only when the switch was on
+  // at page load: turning it on in the hub did nothing until a reload.
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!enabled || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Chrome's autofill sends keydown events without a key.
+      if (typeof e.key !== "string" || isTypingEvent(e)) return;
+      feed(e.key);
+    },
+    true,
+  );
+  chrome.storage.onChanged?.addListener((changes, area) => {
+    if (area !== "local") return;
+    if (changes.EASTER_EGGS_ENABLED) enabled = changes.EASTER_EGGS_ENABLED.newValue !== false;
+    if (changes.DISABLE_ANIMATIONS) animationsDisabled = changes.DISABLE_ANIMATIONS.newValue === true;
   });
+
+  const { EASTER_EGGS_ENABLED, DISABLE_ANIMATIONS } = await getConfigMany([
+    "EASTER_EGGS_ENABLED",
+    "DISABLE_ANIMATIONS",
+  ]);
+  enabled = EASTER_EGGS_ENABLED !== false;
+  animationsDisabled = DISABLE_ANIMATIONS === true;
+  // The page-load secrets (night, Thursday, 42h) look once, on this load.
+  if (!enabled) return;
 
   const start = () => {
     checkTimeAndDay();
