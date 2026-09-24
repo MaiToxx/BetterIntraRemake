@@ -89,4 +89,10 @@ describe("publish.yaml hands a slow signing over to finish-release.yaml", () => 
     expect(finish).toContain("update-updates-xml.js");
     expect(finish).toContain("rm -f crx-key.pem");
   });
+
+  it("the finisher runs the tests before it builds the Chrome files", () => {
+    const step = finish.slice(finish.indexOf("- name: Build and attach the Chrome files"));
+    expect(step.indexOf("npm test")).toBeGreaterThan(0);
+    expect(step.indexOf("npm test")).toBeLessThan(step.indexOf("npm run build:chrome"));
+  });
 });

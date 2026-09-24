@@ -75,6 +75,10 @@ jobs:
         run: |
           cd release
           npm ci
+          # publish.yaml may have stopped at its tests: never ship what they
+          # did not pass (1.15.0 got its Chrome files from here after a
+          # test run that failed)
+          npm test
           npm run build:chrome
           npx web-ext build --source-dir dist-chrome --filename better-intra-chrome.zip --overwrite-dest
           FILES="web-ext-artifacts/better-intra-chrome.zip"
