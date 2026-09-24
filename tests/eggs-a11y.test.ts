@@ -121,6 +121,22 @@ describe("typing in Better Intra's own fields", () => {
     expect(await foundEggs()).toEqual(["barrel"]);
   });
 
+  it("does not trigger from a closed shadow root's field, whose host says it has focus", async () => {
+    // The cluster map's search box: a window listener's composed path stops
+    // at the host of a closed root, so the field itself is never seen.
+    await startEggs();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const input = document.createElement("input");
+    host.attachShadow({ mode: "closed" }).appendChild(input);
+    host.dataset.ftTyping = "";
+    typeInto(input, "barrel");
+    expect(document.documentElement.style.transform).toBe("");
+    delete host.dataset.ftTyping;
+    typeInto(host, "barrel");
+    expect(document.documentElement.style.transform).toBe("rotate(360deg)");
+  });
+
   it("ignores light-DOM fields as before", async () => {
     await startEggs();
     const input = document.createElement("textarea");
@@ -277,6 +293,22 @@ describe("the toast", () => {
     expect(host.isConnected).toBe(true);
     await vi.advanceTimersByTimeAsync(100);
     expect(host.isConnected).toBe(false);
+  });
+
+  it("is as wide as its text needs, up to the viewport less a margin", async () => {
+    // With only left: 50%, a fixed box is capped at half the viewport: a
+    // French message wrapped at 640 px on a 1280 px screen, and became a
+    // five-line lens on a phone.
+    const { toast } = await startEggs();
+    toast("Maxwell (clique dessus pour qu’il tourne plus vite) · secret 1/9 trouvé");
+    const css = document.querySelector("#ft-egg-toast style")!.textContent!.replace(/\s+/g, " ");
+    expect(css).toContain("width: max-content;");
+    expect(css).toContain("max-width: min(40rem, calc(100vw - 32px));");
+    expect(css).toContain("box-sizing: border-box;");
+    expect(css).not.toContain("border-radius: 999px");
+    // still centred, entry animation included
+    expect(css).toContain("left: 50%");
+    expect(css).toContain("translate(-50%, 0)");
   });
 
   it("does not slide in under reduced motion", async () => {

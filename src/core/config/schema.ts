@@ -31,6 +31,8 @@ export interface BetterIntraConfig {
   LOGTIME_GOAL_HOURS: number;
   LOGTIME_SHOW_AVERAGE: boolean;
   LOGTIME_SHOW_GOAL: boolean;
+  /** The streak badge (records in its tooltip) in the widget's header. */
+  LOGTIME_SHOW_RECORDS: boolean;
   LOGTIME_SHOW_TACOS: boolean;
   LOGTIME_EMOJI: string;
   LOGTIME_EMOJI_DIVISOR: number;

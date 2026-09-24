@@ -567,6 +567,26 @@ export async function syncMyVisuals(visuals: {
 }
 
 /**
+ * After Stop sharing: empties the calendar link in the cloud copy of the
+ * settings, and only that. The synced CALENDAR_SYNC_TOKEN names a revoked
+ * link, which a browser restoring the copy would offer as current. A whole
+ * push would upload every setting of a student who chose Manual push, on the
+ * click meant to take data off the server; the worker merges these two keys
+ * into the record and writes nothing when the copy never held a link. Best
+ * effort: a stale copy only shows a dead link until that browser's next
+ * upload, which the worker answers 410 (calendar-sync.ts).
+ */
+export async function forgetCloudCalendarLink(): Promise<void> {
+  const auth = await cloudCredentials();
+  if (!auth) return;
+  await workerFetch(PRIVATE_SETTINGS, {
+    method: "POST",
+    auth,
+    body: { settings: { CALENDAR_SYNC_TOKEN: "", CALENDAR_EVENTS_HASH: "" } },
+  });
+}
+
+/**
  * Fetches the public visual settings for a given user login.
  * @param login The target user's 42 login.
  * @returns A promise that resolves to the user's visual settings, or null on failure.

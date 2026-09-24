@@ -8,6 +8,8 @@ import {
   waitForIntrapyToken,
 } from "../../../core/intra/intrapy.ts";
 import { getConfig } from "../../../core/config.ts";
+import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
+import { getCloudLogin } from "../../account/account.ts";
 import { intlLocale, t } from "../../../core/i18n/i18n.ts";
 
 const INJECTED_ID = "ft-freeze-card";
@@ -84,6 +86,14 @@ function startCountdown(
 
 let _running = false;
 let _stopCountdown: (() => void) | null = null;
+/**
+ * The login whose cursus this page has already asked about. _running is
+ * released after every pass that draws no card (the usual case: nobody is
+ * frozen), and on the dashboard the profile watcher runs a pass on every
+ * Intra mutation burst for 30 s: without this, each of them re-sent the
+ * /cursus request.
+ */
+let _checkedLogin: string | null = null;
 
 function stopCountdown(): void {
   if (_stopCountdown !== null) {
@@ -98,6 +108,7 @@ window.addEventListener(
   "pagehide",
   () => {
     _running = false;
+    _checkedLogin = null;
   },
   { once: true },
 );
@@ -220,12 +231,18 @@ export async function initFreezeCard() {
 
   try {
     const pathParts = location.pathname.split("/").filter(Boolean);
-    if (pathParts[0] !== "users" || !pathParts[1]) return;
+    let targetLogin: string | null = null;
+    if (pathParts.length === 0) {
+      // Your own dashboard, with the same fallback as the other cards there:
+      // a student frozen themselves only saw the countdown on /users/<self>.
+      targetLogin = (await getCloudLogin()) || getLoginFromPage();
+    } else if (pathParts[0] === "users" && pathParts[1]) {
+      targetLogin = pathParts[1];
+    }
+    if (!targetLogin || targetLogin === _checkedLogin) return;
 
     const existingCard = document.getElementById(INJECTED_ID);
     if (existingCard) return;
-
-    const targetLogin = pathParts[1];
 
     // A freeze that was still running on the last visit is drawn right away,
     // so the card does not push the page down once the intra API answers. The
@@ -243,6 +260,9 @@ export async function initFreezeCard() {
     if (!token) return;
 
     const cursusList = await fetchCursusData(targetLogin, token);
+    // Asked once per page, answered or not, as the single pass of a /users
+    // page always did.
+    _checkedLogin = targetLogin;
     if (!Array.isArray(cursusList) || cursusList.length === 0) return;
 
     const frozen = cursusList.find(

@@ -16,6 +16,8 @@ Ready-made builds are attached to every [GitHub release](https://github.com/MaiT
 | `better-intra-chrome.zip` | Chrome / Brave / Edge (unpacked)      |
 | `better-intra.crx`        | Chrome on Linux (self-updating build) |
 
+The release also carries `chrome-web-store-upload.zip`: not for installing. It is the package uploaded to the Chrome Web Store, without the release check, so a copy loaded by hand would never tell you about a new version.
+
 **Firefox** (the campus workstations): open the `.xpi` link, accept the install prompt. That's it: updates are automatic.
 
 **Chrome / Brave / Edge on Windows or macOS**: unzip `better-intra-chrome.zip`, open `chrome://extensions`, enable *Developer mode*, *Load unpacked*, select the folder. Chrome cannot auto-update an unpacked extension: the toolbar icon shows a **NEW** badge when a release is out, and the popup links to it.
@@ -64,7 +66,7 @@ The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it an
 
 ### 👤 Profile
 
-* **Custom visuals** — your own avatar, banner and background images (fill, fit, stretch, center, tile). Click your avatar on your profile to open the editor: zoom, drag to reposition, live preview. Paste an image link, or **Upload** one from your computer (PNG, JPEG, GIF or WebP, 2 MB; it is stored on the Better Intra server, one per field). Link history keeps the last 10 URLs per field.
+* **Custom visuals** — your own avatar, banner and background images (fill, fit, stretch, center, tile). Click your avatar on your profile, or *Edit* in the Profile tab of the hub, to open the editor: zoom, drag to reposition, live preview. Paste an image link, or **Upload** one from your computer (PNG, JPEG, GIF or WebP, 2 MB; it is stored on the Better Intra server, one per field). Link history keeps the last 10 URLs per field.
 * **Avatar decoration** — transparent or solid colour behind the avatar, optional solid border.
 * **Visuals sync ☁️** — other Better Intra users see your custom images on your profile. Click a custom avatar to see the original.
 * **Instant visuals** — visuals are cached locally and refreshed silently.
@@ -75,7 +77,7 @@ The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it an
 * **Achievements** — full scrollable list, newest first, with a glow on completed milestones.
 * **Completed projects** — every graded project with date and score; multi-attempt projects expand; sort newest or oldest first.
 * **Projects sort** — by name or date on any profile.
-* **Freeze alerts** — a card with a live countdown on frozen students' profiles.
+* **Freeze alerts** — a card with a live countdown on frozen students' profiles and on your own dashboard; a frozen friend's row in the friends widget says until when.
 * **Clickable seat** — click someone's seat to open the cluster map with that seat highlighted.
 * **Thursday Roulette ☁️** — the profile's roulette history and points, with a countdown to the next draw (rebuilt from the Intra pages).
 * **Correction stats ☁️** — monthly evaluations as a corrector: total, failures, success rate (rebuilt from the Intra pages).
@@ -83,7 +85,7 @@ The worker is deployed at `betterintra-remake.maitox.workers.dev`. Besides it an
 * **Info card badges** — wallet, level, rank, score and seat as coloured badges under the header; the wallet badge opens the shop.
 * **Campus flag** — the campus badge shows the country flag.
 * **Nav bar avatar** — your custom avatar in the site navigation.
-* **Phoenix / Pegasus tracker** — hover the badge for days and hours done vs required.
+* **Phoenix / Pegasus tracker** — hover or click the badge (or Tab to it and press Enter) for days and hours done vs required, what is left of the Saturday-to-Friday week and the hours per day it takes; pick your phase there.
 
 **Public profile ☁️** — a *Public profile* section at the end of the Profile tab. What you put there is shown to every Better Intra user who opens your page, and on your own page straight away:
 
@@ -117,17 +119,19 @@ A **Customize** tab in the hub restyles every Intra page live, and syncs with yo
 
 * **Monthly calendar** with weekly totals, a **heatmap** view of the whole history and a **compact** view of past months.
 * **Goal tracking** (default 140 h), daily average, last-active label, remaining hours on hover.
+* **Streak and records** — your days in a row next to the Active badge, with your longest streak, best day and best week (over the days shown) in its tooltip; *Show streak* turns it off.
 * **Emoji mode** — pick an emoji, give it a value, track monthly "earnings" with a cap.
 * **Custom colours** and rainbow palettes; calendar events overlaid on the days.
 
 ### 📆 Calendar sync ☁️
 
-The **Calendar** tab of the hub generates a private `.ics` link (with a QR code for phones) that Google Calendar, Apple Calendar or Outlook can subscribe to. Every time you open your own profile, the Intra events you are subscribed to are pushed to the worker, each with a 15-minute reminder. *Regenerate* revokes the old link at once, and so does wiping your cloud data.
+The **Calendar** tab of the hub generates a private `.ics` link (with a QR code for phones) that Google Calendar, Apple Calendar or Outlook can subscribe to. Every time you open your own profile, the Intra events you are subscribed to are pushed to the worker, each with a 15-minute reminder. *Regenerate* revokes the old link at once; *Stop sharing* revokes it and deletes the copy on the worker, and so does wiping your cloud data.
 
 ### 🖥️ Clusters
 
 * **Chair direction markers** on the cluster map, a **cluster picker**, a **default cluster**, open profiles in a new tab.
 * **Live cluster map** (from the **Clusters** button in the Intra sidebar or the profile quick links): seat occupancy with avatars, taken/total badges, Wi-Fi tab, zoom, room tabs, campus selector and clock. The sidebar button shows up on every campus as soon as the extension has detected yours (it used to appear on the Belgium campus only). Mulhouse cluster data is in [campuses/mulhouse.json](campuses/mulhouse.json); other campuses are available too.
+* **Active list** — everyone logged in on the map with their seat (click it to see that seat in its cluster) and a search box by login.
 
 ### 🔗 Shortcuts
 
@@ -200,7 +204,7 @@ The worker is a fork of the upstream one, at [MaiToxx/BetterIntraRemake-worker](
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md). TypeScript, Vite, lit-html, Tailwind CSS + daisyUI, vitest; Cloudflare Workers, KV and D1 on the server side.
 
-To release: bump `version` in `package.json`, push to `main`, publish a GitHub release tagged `v<version>`. The workflow builds both browsers, signs the Firefox build, attaches the files, updates `updates.json` / `updates.xml` and, once configured, publishes to the Chrome Web Store.
+To release: bump `version` in `package.json`, push to `main`, publish a GitHub release tagged `v<version>` (`node scripts/check-release-tag.mjs v<version>` checks the pair; the workflow refuses a tag that does not match). The workflow runs the release gate (`npm run release:check`), builds both browsers, signs the Firefox build, attaches the files, updates `updates.json` / `updates.xml` and, once configured, publishes to the Chrome Web Store; `finish-release.yaml` completes what Mozilla's review holds back.
 
 ## Compatibility
 

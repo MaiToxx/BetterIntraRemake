@@ -117,7 +117,7 @@ export function applyOccupancy(
     renderSeatOverlays(shadow, workCopy, positions, viewBox);
   }
   if (activeCluster.id === "active") {
-    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
+    renderActiveList(state);
   }
   if (state.flashingSeat) {
     applySeatGlow(state, state.flashingSeat);

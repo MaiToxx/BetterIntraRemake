@@ -10,6 +10,7 @@ import USER_COG_SVG from "../../../assets/svg/user-cog.svg?raw";
 import CHECK_SVG from "../../../assets/svg/check.svg?raw";
 import PLUS_SVG from "../../../assets/svg/plus.svg?raw";
 import { t } from "../../../core/i18n/i18n.ts";
+import { css } from "../../../core/dom/css.ts";
 
 function getProfileLogin(): string {
   return getLoginFromPage() ?? "";
@@ -20,8 +21,12 @@ export async function initFriendBadge() {
   if (pathParts[0] !== "users" || !pathParts[1]) return;
 
   const targetLogin = pathParts[1];
+  // The friends list is local storage and works signed out, like the widget:
+  // the cloud login only serves to spot your own profile. Signed out, your
+  // own /users/<you> page may show the button; adding yourself is harmless.
+  // (getLoginFromPage() cannot tell: on /users/<x> it answers x.)
   const myLogin = await getCloudLogin();
-  if (!myLogin || targetLogin === myLogin) return;
+  if (myLogin && targetLogin === myLogin) return;
 
   const container = document.querySelector<HTMLElement>(
     ".flex.flex-col.justify-center.gap-4",
@@ -103,7 +108,7 @@ export async function initShortcutButtons() {
   while (container.firstChild) container.removeChild(container.firstChild);
 
   const style = document.createElement("style");
-  style.textContent = `
+  style.textContent = css`
     [data-ft-shortcuts] a {
       border: 3px solid var(--user-color, hsl(var(--legacy-main))) !important;
       border-radius: 0.5rem;
@@ -121,6 +126,22 @@ export async function initShortcutButtons() {
       height: 20px;
       fill: currentColor !important;
       stroke: currentColor !important;
+    }
+    /* The three links need about 390 px with the wrappers' px-4: on a phone
+       the centred row overflowed on both sides, cut "Holy Graph" off at the
+       left and made the whole page scroll sideways. Phones get less padding
+       (beats .px-4 by specificity) and a row that may wrap. Phones only: on
+       a desktop the row shrinks "Holy Graph" onto two lines to fit its box,
+       and with wrap allowed "Settings" dropped to a line of its own there. */
+    @media (max-width: 479px) {
+      [data-ft-shortcuts] {
+        flex-wrap: wrap;
+        row-gap: 0.25rem;
+      }
+      [data-ft-shortcuts] > div {
+        padding-left: 0.25rem;
+        padding-right: 0.25rem;
+      }
     }
   `;
   container.appendChild(style);

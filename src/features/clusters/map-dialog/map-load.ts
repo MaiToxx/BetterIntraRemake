@@ -15,10 +15,10 @@ import {
   registerClusterLoader,
 } from "./occupancy";
 import { updateActiveSortControls } from "./active-sort";
-import { clearSeatGlow } from "./glow";
+import { clearSeatGlow, flashSeat, getSeatGlowTarget } from "./glow";
 import { rebuildHeader, updateCampusTime, updateDefaultSelect } from "./header";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
-import { campusDisplayName } from "./helpers";
+import { campusDisplayName, seatCluster } from "./helpers";
 import { t } from "../../../core/i18n/i18n.ts";
 
 // occupancy.ts switches to another tab when the Active one disappears: it
@@ -254,7 +254,7 @@ export async function loadCluster(
 
   if (cluster.id === "active") {
     updateActiveSortControls(state);
-    renderActiveList(state.shadow, state.activeUsers, state.activeWifiOnly);
+    renderActiveList(state);
     return;
   }
 
@@ -337,6 +337,36 @@ export async function loadCluster(
       state.retryCount = 0;
       renderMapError(state, cluster, signal);
     }
+  }
+}
+
+/**
+ * Opens the map that holds `seat` and makes the seat glow, as opening the
+ * dialog on a friend's seat does (the Active list's seat buttons and Enter
+ * in its search box). Focus moves to the seat itself: the button or the box
+ * that was focused disappears with the Active tab, and would drop keyboard
+ * users at the top of the page. A seat with no avatar link over it (its
+ * position is not in the map) sends focus to the cluster's tab instead.
+ */
+export async function jumpToSeat(
+  state: DialogState,
+  seat: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  const cluster = seatCluster(state.clusters, seat);
+  if (!cluster) return;
+  await loadCluster(state, cluster, signal);
+  // closed, or another tab picked while the map loaded
+  if (signal?.aborted || state.activeCluster !== cluster) return;
+  flashSeat(state, seat);
+  const target = getSeatGlowTarget(state, seat);
+  const tabs = state.shadow.querySelectorAll<HTMLElement>(
+    `[data-cluster-id="${CSS.escape(cluster.id)}"]`,
+  );
+  // the tab row or, when the tabs overflow, the menu: whichever is shown
+  for (const el of target instanceof HTMLElement ? [target, ...tabs] : tabs) {
+    el.focus({ preventScroll: true });
+    if (state.shadow.activeElement === el) break;
   }
 }
 

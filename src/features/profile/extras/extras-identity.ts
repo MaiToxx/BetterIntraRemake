@@ -31,6 +31,7 @@ import {
   type ProfileExtras,
   type ProfileLink,
 } from "./extras.ts";
+import { css } from "../../../core/dom/css.ts";
 
 export interface IdentityOptions {
   /** Login of the profile being displayed. */
@@ -66,7 +67,7 @@ const BORDER = "hsl(var(--border, 220 13% 28%))";
  * header is a row (lg:flex-row) and the name column is sized by its content:
  * the narrower cap keeps a long bio from squeezing the level column.
  */
-const STYLE = `
+const STYLE = css`
   #${ID} {
     display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
     box-sizing: border-box; width: 100%; max-width: 36rem; margin: 0.5rem auto 0;

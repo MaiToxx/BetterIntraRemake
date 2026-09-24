@@ -133,6 +133,17 @@ describe("map dialog controls have names", () => {
     );
   });
 
+  it("names the Active search box and gives its count a live region", () => {
+    const { shadow } = renderDialog();
+    const box = shadow.querySelector<HTMLInputElement>("#active-sort input#active-search")!;
+    expect(box.type).toBe("search");
+    expect(box.getAttribute("aria-label")).toBe("Search a login");
+    expect(box.getAttribute("aria-controls")).toBe("map-area");
+    const status = shadow.getElementById("active-search-status")!;
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.classList.contains("sr-only")).toBe(true);
+  });
+
   it("cluster tabs are named by their label, even without a name", () => {
     const { shadow } = renderDialog();
     const tabs = [...shadow.querySelectorAll<HTMLButtonElement>("[data-cluster-id]")];

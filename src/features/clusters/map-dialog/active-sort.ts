@@ -2,10 +2,12 @@ import { render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import type { DialogState } from "./context";
 import {
+  filterActiveUsers,
   renderActiveList,
   sortActiveUsers,
   type ActiveSortMode,
 } from "./render";
+import { seatCluster } from "./helpers";
 import { t } from "../../../core/i18n/i18n.ts";
 import SORT_AZ_SVG from "../../../assets/svg/sort-az.svg?raw";
 import SORT_ZA_SVG from "../../../assets/svg/sort-za.svg?raw";
@@ -94,7 +96,7 @@ export function updateActiveSortControls(state: DialogState) {
 }
 
 export function toggleActiveWifi(state: DialogState) {
-  const { shadow, activeCluster } = state;
+  const { activeCluster } = state;
   state.activeWifiOnly = !state.activeWifiOnly;
   chrome.storage.local.set({
     MAP_ACTIVE_WIFI: state.activeWifiOnly,
@@ -107,13 +109,58 @@ export function toggleActiveWifi(state: DialogState) {
     state.activeNameDir,
     state.activeSinceDir,
   );
-  if (activeCluster.id === "active")
-    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
+  if (activeCluster.id === "active") renderActiveList(state);
   updateActiveSortControls(state);
 }
 
+/** The search box changed: the Active list shows the logins that contain it. */
+export function setActiveQuery(state: DialogState, query: string) {
+  state.activeQuery = query;
+  if (state.activeCluster.id === "active") renderActiveList(state);
+}
+
+/**
+ * The seat Enter in the search box opens: the search leaves exactly one
+ * person and their seat is on a map. null otherwise (Wi-Fi, no map, or
+ * several matches, where Enter does nothing).
+ */
+export function activeSearchTarget(state: DialogState): string | null {
+  const users = filterActiveUsers(state.activeUsers, state.activeQuery);
+  if (users.length !== 1) return null;
+  const { host } = users[0];
+  if (host.startsWith("wifi-")) return null;
+  return seatCluster(state.clusters, host) ? host : null;
+}
+
+/**
+ * A key in the search box. Enter on a search that leaves one person opens
+ * their seat with `jump`. Escape empties a filled box and stops there; once
+ * the box is empty it closes the dialog, as it does everywhere else in it.
+ */
+export function handleActiveSearchKey(
+  state: DialogState,
+  box: HTMLInputElement,
+  e: KeyboardEvent,
+  jump: (seat: string) => void,
+) {
+  // An input method's Enter or Escape belongs to the text being composed.
+  if (e.isComposing) return;
+  if (e.key === "Escape" && box.value) {
+    e.preventDefault();
+    e.stopPropagation();
+    box.value = "";
+    setActiveQuery(state, "");
+  } else if (e.key === "Enter") {
+    const seat = activeSearchTarget(state);
+    if (seat) {
+      e.preventDefault();
+      jump(seat);
+    }
+  }
+}
+
 export function toggleActiveSort(state: DialogState, mode: ActiveSortMode) {
-  const { shadow, activeCluster } = state;
+  const { activeCluster } = state;
   if (state.activeSortMode === mode) {
     if (mode === "name") {
       state.activeNameDir = state.activeNameDir === "asc" ? "desc" : "asc";
@@ -130,7 +177,6 @@ export function toggleActiveSort(state: DialogState, mode: ActiveSortMode) {
     state.activeNameDir,
     state.activeSinceDir,
   );
-  if (activeCluster.id === "active")
-    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
+  if (activeCluster.id === "active") renderActiveList(state);
   updateActiveSortControls(state);
 }

@@ -1,8 +1,16 @@
 # Completes the latest release when publish.yaml could not: attaches the
 # Chrome files if they are missing, and the signed Firefox .xpi as soon as
 # Mozilla approves it (AMO can hold an update for a manual review that lasts
-# hours or days; publish.yaml only waits so long). Runs every half hour and
-# does nothing once the release has its files, so it costs a few seconds.
+# hours or days; publish.yaml only waits so long), and writes an update
+# manifest whose push failed. Runs every half hour; once the release has
+# everything it stops as soon as it has decided, a few seconds.
+#
+# It never acts alongside publish.yaml: nothing happens while a publish.yaml
+# run for the tag is not finished or while the release is younger than 30
+# minutes, and missing Chrome files are rebuilt for a day at most, then only
+# on a manual run (scripts/release-state.mjs). No shared concurrency group with
+# publish.yaml on purpose: a newer pending run replaces an older pending one,
+# so a scheduled run here could cancel a queued release.
 name: Finish release
 
 on:
@@ -20,6 +28,8 @@ concurrency:
 
 permissions:
   contents: write
+  # gh run list: is a publish.yaml run for the tag still going?
+  actions: read
 
 jobs:
   finish:
@@ -29,30 +39,23 @@ jobs:
       HAS_AMO: ${{ secrets.AMO_SIGN_KEY != '' && secrets.AMO_SIGN_SECRET != '' }}
       HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
     steps:
+      # main for the scripts and the manifests, the release tag (in release/)
+      # for what is built
+      - name: Checkout main
+        uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+
       - name: What the release lacks
         id: state
         env:
           INPUT_TAG: ${{ inputs.tag }}
-        run: |
-          TAG="$INPUT_TAG"
-          if [ -z "$TAG" ]; then
-            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
-          fi
-          ASSETS=" $(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '[.assets[].name] | join(" ")') "
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
-          case "$ASSETS" in *" better-intra-chrome.zip "*) ;; *) echo "need_chrome=true" >> "$GITHUB_OUTPUT" ;; esac
-          case "$ASSETS" in *" better-intra.xpi "*) ;; *) echo "need_xpi=true" >> "$GITHUB_OUTPUT" ;; esac
-          echo "release $TAG has:$ASSETS"
-
-      # main for the scripts and the manifests, the release tag (in release/)
-      # for what is built
-      - name: Checkout main
-        if: steps.state.outputs.need_chrome == 'true' || steps.state.outputs.need_xpi == 'true'
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
+        run: node scripts/release-state.mjs "$INPUT_TAG"
 
       - name: Checkout the release
         if: steps.state.outputs.need_chrome == 'true'
@@ -61,49 +64,63 @@ jobs:
           ref: ${{ steps.state.outputs.tag }}
           path: release
 
-      - name: Setup Node.js
-        if: steps.state.outputs.need_chrome == 'true' || steps.state.outputs.need_xpi == 'true'
-        uses: actions/setup-node@v6
-        with:
-          node-version: "lts/*"
-
-      - name: Build and attach the Chrome files
+      # Without the .crx key, which only the packing step below gets (as in
+      # publish.yaml): npm ci runs the dependencies' install scripts, and
+      # release:check the test suite, both builds and a real Chrome.
+      - name: Build the Chrome files
+        id: chrome-build
         if: steps.state.outputs.need_chrome == 'true'
         env:
-          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
           TAG: ${{ steps.state.outputs.tag }}
         run: |
           cd release
+          # publish.yaml stops at the same check, so such a release has no
+          # files at all: attach nothing, and leave an error on the run
+          # instead of failing every half hour over an old release
+          if ! node ../scripts/check-release-tag.mjs "$TAG"; then exit 0; fi
           npm ci
-          # publish.yaml may have stopped at its tests: never ship what they
-          # did not pass (1.15.0 got its Chrome files from here after a
-          # test run that failed)
-          npm test
-          npm run build:chrome
+          # The gate publish.yaml runs, whole: publish.yaml may have stopped
+          # at any of its checks, and never ship what it did not pass (1.15.0
+          # got its Chrome files from here after only the tests, which had
+          # failed; check:size, check:cycles, check:themes, the Firefox build
+          # and the Chrome smoke test were not run here at all)
+          npm run release:check
           npx web-ext build --source-dir dist-chrome --filename better-intra-chrome.zip --overwrite-dest
-          FILES="web-ext-artifacts/better-intra-chrome.zip"
-          if [ "$HAS_CRX" = "true" ]; then
-            printf '%s\n' "$CRX_PRIVATE_KEY" > crx-key.pem
-            npx --yes crx@5.0.1 pack dist-chrome -o better-intra.crx -p crx-key.pem
-            rm -f crx-key.pem
-            FILES="$FILES better-intra.crx"
-          fi
-          gh release upload "$TAG" $FILES --repo "$GITHUB_REPOSITORY" --clobber
+          echo "built=true" >> "$GITHUB_OUTPUT"
 
-      - name: Chrome auto-update manifest
-        if: steps.state.outputs.need_chrome == 'true' && env.HAS_CRX == 'true'
+      - name: Pack the Chrome .crx
+        if: steps.chrome-build.outputs.built == 'true' && env.HAS_CRX == 'true'
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+        run: |
+          cd release
+          printf '%s\n' "$CRX_PRIVATE_KEY" > crx-key.pem
+          npx --yes crx@5.0.1 pack dist-chrome -o better-intra.crx -p crx-key.pem
+          rm -f crx-key.pem
+
+      - name: Attach the Chrome files
+        id: chrome
+        if: steps.chrome-build.outputs.built == 'true'
         env:
           TAG: ${{ steps.state.outputs.tag }}
         run: |
-          git fetch origin main
-          git reset --hard origin/main
-          node scripts/update-updates-xml.js "${TAG#v}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.xml
-          git commit -m "chore: update updates.xml for ${TAG}" || exit 0
-          git push origin HEAD:main
+          cd release
+          FILES="web-ext-artifacts/better-intra-chrome.zip"
+          if [ "$HAS_CRX" = "true" ]; then FILES="$FILES better-intra.crx"; fi
+          gh release upload "$TAG" $FILES --repo "$GITHUB_REPOSITORY" --clobber
+          echo "attached=true" >> "$GITHUB_OUTPUT"
 
+      - name: Chrome auto-update manifest
+        if: env.HAS_CRX == 'true' && (steps.chrome.outputs.attached == 'true' || steps.state.outputs.need_updates_xml == 'true')
+        env:
+          TAG: ${{ steps.state.outputs.tag }}
+        run: node scripts/push-update-manifest.mjs updates.xml "$TAG"
+
+      # A version Mozilla never created (validation or upload failure) or
+      # refused fails the run, so that GitHub sends an e-mail, but only from
+      # an hour to a day after the release, or on a manual run (amo_alarm,
+      # scripts/release-state.mjs). Before, publish.yaml reports it itself;
+      # after, it would send 48 e-mails a day for a version that is not coming.
       - name: Signed .xpi from Mozilla
         id: amo
         if: steps.state.outputs.need_xpi == 'true' && env.HAS_AMO == 'true'
@@ -111,6 +128,7 @@ jobs:
           AMO_KEY: ${{ secrets.AMO_SIGN_KEY }}
           AMO_SECRET: ${{ secrets.AMO_SIGN_SECRET }}
           VERSION: ${{ steps.state.outputs.version }}
+          ALARM: ${{ steps.state.outputs.amo_alarm }}
         run: |
           set +e
           node scripts/amo-signed-xpi.mjs "$VERSION" better-intra.xpi
@@ -119,8 +137,15 @@ jobs:
           case $code in
             0) echo "signed=true" >> "$GITHUB_OUTPUT" ;;
             3) echo "::notice::$VERSION is still waiting for Mozilla's approval; the next run checks again." ;;
-            4) echo "::warning::Mozilla refused or disabled $VERSION: see the add-on's page on addons.mozilla.org." ;;
-            2) echo "::notice::$VERSION was never submitted to Mozilla." ;;
+            2|4)
+              if [ "$code" = 2 ]; then
+                what="Mozilla never created $VERSION (the submission failed validation or never reached AMO: see publish.yaml's web-ext sign log)"
+              else
+                what="Mozilla refused or disabled $VERSION: see the add-on's page on addons.mozilla.org"
+              fi
+              if [ "$ALARM" = "true" ]; then echo "::error::$what."; exit 1; fi
+              echo "::warning::$what."
+              ;;
             *) exit $code ;;
           esac
 
@@ -130,11 +155,4 @@ jobs:
           TAG: ${{ steps.state.outputs.tag }}
         run: |
           gh release upload "$TAG" better-intra.xpi --repo "$GITHUB_REPOSITORY" --clobber
-          git fetch origin main
-          git reset --hard origin/main
-          node scripts/update-updates-json.js "${TAG#v}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.json
-          git commit -m "chore: update updates.json for ${TAG}" || exit 0
-          git push origin HEAD:main
+          node scripts/push-update-manifest.mjs updates.json "$TAG"

@@ -69,6 +69,20 @@ describe("Logtime settings apply while the page is open", () => {
     expect(widgetHtml()).not.toContain("rgba(0, 186, 188");
   });
 
+  it("takes the streak badge away with Show streak off, and brings it back", async () => {
+    const badge = () =>
+      document
+        .getElementById("logtime-shadow-wrapper")
+        ?.shadowRoot?.querySelector(".lt-records-badge");
+    expect(badge()).toBeTruthy();
+    await setAndNotify({ LOGTIME_SHOW_RECORDS: false });
+    await flush();
+    expect(badge()).toBeFalsy();
+    await setAndNotify({ LOGTIME_SHOW_RECORDS: true });
+    await flush();
+    expect(badge()).toBeTruthy();
+  });
+
   it("ignores keys it does not own", async () => {
     const before = widgetHtml();
     await setAndNotify({ CUSTOM_FONT: "mono" });

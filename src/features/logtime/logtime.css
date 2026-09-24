@@ -248,6 +248,14 @@
   display: inline-flex;
 }
 
+/* Out of the line but still measured, like the folded view buttons: the
+   header can tell when there is room for the records badge again. */
+.lt-header .lt-records-badge.lt-records-off {
+  position: absolute;
+  left: -9999px;
+  visibility: hidden;
+}
+
 .lt-view-dropdown summary {
   cursor: pointer;
 }

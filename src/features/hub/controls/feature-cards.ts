@@ -40,7 +40,9 @@ export async function renderFeatureCards(
   }
   // what each card says, in the hub's language (the def's texts are keys)
   const tr = (text: string | undefined) => optionLabel(def, text);
-  return html`<div class="grid grid-cols-2 gap-4 w-full col-span-full">
+  // One column until md, like the other tabs: two forced columns left each
+  // card about 150 px wide on a phone, its title broken word by word.
+  return html`<div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full col-span-full">
     ${cards.map((c) =>
       renderFeatureCard({
         ...c,
@@ -162,8 +164,11 @@ function renderFeatureCard(params: {
                   >${text.subLabel}</span
                 >
                 ${opt.subToggle.desc
-                  ? html`<p
-                      class="text-xs opacity-70 leading-4 line-clamp-2"
+                  ? // Whole, not clamped to two lines: the sentence saying
+                    // what "Share with the community" sends was cut mid-word
+                    // in a narrow card, with no way to read the rest.
+                    html`<p
+                      class="text-xs opacity-70 leading-4"
                       id="${subId}-desc"
                     >
                       ${text.subDesc}

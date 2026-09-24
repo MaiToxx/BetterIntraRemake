@@ -213,3 +213,43 @@ describe("logtime event markers on another profile", () => {
     expect(markedCells()).toBe(0);
   });
 });
+
+describe("logtime event markers signed out", () => {
+  // The events come from the Intra with the page's own token: the markers
+  // used to wait for a cloud sign-in (CLOUD_LOGIN) that they never needed,
+  // so a student who never signed in saw none.
+  it("draws them on your own calendar without a cloud sign-in", async () => {
+    await chrome.storage.local.remove("CLOUD_LOGIN");
+    history.pushState({}, "", "/");
+    sendStats();
+    await flush();
+    expect(markedCells()).toBe(1);
+  });
+});
+
+describe("the records badge on a full header", () => {
+  // Same widget, other concern: the harness above is the one that plays
+  // resizes. The badge (streak) counts in the fold of the view switcher; on
+  // a line that is still full once folded (a phone), it steps out of it.
+  it("steps out of the folded line when it has no room, and comes back", async () => {
+    history.pushState({}, "", "/");
+    sendStats();
+    await flush();
+    expect(root().querySelector(".lt-records-badge")).toBeTruthy();
+
+    overflowing = true; // every part 200px wide in a 300px header
+    for (const cb of resizeCallbacks) cb(); // folds the switcher
+    await flush();
+    for (const cb of resizeCallbacks) cb(); // the re-armed observer's first call
+    await flush();
+    expect(root().querySelector(".lt-view-switcher.collapsed")).toBeTruthy();
+    expect(root().querySelector(".lt-records-badge.lt-records-off")).toBeTruthy();
+
+    overflowing = false;
+    for (const cb of resizeCallbacks) cb();
+    await flush();
+    expect(root().querySelector(".lt-view-switcher.collapsed")).toBeNull();
+    expect(root().querySelector(".lt-records-off")).toBeNull();
+    expect(root().querySelector(".lt-records-badge")).toBeTruthy();
+  });
+});

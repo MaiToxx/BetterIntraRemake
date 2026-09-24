@@ -3,6 +3,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
 import { findDashboardCard } from "../../../core/intra/selectors.ts";
+import { getLoginFromPage } from "../../../core/intra/profile-login.ts";
 import { getEffectiveTheme, THEMES } from "../../../core/theme/theme-manager.ts";
 import { loadCampusData, TranscriptEntry } from "../../campus/campus.ts";
 import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
@@ -230,7 +231,7 @@ const findProjectsCard = () => findDashboardCard("PROJECTS");
  * no animation-frame loop (which had no deadline) is needed.
  */
 function injectTranscriptButton(
-  cloudLogin: string,
+  login: string,
   transcripts: TranscriptEntry[],
 ): void {
   const projectsCard = findProjectsCard();
@@ -250,7 +251,7 @@ function injectTranscriptButton(
   transcriptBtn.textContent = t("Transcript");
   transcriptBtn.addEventListener("click", (e) => {
     e.preventDefault();
-    openTranscriptDialog(cloudLogin, transcripts);
+    openTranscriptDialog(login, transcripts);
   });
 
   const actionRow = inner.querySelector<HTMLElement>(".flex.flex-row.gap-2");
@@ -268,9 +269,11 @@ export async function initTranscript() {
   )
     return;
 
-  const cloudLogin = await getCloudLogin();
-  const token = await getConfig("CLOUD_TOKEN");
-  if (!cloudLogin || !token) return;
+  // The download is a form POST to projects.intra with the student's own
+  // cookies and the campus file comes from the public /gh route: no worker
+  // sign-in is needed, so the login falls back to the page's, as marks does.
+  const login = (await getCloudLogin()) || getLoginFromPage();
+  if (!login) return;
 
   const campusId = await getConfig("CLUSTERS_CAMPUS");
   if (!campusId) return;
@@ -283,5 +286,5 @@ export async function initTranscript() {
   }
   if (transcripts.length === 0) return;
 
-  injectTranscriptButton(cloudLogin, transcripts);
+  injectTranscriptButton(login, transcripts);
 }

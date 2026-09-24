@@ -30,7 +30,6 @@ export interface VisualUrls {
     labelsColor?: string;
     emoji?: string;
     emojiDivisor?: string | number;
-    emojiRate?: string | number;
     rainbowPalette?: string;
   } | null;
   /** Look (accent, palette, background, cards) published by this user. */

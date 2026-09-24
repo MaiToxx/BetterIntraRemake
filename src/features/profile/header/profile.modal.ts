@@ -29,7 +29,12 @@ import {
   type ProfileTab,
 } from "./profile-modal-form.ts";
 import { renderTabPanels } from "./profile-modal-tabs.ts";
-import { IMAGE_SLOTS } from "./image-upload.ts";
+import {
+  IMAGE_SLOTS,
+  ownUploadHash,
+  uploadedSlotOf,
+  type ImageSlot,
+} from "./image-upload.ts";
 import {
   createPendingUploads,
   SLOT_LABELS,
@@ -41,6 +46,40 @@ import FORTY_TWO_SVG from "../../../assets/svg/42_Logo.svg?raw";
 import { t } from "../../../core/i18n/i18n.ts";
 
 let activeTab: ProfileTab = "avatar";
+
+/** The storage keys of each image field. */
+const SLOT_URL_KEY = {
+  avatar: "PROFILE_IMAGE_URL",
+  banner: "PROFILE_BANNER_URL",
+  background: "PROFILE_BACKGROUND_URL",
+} as const;
+const SLOT_HISTORY_KEY = {
+  avatar: "PROFILE_IMAGE_HISTORY",
+  banner: "PROFILE_BANNER_HISTORY",
+  background: "PROFILE_BACKGROUND_HISTORY",
+} as const;
+
+/**
+ * The look as the page and the cloud take it. Every field, always:
+ * syncMyVisuals() fills an omitted one with its default.
+ */
+function toVisuals(look: FormState): VisualUrls {
+  return {
+    avatar: look.avatar || "",
+    banner: look.banner || "",
+    bannerMode: look.bannerMode || "fill",
+    bannerColor: look.bannerColor || "",
+    background: look.background || "",
+    backgroundMode: look.backgroundMode || "fill",
+    backgroundColor: look.backgroundColor || "",
+    avatarBg: look.avatarBg,
+    decoration: look.decoration,
+    avatarPosX: look.avatarPosX,
+    avatarPosY: look.avatarPosY,
+    avatarScale: look.avatarScale,
+    badgeBg: look.badgeBg || "",
+  };
+}
 
 /** The Save button's state: busy while the picked images upload and the look is stored. */
 interface SaveUi {
@@ -286,7 +325,7 @@ export const createSettingsModal = async (
     }
   }
 
-  const saved = {
+  const saved: FormState = {
     avatar: await getConfig("PROFILE_IMAGE_URL"),
     banner: await getConfig("PROFILE_BANNER_URL"),
     bannerMode: (await getConfig("PROFILE_BANNER_MODE")) || "fill",
@@ -324,8 +363,10 @@ export const createSettingsModal = async (
     clearLocalPreview();
     if (dirty && !committed) liveApplyBannerBg(saved);
     // An image uploaded by a Save that did not finish (another slot failed,
-    // then Cancel) is public but used by nothing. While a Save is still
-    // running, it cleans up itself once its upload lands.
+    // then Cancel) and used by nothing is removed. One that replaced a picture
+    // of the saved look was saved on its own (see commitReplacedUploads), so
+    // savedUrls keeps it. While a Save is still running, it cleans up itself
+    // once its upload lands.
     if (!committed && !saving && uploads.uploaded.size > 0) {
       void deleteUnusedUploads([], uploads.uploaded, savedUrls);
     }
@@ -351,6 +392,60 @@ export const createSettingsModal = async (
     dialog.close();
     dialog.remove();
   };
+
+  /**
+   * After a Save that stopped half-way: saves, on their own, the uploads that
+   * replaced a picture the saved look uses, and returns their slots.
+   *
+   * WHY: the worker keeps one image per slot and redirects every older ?v= to
+   * the current bytes. An upload into a slot the saved look uses has already
+   * replaced that picture for every visitor, and the old bytes are gone, so a
+   * Cancel cannot bring it back. Left unsaved, the saved URL kept showing the
+   * cancelled picture to everyone but the owner (whose browser caches the old
+   * one for a year). Saved, the stored look matches what visitors get. Only
+   * these URLs change: every other field keeps its saved value, and the other
+   * edits wait for the next Save. An upload into a slot nothing uses is not
+   * public anywhere, and Cancel still removes it.
+   */
+  const commitReplacedUploads = async (): Promise<ImageSlot[]> => {
+    // Read before the await: a close meanwhile empties the pending files.
+    const uploadedUrls = new Map<ImageSlot, string>();
+    for (const slot of uploads.uploaded) {
+      const url = uploads.get(slot)?.uploadedUrl;
+      if (url) uploadedUrls.set(slot, url);
+    }
+    const hash = await ownUploadHash();
+    if (!hash) return [];
+    const usedBySaved = new Set(savedUrls.map((url) => uploadedSlotOf(url, hash)));
+    const replaced = IMAGE_SLOTS.filter(
+      (slot) => usedBySaved.has(slot) && uploadedUrls.has(slot),
+    );
+    if (replaced.length === 0) return [];
+
+    const urls: Record<string, string> = {};
+    const histories: Record<string, string[]> = {};
+    for (const slot of replaced) {
+      const url = uploadedUrls.get(slot)!;
+      saved[slot] = url;
+      urls[SLOT_URL_KEY[slot]] = url;
+      imgHistory[slot] = addToHistory(url, imgHistory[slot]);
+      histories[SLOT_HISTORY_KEY[slot]] = imgHistory[slot];
+    }
+    savedUrls.splice(0, savedUrls.length, saved.avatar, saved.banner, saved.background);
+    await chrome.storage.local.set({ ...urls, ...histories });
+    const look = toVisuals(saved);
+    try {
+      await syncMyVisuals(look);
+    } catch (e) {
+      console.error("Failed to sync visuals:", e);
+    }
+    // Paints the saved look (and the new avatar) on the page, then the edits
+    // still pending over it.
+    onSaveCallback(look);
+    if (!uploads.closed) liveApplyBannerBg(state, uploads.previews());
+    return replaced;
+  };
+
   const close = () => {
     if (!saving) closeDialog();
   };
@@ -468,11 +563,24 @@ export const createSettingsModal = async (
             void deleteUnusedUploads([], uploads.uploaded, savedUrls);
             return;
           }
+          const kept = await commitReplacedUploads();
           saving = false;
+          if (uploads.closed) {
+            // Closed while the kept uploads were stored: the close handler
+            // skipped the cleanup, which runs here instead.
+            void deleteUnusedUploads([], uploads.uploaded, savedUrls);
+            return;
+          }
           saveError = t("{slot}: {error}", {
             slot: t(SLOT_LABELS[upload.slot]),
             error: upload.error,
           });
+          if (kept.length > 0) {
+            saveError += ` ${t(
+              "Saved anyway: {slots} (the upload had already replaced the previous picture).",
+              { slots: kept.map((slot) => t(SLOT_LABELS[slot])).join(", ") },
+            )}`;
+          }
           rerender();
           return;
         }
@@ -553,21 +661,7 @@ export const createSettingsModal = async (
           PROFILE_BACKGROUND_HISTORY: imgHistory.background,
         });
 
-        const updatedVisuals: VisualUrls = {
-          avatar: state.avatar || "",
-          banner: state.banner || "",
-          bannerMode: state.bannerMode || "fill",
-          bannerColor: state.bannerColor || "",
-          background: state.background || "",
-          backgroundMode: state.backgroundMode || "fill",
-          backgroundColor: state.backgroundColor || "",
-          avatarBg: state.avatarBg,
-          decoration: state.decoration,
-          avatarPosX: state.avatarPosX,
-          avatarPosY: state.avatarPosY,
-          avatarScale: state.avatarScale,
-          badgeBg: state.badgeBg || "",
-        };
+        const updatedVisuals = toVisuals(state);
 
         try {
           await syncMyVisuals(updatedVisuals);

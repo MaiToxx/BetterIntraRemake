@@ -13,7 +13,7 @@
  */
 import { getConfig, getConfigMany } from "../../../core/config.ts";
 import { waitForElement } from "../../../core/dom/dom-wait.ts";
-import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
+import { AVATAR_SELECTOR, EDIT_VISUALS_HASH } from "../../../core/intra/selectors.ts";
 import { fetchUserVisuals } from "../../account/account.ts";
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
 import { applyOwnProfileExtras } from "../extras/extras-apply.ts";
@@ -26,6 +26,7 @@ import {
   readOwnLogin,
   rememberNoVisuals,
   setCachedVisuals,
+  visualsAreFresh,
 } from "./visuals-cache.ts";
 import {
   applyImgs,
@@ -48,6 +49,68 @@ let lastAppliedUser: string | null = null;
 let lastAppliedKey: string | null = null;
 
 const pendingRevalidations = new Set<string>();
+
+/** Does another user's record carry anything to paint or show? */
+const hasVisuals = (urls: VisualUrls): boolean =>
+  !!(
+    urls.avatar ||
+    urls.banner ||
+    urls.bannerColor ||
+    urls.background ||
+    urls.backgroundColor ||
+    urls.badgeBg ||
+    urls.theme ||
+    urls.logtime ||
+    urls.look ||
+    urls.extras
+  );
+
+/**
+ * First look at a peer with nothing stored: ask the worker without holding up
+ * the pass.
+ *
+ * WHY: the pass used to await this request before any card init, so the marks
+ * dates, the freeze countdown, the roulette card, the info card and the Add
+ * friend button all waited for the worker (up to the 8 s timeout when it
+ * hangs), mostly to learn that the student publishes nothing. The answer is
+ * painted when it lands, as revalidateVisuals() already does. The avatar hold
+ * still ends with the watcher (profile.ts): an answer slower than the whole
+ * pass shows the Intra picture first rather than no avatar for 8 s.
+ */
+const fetchPeerVisuals = (login: string, avatarEl: HTMLElement): void => {
+  isFetching = true;
+  void fetchUserVisuals(login)
+    .then((cloudUrls) => {
+      if (login !== pageState.lastUser) return;
+      if (cloudUrls && hasVisuals(cloudUrls)) {
+        visualCache = cloudUrls;
+        setCachedVisuals(login, cloudUrls);
+        applyImgs(cloudUrls);
+        lastAppliedUser = login;
+        lastAppliedKey = getVisualKey(cloudUrls);
+        // React may have swapped the avatar element while the request was out.
+        const avatar = document.querySelector<HTMLElement>(AVATAR_SELECTOR);
+        if (cloudUrls.avatar && avatar) {
+          attachToggleListener(avatar, () => visualCache);
+        }
+      } else if (cloudUrls) {
+        // A failed request (null) is not "no visuals": the next pass asks again.
+        rememberNoVisuals(login);
+      }
+    })
+    .catch((e) => console.warn("Better Intra: visuals", e))
+    .finally(() => {
+      // Another profile's pass owns the flag and the avatar by now.
+      if (login !== pageState.lastUser) return;
+      isFetching = false;
+      // applyImgs() has revealed the current avatar; this covers "no
+      // visuals" and a failure, on the element React may have replaced too.
+      avatarEl.style.setProperty("opacity", "1", "important");
+      document
+        .querySelector<HTMLElement>(AVATAR_SELECTOR)
+        ?.style.setProperty("opacity", "1", "important");
+    });
+};
 
 const revalidateVisuals = async (login: string, cached: VisualUrls) => {
   if (pendingRevalidations.has(login)) return;
@@ -125,6 +188,13 @@ export const updateVisuals = async () => {
       lastAppliedUser = targetLogin;
       lastAppliedKey = getVisualKey(visualCache);
     });
+    // Sent here by the hub's Edit from another page: open the editor through
+    // the avatar (its listener holds the save callback above), once. The
+    // hash goes first, so a reload or the next pass does not open it again.
+    if (location.hash === EDIT_VISUALS_HASH) {
+      history.replaceState(history.state, "", location.pathname + location.search);
+      avatarEl.click();
+    }
   }
 
   if (visualCache) {
@@ -210,59 +280,24 @@ export const updateVisuals = async () => {
         return;
       }
       const cached = await getCachedVisuals(targetLogin);
-      if (
-        cached &&
-        (cached.avatar ||
-          cached.banner ||
-          cached.bannerColor ||
-          cached.background ||
-          cached.backgroundColor ||
-          cached.badgeBg ||
-          cached.theme ||
-          cached.logtime ||
-          cached.look ||
-          cached.extras)
-      ) {
+      // A record stored less than ten minutes ago (typically by the friends
+      // widget, a click before this visit) is what the worker would answer:
+      // asking again cost a worker call and a KV read of the whole record, on
+      // a URL the browser's cache could not serve (?login= vs ?logins=).
+      const fresh = visualsAreFresh(cached);
+      if (cached && hasVisuals(cached)) {
         visualCache = sanitizeVisualUrls(cached);
         applyImgs(visualCache);
         lastAppliedUser = targetLogin;
         lastAppliedKey = getVisualKey(visualCache);
         if (visualCache.avatar) attachToggleListener(avatarEl, () => visualCache);
-        revalidateVisuals(targetLogin, cached);
+        if (!fresh) void revalidateVisuals(targetLogin, cached);
+      } else if (cached && fresh) {
+        // The friends widget stores "no visuals" answers too.
+        rememberNoVisuals(targetLogin);
+        avatarEl.style.setProperty("opacity", "1", "important");
       } else {
-        isFetching = true;
-        const fetchForLogin = targetLogin;
-        try {
-          const cloudUrls = await fetchUserVisuals(targetLogin);
-
-          if (fetchForLogin !== pageState.lastUser) return;
-
-          if (
-            cloudUrls &&
-            (cloudUrls.avatar ||
-              cloudUrls.banner ||
-              cloudUrls.bannerColor ||
-              cloudUrls.background ||
-              cloudUrls.backgroundColor ||
-              cloudUrls.badgeBg ||
-              cloudUrls.theme ||
-              cloudUrls.logtime ||
-              cloudUrls.look ||
-              cloudUrls.extras)
-          ) {
-            visualCache = cloudUrls;
-            setCachedVisuals(targetLogin, cloudUrls);
-            applyImgs(visualCache);
-            lastAppliedUser = targetLogin;
-            lastAppliedKey = getVisualKey(visualCache);
-            if (cloudUrls.avatar) attachToggleListener(avatarEl, () => visualCache);
-          } else {
-            if (cloudUrls) rememberNoVisuals(targetLogin);
-            avatarEl.style.setProperty("opacity", "1", "important");
-          }
-        } finally {
-          isFetching = false;
-        }
+        fetchPeerVisuals(targetLogin, avatarEl);
       }
     }
   }

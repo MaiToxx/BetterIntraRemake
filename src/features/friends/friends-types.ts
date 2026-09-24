@@ -23,4 +23,10 @@ export interface FriendData {
   wallet: number;
   correctionPoints: number;
   lastOnlineTimestamp: number | null;
+  /**
+   * The end of a running freeze (the Intra's `freeze_until`), from the cursus
+   * payload the level already comes from. Optional: older cached rows and the
+   * dormant OAuth builder have none.
+   */
+  freezeUntil?: string | null;
 }

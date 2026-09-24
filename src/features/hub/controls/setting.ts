@@ -59,8 +59,15 @@ export function renderSetting(
   live: LiveOptions,
 ) {
   if (def.kind === "divider") {
+    // daisyUI's divider is one 1rem line: on a phone the long titles
+    // ("Public profile (visible to all Better Intra users)") were cut. There
+    // they wrap, the divider grows with them, and its rules start at 1rem to
+    // leave the title the width. [&::before], not before: — that variant
+    // also sets content: var(--tw-content), whose default comes from an
+    // @property rule that does not apply in the hub's shadow root: the rules
+    // vanished from every divider.
     return html`<div
-      class="divider font-bold my-2 col-span-full opacity-70"
+      class="divider font-bold my-2 col-span-full opacity-70 text-center max-sm:h-auto max-sm:whitespace-normal max-sm:[&::before]:w-4 max-sm:[&::after]:w-4"
       data-search-divider
     >
       ${t(def.label ?? "")}
@@ -87,6 +94,14 @@ export function renderSetting(
   // most settings only take effect after the Reload of the footer; the few
   // the page applies on the spot carry no tag
   const needsReload = !!def.key && !isLiveKey(def.key);
+  // Never wider than the card: below sm the control is aligned to the end
+  // of a column, and a wider one spilled out on the left, where no scroll
+  // reaches. A radio group (buttons stacked) and a select take the whole
+  // width there, where long French options were cut.
+  const stretch = def.kind === "radio-group" || def.kind === "select";
+  const controlClass = isFullWidth
+    ? "w-full"
+    : `flex-none self-end sm:self-auto max-w-full min-w-0${stretch ? " max-sm:self-stretch" : ""}`;
 
   return html`<div
     class="card bg-base-200 shadow-sm p-3 sm:p-4 ${gridClass} ${hidden
@@ -119,7 +134,7 @@ export function renderSetting(
           : ""}
       </div>
       <div
-        class="${isFullWidth ? "w-full" : "flex-none self-end sm:self-auto"}"
+        class="${controlClass}"
         role="${panel ? "group" : nothing}"
         aria-labelledby="${panel ? ids.label : nothing}"
         aria-describedby="${panel && ids.desc ? ids.desc : nothing}"

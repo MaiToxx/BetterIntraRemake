@@ -76,6 +76,8 @@ export interface DialogState {
   activeNameDir: "asc" | "desc";
   activeSinceDir: "asc" | "desc";
   activeWifiOnly: boolean;
+  /** The Active tab's search box; empty or unset, the list shows everyone. */
+  activeQuery?: string;
 }
 
 export const keyOf = (campusId: string, clusterId: string) =>

@@ -102,6 +102,17 @@ describe("finalizeManifest", () => {
     expect(finalizeManifest(read("chrome"), build({ chromeStore: true })).update_url).toBeUndefined();
   });
 
+  it("firefox keeps its data collection declaration: real categories, never 'none' beside them", () => {
+    // Firefox 140+ shows it in the install prompt; tests/privacy-doc.test.ts
+    // ties each category to PRIVACY.md and the Chrome Web Store answers.
+    const gecko = finalizeManifest(read("firefox"), build({ target: "firefox" })).browser_specific_settings?.gecko as
+      | { data_collection_permissions?: { required?: string[]; optional?: string[] } }
+      | undefined;
+    const required = gecko?.data_collection_permissions?.required ?? [];
+    expect(required).toEqual(["authenticationInfo", "browsingActivity", "personallyIdentifyingInfo", "websiteContent"]);
+    expect(required).not.toContain("none");
+  });
+
   it("the store build asks no alarms permission: its only user, the release check, is not compiled in", () => {
     const store = finalizeManifest(read("chrome"), build({ chromeStore: true }));
     expect(store.permissions).toEqual(["storage"]);

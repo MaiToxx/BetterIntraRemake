@@ -262,6 +262,103 @@ export function renderTemplate(state: DialogState): TemplateResult {
       #campus-trigger {
         border: 1px solid var(--color-base-300);
       }
+      #active-search {
+        width: 9rem;
+        height: 1.375rem;
+        padding: 0 8px;
+        border: none;
+        border-radius: 6px;
+        background: var(--color-base-100);
+        color: var(--color-base-content);
+        font-size: 12px;
+      }
+      #active-search:focus-visible {
+        outline: 2px solid var(--color-accent-content);
+        outline-offset: 1px;
+      }
+      .active-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px;
+        padding: 72px 16px 16px;
+        align-content: start;
+      }
+      .active-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        padding: 10px 8px;
+        border-radius: 10px;
+        background: var(--color-base-200);
+        text-align: center;
+        min-width: 0;
+      }
+      .active-card:has(.active-card-link:hover) {
+        background: var(--color-base-300);
+      }
+      .active-card-link {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        max-width: 100%;
+        min-width: 0;
+        border-radius: 6px;
+        color: var(--color-base-content);
+        text-decoration: none;
+      }
+      .active-card-link img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+      }
+      .active-card[data-friend] .active-card-link img {
+        outline: 3px solid var(--color-accent);
+        outline-offset: 2px;
+      }
+      .active-card-login {
+        font-size: 13px;
+        font-weight: 600;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .active-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+        max-width: 100%;
+      }
+      .seat-chip {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 0 6px;
+        border: 1px solid
+          color-mix(in oklch, var(--color-base-content) 25%, transparent);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--color-base-content);
+        font: 600 11px/18px ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      button.seat-chip {
+        cursor: pointer;
+        border-color: var(--color-accent);
+      }
+      button.seat-chip:hover {
+        background: color-mix(in oklch, var(--color-accent) 20%, transparent);
+      }
+      button.seat-chip:focus-visible,
+      .active-card-link:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 2px;
+      }
     </style>
     <div
       data-theme="${currentTheme}"
@@ -518,6 +615,23 @@ export function renderTemplate(state: DialogState): TemplateResult {
             >
               <span class="sort-label">Wi-Fi</span>
             </button>
+            <div class="w-px h-4 bg-accent-content/40"></div>
+            <input
+              type="search"
+              id="active-search"
+              placeholder="${t("Search a login")}"
+              aria-label="${t("Search a login")}"
+              aria-controls="map-area"
+              autocomplete="off"
+              spellcheck="false"
+              enterkeyhint="search"
+            />
+            <span
+              id="active-search-status"
+              class="sr-only"
+              role="status"
+              aria-live="polite"
+            ></span>
           </div>
         </div>
         <div

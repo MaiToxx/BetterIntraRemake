@@ -19,9 +19,19 @@ type Config = {
 const MAP_WATCH_MS = 30000;
 /** Same budget as the old 100 ms x 30 poll. */
 const CLUSTER_TAB_WAIT_MS = 3000;
+/** The Intra's own cluster pages, the only place this feature has work. */
+const CLUSTER_PAGE_HOST = "meta.intra.42.fr";
 
 export async function initClusters() {
   "use strict";
+
+  // The picker, the chair markers and "Open profiles in new tab" are for the
+  // Intra's cluster page. This ran on every Intra host: a 30 s DOM watcher
+  // for a picker that never mounts, an observer left on the page's first
+  // icon for the tab's life, and a capture click handler that turned every
+  // profile link (the v3 sidebar's Settings, team members on projects) into
+  // a new tab for anyone with the setting on.
+  if (location.hostname !== CLUSTER_PAGE_HOST) return;
 
   let CONFIG: Config;
   let refreshQueued = false;
@@ -61,8 +71,8 @@ export async function initClusters() {
   };
 
   // The picker lives in a shadow root that carries the whole Tailwind/daisyUI
-  // sheet (~300 KB). initClusters() runs on every Intra page, so it is only
-  // built once we know the page really has a cluster tab list to mount it in.
+  // sheet (~300 KB). meta.intra.42.fr has other pages than the cluster map, so
+  // it is only built once the page really has a cluster tab list to mount in.
   let shadowHost: HTMLElement | null = null;
   let reRender:
     | ((currentId: string, showMarkers: boolean) => void)
@@ -101,10 +111,10 @@ export async function initClusters() {
     ] as const);
     // ensureCampusData() fills the cluster list only; the chair markers come
     // from SCREENS, which getClusterData() builds. Without this the markers
-    // never drew on meta.intra and the toggle showed for every campus. Only
-    // the cluster pages (meta.intra.42.fr) need it: the file is already in
-    // the storage cache from the call above, so this costs one read there.
-    if (c.CLUSTERS_CAMPUS && location.hostname === "meta.intra.42.fr") {
+    // never drew on meta.intra and the toggle showed for every campus. The
+    // file is already in the storage cache from the call above, so this
+    // costs one read.
+    if (c.CLUSTERS_CAMPUS) {
       try {
         await getClusterData(c.CLUSTERS_CAMPUS);
       } catch {}
@@ -156,10 +166,10 @@ export async function initClusters() {
       }).then((el) => el?.click());
     }
 
-    // Wait for the map SVG and our UI, but never for more than ~30 s: this
-    // feature is initialised on every Intra page. The old version re-ran the
-    // whole search twice a second for those 30 s even on pages that have no
-    // cluster map at all; now it only runs when the page actually changed.
+    // Wait for the map SVG and our UI, but never for more than ~30 s: other
+    // meta.intra pages have no cluster map at all. The old version re-ran the
+    // whole search twice a second for those 30 s; now it only runs when the
+    // page actually changed.
     const stopWatch = watchDom(
       () => {
         findAndAttach();
@@ -180,6 +190,7 @@ export async function initClusters() {
   }
 
   function onClusterProfileClick(e: MouseEvent) {
+    if (e.button !== 0) return;
     const target = e.target as HTMLElement;
 
     const svgImage = target.closest("image[data-tooltip-login]");
@@ -188,18 +199,26 @@ export async function initClusters() {
       if (login) {
         e.preventDefault();
         e.stopPropagation();
-        window.open(`https://profile.intra.42.fr/users/${login}`, "_blank");
+        window.open(
+          `https://profile.intra.42.fr/users/${login}`,
+          "_blank",
+          "noopener",
+        );
         return;
       }
     }
 
+    // A modified click on a link already says where it goes (Ctrl/Cmd: a
+    // background tab, Shift: a window): the browser does it. It used to
+    // become a foreground window.open() like any other click.
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
     const link = target.closest(
       "a[href*='profile.intra.42.fr/users/']",
     ) as HTMLAnchorElement | null;
     if (link) {
       e.preventDefault();
       e.stopPropagation();
-      window.open(link.href, "_blank");
+      window.open(link.href, "_blank", "noopener");
     }
   }
 

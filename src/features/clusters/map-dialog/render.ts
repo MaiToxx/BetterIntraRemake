@@ -1,6 +1,8 @@
 import { SeatPos } from "./crop";
 import { normalizeSeatId } from "./seats";
-import { getLang, t } from "../../../core/i18n/i18n.ts";
+import { seatCluster } from "./helpers";
+import type { DialogState } from "./context";
+import { getLang, t, tp } from "../../../core/i18n/i18n.ts";
 
 const PROFILE_BASE = "https://profile.intra.42.fr/users";
 
@@ -219,78 +221,120 @@ export function renderSeatOverlays(
   mapArea.appendChild(overlay);
 }
 
-/** `wifiOnly`: the list is filtered to Wi-Fi users, and its empty state says so. */
-export function renderActiveList(
-  shadow: ShadowRoot,
+/**
+ * The people the Active list shows for the search box's text: the logins
+ * that contain it, whatever the case. Applied when the list is drawn, never
+ * stored in state.activeUsers: the 60 s poll rebuilds that list, and the tab's
+ * count and the "{n} active" badge read it to count everyone.
+ */
+export function filterActiveUsers(
   users: OccupancyEntry[],
-  wifiOnly = false,
-) {
-  const mapArea = shadow.getElementById("map-area");
+  query: string | undefined,
+): OccupancyEntry[] {
+  const q = (query ?? "").trim().toLowerCase();
+  return q ? users.filter((u) => u.login.toLowerCase().includes(q)) : users;
+}
+
+/**
+ * Where a card says the person sits. A seat whose cluster has a map is a
+ * button that opens it there (map-dialog.ts handles `data-jump-seat`); a
+ * Wi-Fi host or a seat on no map is plain text, so it does not look like a
+ * link. The card used to show no seat at all: finding someone meant opening
+ * every cluster tab and scanning the avatars.
+ */
+function seatChip(state: DialogState, host: string): HTMLElement {
+  if (host.startsWith("wifi-")) {
+    const wifi = document.createElement("span");
+    wifi.className = "seat-chip";
+    wifi.textContent = "Wi-Fi";
+    return wifi;
+  }
+  if (!seatCluster(state.clusters, host)) {
+    const plain = document.createElement("span");
+    plain.className = "seat-chip";
+    plain.textContent = host;
+    return plain;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "seat-chip";
+  button.dataset.jumpSeat = host;
+  button.textContent = host;
+  const label = t("View {seat} on cluster map", { seat: host });
+  button.setAttribute("aria-label", label);
+  button.dataset.tip = label;
+  return button;
+}
+
+/**
+ * The search's result count for screen readers (the list itself is not a
+ * live region). Written only when it changes: the poll redraws the list every
+ * minute, and the same count must not be read out again each time.
+ */
+function announceMatches(state: DialogState, query: string, count: number) {
+  const status = state.shadow.getElementById("active-search-status");
+  if (!status) return;
+  const text = query ? tp(count, "{n} match", "{n} matches") : "";
+  if (status.textContent !== text) status.textContent = text;
+}
+
+/**
+ * The Active tab: everyone connected on the campus (or on Wi-Fi only, whose
+ * empty state says so), filtered by the search box, each with their seat.
+ */
+export function renderActiveList(state: DialogState) {
+  const mapArea = state.shadow.getElementById("map-area");
   if (!mapArea) return;
   mapArea.style.position = "";
+
+  const query = (state.activeQuery ?? "").trim();
+  const users = filterActiveUsers(state.activeUsers, query);
+  announceMatches(state, query, users.length);
 
   if (users.length === 0) {
     const emptyDiv = document.createElement("div");
     emptyDiv.className =
-      "flex items-center justify-center p-12 text-base-content/50";
-    emptyDiv.textContent = t(
-      wifiOnly ? "No one on Wi-Fi right now" : "No one connected",
-    );
+      "flex items-center justify-center p-12 text-center text-base-content/50";
+    emptyDiv.textContent =
+      query && state.activeUsers.length > 0
+        ? t("No login matches “{query}”", { query })
+        : t(
+            state.activeWifiOnly
+              ? "No one on Wi-Fi right now"
+              : "No one connected",
+          );
     mapArea.replaceChildren(emptyDiv);
     return;
   }
 
   const grid = document.createElement("div");
-  grid.style.cssText = [
-    "display:grid;",
-    "grid-template-columns:repeat(auto-fill,minmax(120px,1fr));",
-    "gap:8px;",
-    "padding:72px 16px 16px;",
-    "align-content:start;",
-  ].join("");
+  grid.className = "active-grid";
 
   for (const user of users) {
-    const card = Object.assign(document.createElement("a"), {
+    // A <div>, not a link: the seat button sits next to the profile link
+    // rather than inside it (a button inside a link is not valid HTML, and a
+    // click on it would open the profile too).
+    const card = document.createElement("div");
+    card.className = "active-card";
+
+    const link = Object.assign(document.createElement("a"), {
       href: `${PROFILE_BASE}/${user.login}`,
       target: "_blank",
       rel: "noopener noreferrer",
-    });
-    card.style.cssText = [
-      "display:flex;",
-      "flex-direction:column;",
-      "align-items:center;",
-      "gap:4px;",
-      "padding:10px 8px;",
-      "border-radius:10px;",
-      "background:var(--color-base-200);",
-      "text-align:center;",
-      "text-decoration:none;",
-      "min-width:0;",
-    ].join("");
-    card.addEventListener("mouseenter", () => {
-      card.style.background = "var(--color-base-300)";
-    });
-    card.addEventListener("mouseleave", () => {
-      card.style.background = "var(--color-base-200)";
+      className: "active-card-link",
     });
 
     const avatar = Object.assign(document.createElement("img"), {
       src: user.cdn_uri,
       alt: user.login,
     });
-    avatar.style.cssText =
-      "width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;";
     const friend = isMapFriend(user.login);
-    if (friend) {
-      avatar.style.outline = "3px solid var(--color-accent)";
-      avatar.style.outlineOffset = "2px";
-      card.dataset.friend = "true";
-    }
+    if (friend) card.dataset.friend = "true";
 
     const login = document.createElement("span");
+    login.className = "active-card-login";
     login.textContent = friend ? `★ ${user.login}` : user.login;
-    login.style.cssText =
-      "font-size:13px;font-weight:600;color:var(--color-base-content);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    link.append(avatar, login);
 
     const since = document.createElement("span");
     since.className = "badge badge-sm";
@@ -304,12 +348,35 @@ export function renderActiveList(
       t("since {time}", { time: clockTime(user.begin_at) }),
     );
 
-    card.appendChild(avatar);
-    card.appendChild(login);
-    card.appendChild(since);
+    const meta = document.createElement("div");
+    meta.className = "active-card-meta";
+    meta.append(seatChip(state, user.host), since);
+
+    card.append(link, meta);
     grid.appendChild(card);
   }
+  const refocus = focusedCardControl(state, mapArea);
   mapArea.replaceChildren(grid);
+  if (refocus)
+    grid.querySelector<HTMLElement>(refocus)?.focus({ preventScroll: true });
+}
+
+/**
+ * The card link or seat button that has focus, as a selector for the same
+ * control in the redrawn list. The 60 s poll redraws the whole list: a
+ * keyboard user tabbing through the cards was sent back to the top of the
+ * page every minute.
+ */
+function focusedCardControl(
+  state: DialogState,
+  mapArea: HTMLElement,
+): string | null {
+  const el = state.shadow.activeElement;
+  if (!(el instanceof HTMLElement) || !mapArea.contains(el)) return null;
+  const seat = el.dataset.jumpSeat;
+  if (seat) return `[data-jump-seat="${CSS.escape(seat)}"]`;
+  const href = el instanceof HTMLAnchorElement ? el.getAttribute("href") : null;
+  return href ? `.active-card-link[href="${CSS.escape(href)}"]` : null;
 }
 
 export function formatTimeAgo(ts: number): string {

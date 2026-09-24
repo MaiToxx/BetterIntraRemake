@@ -20,21 +20,19 @@ jobs:
           node-version: "lts/*"
           cache: "npm"
 
+      # A prerelease tag may carry a suffix (v1.17.0-rc1), which a manifest
+      # version cannot: only the version before it must match.
+      - name: Release tag matches package.json
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/check-release-tag.mjs "$RELEASE_TAG" --prerelease
+
       - name: Install dependencies
         run: npm ci
 
       # Same gate as build-and-sign (see there).
-      - name: Tests
-        run: npm test
-
-      - name: Generated theme files are up to date
-        run: npm run check:themes
-
-      - name: No runtime import cycles
-        run: npm run check:cycles
-
-      - name: Build Extension (Firefox)
-        run: npm run build:firefox
+      - name: Release gate
+        run: npm run release:check
 
       - name: web-ext build (Firefox)
         id: web-ext-build-ff
@@ -43,9 +41,6 @@ jobs:
           cmd: build
           source: dist-firefox
           filename: "better-intra.xpi"
-
-      - name: Build Extension (Chrome)
-        run: npm run build:chrome
 
       - name: web-ext build (Chrome)
         id: web-ext-build-chrome
@@ -57,9 +52,6 @@ jobs:
 
       - name: Move Chrome artifact
         run: mv web-ext-artifacts/better-intra-chrome.zip .
-
-      - name: Bundle size budgets
-        run: npm run check:size
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v3
@@ -83,7 +75,8 @@ jobs:
       HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
       # Chrome Web Store publishing (the only automatic update path on
       # Windows/macOS). See docs/CHROME-WEB-STORE.md for the five secrets.
-      # Without all five the store steps are skipped.
+      # Without all five the store upload is skipped (the store package is
+      # still built and kept, for an upload by hand).
       HAS_CWS: ${{ secrets.CWS_EXTENSION_ID != '' && secrets.CWS_PUBLISHER_ID != '' && secrets.CWS_CLIENT_ID != '' && secrets.CWS_CLIENT_SECRET != '' && secrets.CWS_REFRESH_TOKEN != '' }}
       # The four secrets of the API v1.1 setup without the publisher id that
       # v2 needs: warn instead of skipping in silence.
@@ -98,26 +91,30 @@ jobs:
           node-version: "lts/*"
           cache: "npm"
 
+      # The packages take their version from package.json; updates.json,
+      # updates.xml and the AMO lookups take it from the tag. A forgotten bump
+      # would announce a version the packages do not carry.
+      - name: Release tag matches package.json
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: node scripts/check-release-tag.mjs "$RELEASE_TAG"
+
       - name: Install dependencies
         run: npm ci
 
-      # The release gate. A release is published from a commit whose CI run
-      # may not have finished (or may have been skipped), and what follows
-      # signs the build and pushes updates.json/updates.xml, which every
-      # Firefox and Linux Chrome install follows within a day. A failure here
-      # leaves a release without files, which the in-extension update check
-      # ignores (parseLatestRelease in src/core/update-check.ts).
-      - name: Tests
-        run: npm test
-
-      - name: Generated theme files are up to date
-        run: npm run check:themes
-
-      - name: No runtime import cycles
-        run: npm run check:cycles
-
-      - name: Build Extension (Firefox)
-        run: npm run build:firefox
+      # The release gate (package.json "release:check", which
+      # finish-release.yaml runs too): tests, generated themes, import cycles,
+      # both builds, size budgets, and the Chrome smoke test in the runner's
+      # Chrome. A release is published from a commit whose CI run may not have
+      # finished (for 1.16.0 this job uploaded the Chrome files 14 s before
+      # CI's smoke test ended), and what follows signs the build and pushes
+      # updates.json/updates.xml, which every Firefox and Linux Chrome install
+      # follows within a day. A failure here leaves a release without files,
+      # which the in-extension update check ignores (parseLatestRelease in
+      # src/core/update-check.ts). Any failure fails the job, a runner without
+      # Chrome included: the gate never counts as passed without running.
+      - name: Release gate
+        run: npm run release:check
 
       - name: web-ext build (Firefox)
         id: web-ext-build-ff
@@ -126,9 +123,6 @@ jobs:
           cmd: build
           source: dist-firefox
           filename: "better-intra.xpi"
-
-      - name: Build Extension (Chrome)
-        run: npm run build:chrome
 
       - name: web-ext build (Chrome)
         id: web-ext-build-chrome
@@ -140,9 +134,6 @@ jobs:
 
       - name: Move Chrome artifact
         run: mv web-ext-artifacts/better-intra-chrome.zip .
-
-      - name: Bundle size budgets
-        run: npm run check:size
 
       - name: Pack Chrome .crx (self-hosted updates)
         if: env.HAS_CRX == 'true'
@@ -166,16 +157,46 @@ jobs:
             better-intra-chrome.zip
             better-intra.crx
 
-      # Built and archived here, before a step checks out main: later they
-      # would package main's HEAD instead of the release tag. A store build
-      # failure must not hold back anything else, hence continue-on-error.
+      # The Chrome Web Store package, built on every release, with or without
+      # the store secrets: store uploads were built by hand from a working
+      # folder, through no gate and with no record of what went in. Built
+      # before a step checks out main (later it would package main's HEAD
+      # instead of the release tag); `zip` writes forward slashes, which the
+      # store needs. A store build failure must not hold back anything else,
+      # hence continue-on-error here and on the two steps that keep it.
       - name: Build Extension (Chrome Web Store)
         id: cws-build
-        if: env.HAS_CWS == 'true'
         continue-on-error: true
         run: |
           npm run build:chrome-store
-          (cd dist-chrome-store && zip -qr ../better-intra-chrome-store.zip .)
+          (cd dist-chrome-store && zip -qr ../chrome-web-store-upload.zip .)
+
+      - name: Keep the Chrome Web Store package
+        id: cws-keep
+        if: steps.cws-build.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: chrome-web-store-upload.zip
+          path: chrome-web-store-upload.zip
+          archive: false
+          retention-days: 90
+          # `gh run rerun --failed` builds the same tag again, and an artifact
+          # name already taken in the run would fail this step
+          overwrite: true
+
+      # On the release too, under a name nobody takes for the GitHub Chrome
+      # zip, and that RELEASE_ASSET_CHROME (better-intra*.zip, the files the
+      # in-extension update check waits for) does not match: the store build
+      # has no update check, so an install of it would never hear of a new
+      # version (tests/store-pipeline.test.ts holds both).
+      - name: Attach the Chrome Web Store package to the release
+        id: cws-attach
+        if: steps.cws-build.outcome == 'success'
+        continue-on-error: true
+        uses: softprops/action-gh-release@v3
+        with:
+          files: chrome-web-store-upload.zip
 
       - name: Collect source code
         if: env.HAS_AMO == 'true'
@@ -185,20 +206,13 @@ jobs:
       # from raw.githubusercontent.com).
       #   updates.xml  -> Chrome self-hosted .crx (Linux): now
       #   updates.json -> Firefox: after signing, further down
+      # scripts/push-update-manifest.mjs checks out main, writes the file and
+      # pushes it, trying again when main moved in between.
       - name: Update Chrome auto-update manifest
         if: env.HAS_CRX == 'true'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          git fetch origin main
-          git checkout main
-          git reset --hard origin/main
-          node scripts/update-updates-xml.js "${RELEASE_TAG#v}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.xml
-          git commit -m "chore: update updates.xml for ${RELEASE_TAG}" || exit 0
-          git push origin main
+        run: node scripts/push-update-manifest.mjs updates.xml "$RELEASE_TAG"
 
       # Allowed to fail: the Web Store refuses an upload while the previous
       # version is still in review, which is common at this release pace.
@@ -216,12 +230,13 @@ jobs:
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
-        run: npx --yes chrome-webstore-upload-cli@4.0.1 --source better-intra-chrome-store.zip
+        run: npx --yes chrome-webstore-upload-cli@4.0.1 --source chrome-web-store-upload.zip
 
       # Firefox last: it waits for Mozilla. An approval that takes longer
       # (AMO holds some updates for a manual review of hours or days) is not
       # a failure: finish-release.yaml fetches the signed file every half hour
-      # and completes the release when Mozilla approves it.
+      # and completes the release when Mozilla approves it. Whether the
+      # submission reached Mozilla at all is checked at the very end.
       - name: web-ext sign (Firefox)
         if: env.HAS_AMO == 'true'
         id: web-ext-sign
@@ -235,10 +250,6 @@ jobs:
           apiKey: ${{ secrets.AMO_SIGN_KEY }}
           apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
           timeout: 1200000
-
-      - name: Signing still waiting for Mozilla
-        if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome != 'success'
-        run: echo "::notice::Mozilla has not approved this version yet. The Chrome files and updates.xml are out; finish-release.yaml attaches the .xpi and updates updates.json once Mozilla signs it."
 
       - name: Rename signed artifact
         if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome == 'success'
@@ -260,23 +271,50 @@ jobs:
         if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome == 'success'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          git fetch origin main
-          git checkout main
-          git reset --hard origin/main
-          node scripts/update-updates-json.js "${RELEASE_TAG#v}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add updates.json
-          git commit -m "chore: update updates.json for ${RELEASE_TAG}" || exit 0
-          git push origin main
+        run: node scripts/push-update-manifest.mjs updates.json "$RELEASE_TAG"
 
       - name: Chrome Web Store step failed
-        if: steps.cws-build.outcome == 'failure' || steps.cws.outcome == 'failure'
+        if: steps.cws-build.outcome == 'failure' || steps.cws-keep.outcome == 'failure' || steps.cws-attach.outcome == 'failure' || steps.cws.outcome == 'failure'
+        env:
+          BUILT: ${{ steps.cws-build.outcome }}
+          UPLOADED: ${{ steps.cws.outcome }}
         run: |
-          echo "::warning::Chrome Web Store build or upload failed (previous version still in review, or bad or expired CWS credentials). updates.json/updates.xml were updated anyway; upload this version by hand or let the next release carry it (docs/CHROME-WEB-STORE.md)."
+          if [ "$BUILT" = "failure" ]; then
+            echo "::warning::The Chrome Web Store package could not be built: nothing was kept or attached for the store. The GitHub files are out regardless; build it by hand from the release tag (docs/CHROME-WEB-STORE.md)."
+          elif [ "$UPLOADED" = "failure" ]; then
+            echo "::warning::The Chrome Web Store upload failed (previous version still in review, or bad or expired CWS credentials). The GitHub files are out regardless, updates.xml too when .crx packing is set up, and updates.json once Mozilla signs; upload chrome-web-store-upload.zip from the release by hand or let the next release carry it (docs/CHROME-WEB-STORE.md)."
+          else
+            echo "::warning::The Chrome Web Store package was built but could not be kept as a run artifact or attached to the release: see the steps above."
+          fi
 
       - name: Chrome Web Store publisher id missing
         if: env.CWS_NO_PUBLISHER == 'true'
         run: |
           echo "::warning::CWS_EXTENSION_ID is set but CWS_PUBLISHER_ID is not: the Chrome Web Store upload was skipped (API v2 needs it, see docs/CHROME-WEB-STORE.md)."
+
+      # Last, so that failing here holds nothing back. web-ext sign failing
+      # (continue-on-error) meant a slow review as well as a submission AMO
+      # never accepted (a validation error, an upload that never happened),
+      # and both left the same notice on a green run: Firefox users missed
+      # the release until someone opened a log. Asking AMO tells them apart.
+      - name: Firefox submission reached Mozilla
+        if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome != 'success'
+        env:
+          AMO_KEY: ${{ secrets.AMO_SIGN_KEY }}
+          AMO_SECRET: ${{ secrets.AMO_SIGN_SECRET }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          set +e
+          node scripts/amo-signed-xpi.mjs "$VERSION" /dev/null
+          code=$?
+          set -e
+          case $code in
+            # 0: signed, yet web-ext sign failed, as on a rerun that resubmits
+            # a version AMO already has
+            0) echo "::notice::Mozilla has signed $VERSION, but not through this run's web-ext sign step. finish-release.yaml attaches the .xpi and updates updates.json if this run did not." ;;
+            3) echo "::notice::Mozilla has $VERSION but did not sign it within this run (it can hold an update for a review of hours or days). The Chrome files are out; finish-release.yaml attaches the .xpi and updates updates.json once Mozilla signs it." ;;
+            2) echo "::error::Mozilla never created $VERSION: the submission failed (a validation error or an upload that never reached AMO: see the web-ext sign step). Firefox users will not get this release until a version is submitted."; exit 1 ;;
+            4) echo "::error::Mozilla refused or disabled $VERSION: see the add-on's page on addons.mozilla.org."; exit 1 ;;
+            *) echo "::error::Could not ask AMO about $VERSION (exit $code): bad or expired AMO credentials, or AMO unreachable."; exit 1 ;;
+          esac

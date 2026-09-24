@@ -27,13 +27,21 @@ The GitHub builds (`.xpi`, `better-intra-chrome.zip`, `.crx`) keep the check:
 for them it is the only way to hear about a new version. Every package ships
 `LICENSE` and `THIRD_PARTY_NOTICES.txt` next to `manifest.json`.
 
+Every release also carries the store package itself, built from the release
+tag by the release workflow: `chrome-web-store-upload.zip`. It is for the
+dashboard only. Installed by hand it would never hear of an update, so its
+name is not `better-intra*.zip`, the pattern students and the in-extension
+update check (`RELEASE_ASSET_CHROME`) look for.
+
 ## 1. Developer account and first upload (one-time, 5 USD)
 
 1. Sign in at https://chrome.google.com/webstore/devconsole with a Google
    account and pay the one-time registration fee.
-2. *New item* → upload the store package. Not `better-intra-chrome.zip` from
-   the GitHub release: that one is `dist-chrome`, with the self-hosted
-   `update_url` and the release check. Build and zip it with:
+2. *New item* → upload the store package: `chrome-web-store-upload.zip` from
+   the GitHub release (also kept for 90 days as an artifact of the release's
+   *Build and Publish* run). Not `better-intra-chrome.zip`: that one is
+   `dist-chrome`, with the self-hosted `update_url` and the release check.
+   Before the first release that attaches it, build and zip it with:
 
    ```bash
    npm run build:chrome-store
@@ -144,6 +152,13 @@ leaves the browser.
 Leave unticked: health information, financial and payment information,
 personal communications, user activity.
 
+The Firefox package declares the same practices to Firefox's install prompt
+(`data_collection_permissions` in `manifests/manifest.firefox.json`:
+`authenticationInfo`, `browsingActivity`, `personallyIdentifyingInfo`,
+`websiteContent`). tests/privacy-doc.test.ts ties each of them to a row
+ticked here, each ticked row to its Firefox category, and both to
+PRIVACY.md: change the three files together.
+
 Tick the three certifications: no sale or transfer of user data outside the
 approved use cases, no use or transfer unrelated to the single purpose, no
 use for creditworthiness or lending.
@@ -211,8 +226,9 @@ In the GitHub repository → *Settings* → *Secrets and variables* → *Actions
 | `CWS_CLIENT_SECRET`  | OAuth client secret                                                |
 | `CWS_REFRESH_TOKEN`  | refresh token                                                      |
 
-Until all five exist, the store steps of the release workflow are skipped
-(with a warning when the extension id is set but the publisher id is not).
+Until all five exist, the release workflow skips the store upload (with a
+warning when the extension id is set but the publisher id is not); it still
+builds the store package and attaches it for an upload by hand.
 
 Check the credentials once before the first release that uses them, with a
 store zip whose version is above the store's current one (built as in step
@@ -225,19 +241,31 @@ EXTENSION_ID=… PUBLISHER_ID=… CLIENT_ID=… CLIENT_SECRET=… REFRESH_TOKEN=
 
 ## What a release does then
 
-Publishing a GitHub release runs the tests, builds and signs the GitHub
-packages, attaches them, updates `updates.json` / `updates.xml`, and only
-then uploads the store package and submits it for review
-(`chrome-webstore-upload-cli` 4, Chrome Web Store API v2; the v1.1 API it
-replaces stops on 15 October 2026). Each version still goes through Google's
-review before it reaches users, usually within a day; Chrome then installs
-it by itself within a few hours.
+Publishing a GitHub release runs `.github/workflows/publish.yaml`, in this
+order:
 
-The store step is allowed to fail: the store refuses an upload while the
+1. the release tag must name `package.json`'s version, then the release gate
+   (`npm run release:check`: tests, theme and cycle checks, both builds, size
+   budgets, the Chrome smoke test);
+2. the Chrome zip and `.crx` are attached to the release;
+3. the store package is built from the tag, kept as a run artifact and
+   attached as `chrome-web-store-upload.zip`;
+4. `updates.xml` is updated (Linux `.crx` installs);
+5. with the five secrets, the store package is uploaded and submitted for
+   review (`chrome-webstore-upload-cli` 4, Chrome Web Store API v2; the v1.1
+   API it replaces stops on 15 October 2026);
+6. last, the Firefox build goes to Mozilla for signing; once signed, the
+   `.xpi` is attached and `updates.json` updated. When Mozilla takes longer
+   than the run waits, `finish-release.yaml` does both later.
+
+Each version still goes through Google's review before it reaches users,
+usually within a day; Chrome then installs it by itself within a few hours.
+
+The store steps are allowed to fail: the store refuses an upload while the
 previous version is still in review, and that must not hold back Firefox and
 Linux updates. A failure leaves a warning on the workflow run. That version
-then reaches the store with the next release, or upload it by hand from the
-dashboard (the zip is built as in step 1 from the release tag).
+then reaches the store with the next release, or upload
+`chrome-web-store-upload.zip` from the release by hand in the dashboard.
 
 ## Firefox
 

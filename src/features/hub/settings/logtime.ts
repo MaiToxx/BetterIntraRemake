@@ -1,6 +1,6 @@
 /**
- * Logtime tab of the settings hub: monthly goal, average and day labels, the
- * emoji earnings counter, and the colours of the calendar.
+ * Logtime tab of the settings hub: monthly goal, average, streak and day
+ * labels, the emoji earnings counter, and the colours of the calendar.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
 import { RAINBOW_PALETTES } from "../../logtime/rainbow-presets.ts";
@@ -36,6 +36,16 @@ export const LOGTIME_SETTINGS: readonly HubSettingDef[] = [
     desc: "Shows the goal indicator.",
     kind: "toggle",
     defaultValue: CONFIG_DEFAULT.LOGTIME_SHOW_GOAL,
+    grid: true,
+    colSpan: 1,
+  },
+  {
+    feature: "logtime",
+    key: "LOGTIME_SHOW_RECORDS",
+    label: "Show streak",
+    desc: "Shows your days in a row next to the Active badge, with your records in its tooltip.",
+    kind: "toggle",
+    defaultValue: CONFIG_DEFAULT.LOGTIME_SHOW_RECORDS,
     grid: true,
     colSpan: 1,
   },
@@ -94,8 +104,11 @@ export const LOGTIME_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "logtime",
     key: "LOGTIME_EMOJI_RATE",
-    label: "Hourly Earning",
-    desc: "How much you earn per hour.",
+    // Not "Hourly Earning" / "How much you earn per hour": that invited a
+    // student to type their real pay into a synced setting, which the
+    // worker also served to anyone with the public visuals.
+    label: "Value of an hour",
+    desc: "What one hour of logtime is worth in the emoji count. A game value, not your real pay.",
     kind: "number",
     min: 0,
     step: 0.1,

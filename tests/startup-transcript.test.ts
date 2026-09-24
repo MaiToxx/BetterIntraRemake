@@ -99,4 +99,58 @@ describe("initTranscript", () => {
     expect(readsAfter).toBe(readsBefore);
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
+
+  it("shows without the cloud sign-in, and posts the transcript form for the page's login", async () => {
+    const { initTranscript } = await loadModule();
+    await seed(WITH_TRANSCRIPTS);
+    // The download is a form POST with the student's own Intra cookies: no
+    // worker session is involved.
+    await chrome.storage.local.remove(["CLOUD_LOGIN", "CLOUD_TOKEN"]);
+    const own = document.createElement("span");
+    own.setAttribute("data-login", "");
+    own.textContent = "carol";
+    document.body.appendChild(own);
+    mountProjectsCard();
+
+    await initTranscript();
+    const btn = document.querySelector<HTMLElement>("[data-ft-transcript]");
+    expect(btn, "the button needs no sign-in").not.toBeNull();
+
+    // jsdom has neither showModal() / close() nor form submission.
+    const dialogProto = HTMLDialogElement.prototype as unknown as {
+      showModal: () => void;
+      close: () => void;
+    };
+    const { showModal, close } = dialogProto;
+    dialogProto.showModal = function (this: HTMLDialogElement) {
+      this.setAttribute("open", "");
+    };
+    dialogProto.close = function (this: HTMLDialogElement) {
+      this.removeAttribute("open");
+    };
+    let action = "";
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "submit")
+      .mockImplementation(function (this: HTMLFormElement) {
+        action = this.action;
+      });
+    try {
+      btn!.click();
+      const download = await vi.waitFor(() => {
+        const root = document.querySelector("#ft-transcript-dialog div")!.shadowRoot!;
+        const b = [...root.querySelectorAll<HTMLButtonElement>("button")].find((x) =>
+          x.textContent?.includes("Download"),
+        );
+        expect(b).toBeDefined();
+        return b!;
+      });
+      download.click();
+      expect(action).toBe(
+        "https://projects.intra.42.fr/users/carol/transcripts/1/generate.pdf",
+      );
+    } finally {
+      submit.mockRestore();
+      Object.assign(dialogProto, { showModal, close });
+    }
+  });
 });

@@ -1,16 +1,22 @@
 /**
  * Keep the published look fresh: when the user shares their look and changes
- * a Customize setting, push the settings to the cloud shortly after (one push
+ * a setting of it, push the settings to the cloud shortly after (one push
  * per burst of changes), whatever the "auto sync" setting says. Without this
  * a visitor could see last week's colours.
  */
 import { getConfigMany } from "../../core/config.ts";
 import { syncToCloud } from "../account/account.ts";
-import { CUSTOMIZE_KEYS } from "./customize.ts";
+import { PUBLIC_LOOK_KEYS } from "./public-look.ts";
 import { EXTRAS_KEYS } from "../profile/extras/extras.ts";
 
 const SHARE_KEY = "CUSTOM_SHARE_LOOK";
-const RELEVANT = new Set<string>([...CUSTOMIZE_KEYS, SHARE_KEY, ...EXTRAS_KEYS]);
+/**
+ * The keys that change what visitors see. The rest of Customize (custom CSS,
+ * fonts, density, footer, scrollbar) is never published: a push for it spent
+ * one of the day's shared KV writes, and uploaded every setting of a student
+ * who chose Manual push, for nothing a visitor could see.
+ */
+const RELEVANT = new Set<string>([...PUBLIC_LOOK_KEYS, SHARE_KEY, ...EXTRAS_KEYS]);
 /** Keys that are public by nature: published as soon as they change. */
 const ALWAYS_PUBLIC = new Set<string>([SHARE_KEY, ...EXTRAS_KEYS]);
 let timer: ReturnType<typeof setTimeout> | null = null;

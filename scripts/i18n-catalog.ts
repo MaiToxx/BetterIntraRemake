@@ -6,8 +6,9 @@
  * English text translated two ways is an error.
  *
  * `virtual:bi-fr-catalog` (imported by src/core/i18n/i18n.ts) is that merged
- * catalog. In a build it is filtered per bundle: renderChunk parses the
- * chunk, collects every string it contains, and keeps only the entries whose
+ * catalog as a JSON string, which i18n.ts parses on the first French lookup.
+ * In a build it is filtered per bundle: renderChunk parses the chunk,
+ * collects every string it contains, and keeps only the entries whose
  * English text is among them. content.js, popup.js and background.js each
  * carry the translations of their own text, not the whole catalog (the popup
  * has a tight size budget). This works because t() / tp() / msg() are only
@@ -107,8 +108,9 @@ export function frCatalogPlugin(opts: { filter?: boolean } = {}): Plugin {
       if (fs.existsSync(CATALOG_DIR)) {
         for (const file of fs.readdirSync(CATALOG_DIR)) this.addWatchFile(resolve(CATALOG_DIR, file));
       }
-      if (!filter) return `export default ${JSON.stringify(loadCatalog())};`;
-      return `export default JSON.parse(${JSON.stringify(PLACEHOLDER)});`;
+      // A string, not an object: a page in English never parses it.
+      if (!filter) return `export default ${JSON.stringify(JSON.stringify(loadCatalog()))};`;
+      return `export default ${JSON.stringify(PLACEHOLDER)};`;
     },
     renderChunk(code) {
       if (!filter || !code.includes(PLACEHOLDER)) return null;

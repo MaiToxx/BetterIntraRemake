@@ -10,6 +10,7 @@ import { render } from "lit-html";
 const account = vi.hoisted(() => ({
   clearAuthFailed: vi.fn(async () => {}),
   loginWith42: vi.fn(async () => {}),
+  forgetCloudCalendarLink: vi.fn(async () => {}),
 }));
 vi.mock("../src/features/account/account.ts", () => account);
 // the QR code draws on a canvas, which jsdom has not

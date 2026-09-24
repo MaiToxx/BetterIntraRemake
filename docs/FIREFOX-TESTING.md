@@ -23,8 +23,10 @@ npm run smoke:chrome -- dist-chrome --runs 3 --cold 1           # the Chrome bui
 ```
 
 The exit code is 0 when every check passed on every load, 1 when one failed,
-2 for a usage or set-up error. A default run takes about 25 s per build, and
-`--compare` about a minute.
+2 for a usage error or a crash of the harness, and 3 when there is nothing to
+run on: no browser found, or puppeteer-core not installed
+(`scripts/firefox-smoke/browsers.mjs`). CI treats only 3 as "skipped". A
+default run takes about 25 s per build, and `--compare` about a minute.
 
 | option | default | what it does |
 | --- | --- | --- |
@@ -411,8 +413,14 @@ in a real Chrome, through CDP instead of WebDriver BiDi:
 - **CI.** `.github/workflows/ci.yaml` runs
   `node scripts/firefox-smoke.mjs dist-chrome --browser chrome --runs 3 --cold 1 --no-sandbox`
   after the builds on `ubuntu-latest`, which ships `google-chrome`. A failed
-  check fails the job; a runner without Chrome (exit code 2, "no Chrome
-  found") only prints a warning.
+  check (1) or a crash of the harness (2) fails the job; a runner without
+  Chrome (3, "no Chrome found") only prints a warning. When a crash shared
+  "no Chrome"'s code, a broken harness passed CI as skipped.
+- **Release gate.** The same command ends `npm run release:check`, which
+  `publish.yaml` runs before it attaches or signs anything and
+  `finish-release.yaml` before it attaches Chrome files. There any non-zero
+  exit fails, 3 included: CI's run races the release and gates nothing (for
+  1.16.0 the Chrome files were attached 14 s before CI's smoke test ended).
 
 It is a functional smoke test, not a benchmark: the timing table is printed
 but headless Chrome's numbers are not comparable with Firefox's, or with the
@@ -428,6 +436,8 @@ console message, no stubbed 404 and no unserved host.
 - `scripts/firefox-smoke/server.mjs`: the HTTPS server, the stubs, the page
   shell and the CONNECT-proxy fallback.
 - `scripts/firefox-smoke/cert.mjs`: the in-memory self-signed certificate.
+- `scripts/firefox-smoke/browsers.mjs`: finding the browser and
+  puppeteer-core, and the exit codes (`tests/smoke-harness-exit.test.ts`).
 - `scripts/firefox-smoke/page/app.js`: the synthetic Intra bundle.
 - `scripts/firefox-smoke/page/instrument.js`: the preload script that records
   everything the checks read.

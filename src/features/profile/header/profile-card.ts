@@ -19,6 +19,7 @@ import ARROW_SHARE_SVG from "../../../assets/svg/arrow_share.svg?raw";
 import { initShortcutButtons, initFriendBadge } from "./personal-info.ts";
 import { injectCampusFlag } from "../../campus/campus-flags.ts";
 import { t } from "../../../core/i18n/i18n.ts";
+import { css } from "../../../core/dom/css.ts";
 
 const PROFILE_CARD_CLASS = "ft-profile-card";
 const SHADOW_HOST_ID = "profile-badges-shadow";
@@ -350,7 +351,7 @@ function createInfoCard(
   const shadowRoot = shadowHost.attachShadow({ mode: "open" });
   bindTooltips(shadowRoot, getIsLight);
 
-  const seatStyles = `
+  const seatStyles = css`
     [data-ft-seat]:not([data-ft-unavailable]) {
       border-color: #10b981 !important;
       box-shadow: 0 0 10px rgba(16,185,129,0.25);
@@ -374,7 +375,7 @@ function createInfoCard(
     }
   `;
 
-  const badgeResponsiveStyles = `
+  const badgeResponsiveStyles = css`
     @media (max-width: 1023px) {
       #${INFO_CARD_ID} {
         flex-direction: row !important;
@@ -452,7 +453,7 @@ function injectProfileCardStyles() {
 
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = `
+  style.textContent = css`
     /* --- Main Card Container --- */
     .ft-profile-card {
       border: 1px solid var(--user-color-translucent, rgba(255, 255, 255, 0.1)) !important;

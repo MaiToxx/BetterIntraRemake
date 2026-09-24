@@ -12,7 +12,8 @@ import { sanitizeCssColor } from "../profile/header/visuals-sanitize.ts";
 import { cssUrl } from "../../core/security/css-sanitize.ts";
 import { CLUSTERS } from "../clusters/clusters.data.ts";
 import { findClusterForSeat } from "../clusters/map-dialog/helpers.ts";
-import { t } from "../../core/i18n/i18n.ts";
+import { parseIntraDate } from "../../core/intra/intrapy.ts";
+import { intlLocale, t } from "../../core/i18n/i18n.ts";
 import WALLET_SVG from "../../assets/svg/wallet.svg?raw";
 import EVAL_SVG from "../../assets/svg/eval.svg?raw";
 import ARROW_SHARE_SVG from "../../assets/svg/arrow_share.svg?raw";
@@ -70,6 +71,24 @@ function renderLevelBar(level: number) {
   `;
 }
 
+/**
+ * When an offline friend's freeze ends, as the badge shows it ("Oct 12", the
+ * year too when it is not this one), or null: online, not frozen, or the
+ * freeze is over since the row was fetched (checked at each render).
+ */
+function freezeLabel(friend: FriendData): string | null {
+  if (friend.isOnline || typeof friend.freezeUntil !== "string") return null;
+  const end = parseIntraDate(friend.freezeUntil);
+  if (!(end.getTime() > Date.now())) return null;
+  return end.toLocaleDateString(intlLocale("en-US"), {
+    month: "short",
+    day: "numeric",
+    ...(end.getFullYear() === new Date().getFullYear()
+      ? {}
+      : { year: "numeric" }),
+  });
+}
+
 function clusterUrl(location: string): string {
   const cluster = findClusterForSeat(CLUSTERS, location);
   const hash = cluster ? `#cluster-${cluster.id}` : "";
@@ -112,6 +131,10 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
           : "Click to view original avatar",
       )
     : "";
+
+  // Shown in place of the bare "last seen": why a friend has been away for
+  // weeks.
+  const frozenUntil = freezeLabel(friend);
 
   const toggleCustom = hasCustom
     ? (e: Event) => {
@@ -238,6 +261,7 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
       ${friend.grade ||
       friend.poolLabel ||
       (friend.isOnline && friend.lastSeen) ||
+      frozenUntil ||
       (!friend.isOnline && friend.lastOnlineTimestamp)
         ? html` <div
             class="flex items-center gap-1 flex-wrap min-w-0"
@@ -277,6 +301,16 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
                       >${unsafeHTML(ARROW_SHARE_SVG)}</span
                     >
                   </a>`
+                : frozenUntil
+                  ? html`<span
+                      class="badge badge-info badge-md gap-1 px-2"
+                      style="border:3px solid color-mix(in oklab, var(--color-info) 55%, transparent);border-radius:0.75rem;height:auto;padding-block:0.15rem;font-weight:600;"
+                      data-ft-freeze
+                      ><span aria-hidden="true">❄</span>${t(
+                        "Frozen until {date}",
+                        { date: frozenUntil },
+                      )}</span
+                    >`
                 : !friend.isOnline && friend.lastOnlineTimestamp
                   ? html`<span
                       class="badge badge-md gap-1 px-2"

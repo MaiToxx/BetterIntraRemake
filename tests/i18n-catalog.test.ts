@@ -20,6 +20,7 @@ import { HUB_SETTING_DEFS } from "../src/features/hub/hubSettings.data.ts";
 type Node = { type?: string; start?: number; end?: number; [k: string]: unknown };
 
 const SRC = path.resolve(__dirname, "../src");
+const I18N_MODULE = path.join(SRC, "core/i18n/i18n");
 
 function tsFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -80,7 +81,10 @@ function collectFromCode(): { uses: Use[]; errors: string[] } {
     walk(program, (n) => {
       if (n.type !== "ImportDeclaration") return;
       const source = String((n.source as Node).value);
-      if (!/core\/i18n\/i18n(\.ts)?$|^\.\/i18n(\.ts)?$/.test(source)) return;
+      // resolved against the importing file: "../i18n/i18n.ts" from core/intra
+      // is the same module as "../../core/i18n/i18n.ts" from a feature
+      if (!source.startsWith(".")) return;
+      if (path.resolve(path.dirname(file), source).replace(/\.ts$/, "") !== I18N_MODULE) return;
       for (const s of n.specifiers as Node[]) {
         if (s.type !== "ImportSpecifier") continue;
         const imported = String((s.imported as Node).name ?? (s.imported as Node).value);

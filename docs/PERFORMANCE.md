@@ -17,7 +17,7 @@ Measured on the minified v1.12.0 build (`npm run measure`, `dist-firefox`;
 | `shared-themes.css`  |  37.5 KB |   6.1 KB | only with a preset other than light/dark |
 | `theme-dark-v3.css`  |  12.3 KB |   2.1 KB | with the dark theme on v3                |
 | `theme-light-v3.css` |  10.0 KB |   1.6 KB | with a light theme preset                |
-| `auth-callback.js`   |   9.8 KB |   4.3 KB | on the worker callback page              |
+| `auth-callback.js`   |   9.8 KB |   4.3 KB | oauth builds only, on the callback page  |
 | `hook.js`            |   4.2 KB |   1.4 KB | in the page's own world, at document_start |
 | `background.js`      |   2.7 KB |   1.3 KB | once per browser session                 |
 
@@ -106,6 +106,8 @@ Swapping one for the other on the wrong root silently changes which rules win.
 extraction, `content.js` has about 104 KB of literals across 23 strings: the
 lit-html template texts of the widgets, the settings metadata and inline SVG.
 No single one is over 16 KB. The rest is feature code.
+
+The indentation of those templates does not ship: `scripts/collapse-lit-templates.ts` collapses the whitespace of every `html` template (except one with `<pre>`, `<textarea>` or a `white-space: pre*` value) and of every `css`-tagged stylesheet, and drops their CSS comments. In September 2026 two gaps in it cost about 6 KB of `content.js`: a template whose `<style>` said `white-space: nowrap` was skipped whole (the cluster map dialog), and in a CRLF file every line kept its newline.
 
 ## "Lighten the Intra" (Advanced tab)
 

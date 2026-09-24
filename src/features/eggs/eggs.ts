@@ -136,11 +136,20 @@ export function toast(message: string, ms = 4500): void {
     host.id = TOAST_ID;
     (document.body || document.documentElement).appendChild(host);
   }
+  // The pill is sized to its text, up to the viewport less a margin: with
+  // only left: 50%, a fixed box is never wider than half the viewport, so a
+  // longer message (French, a profile greeting) wrapped with room to spare.
+  // Border-box because the page decides the default box model. The 20px
+  // radius is a pill on one line (about 40px tall) and a rounded box on two,
+  // where 999px made a lens.
   render(
     html`<style>
         #${TOAST_ID} {
           position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
-          z-index: 2147483000; padding: 10px 16px; border-radius: 999px;
+          z-index: 2147483000; padding: 10px 16px;
+          box-sizing: border-box; width: max-content;
+          max-width: min(40rem, calc(100vw - 32px));
+          text-align: center; overflow-wrap: anywhere; border-radius: 20px;
           font: 500 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif;
           background: hsl(var(--card, 220 20% 10%)); color: hsl(var(--card-foreground, 0 0% 95%));
           border: 1px solid hsl(var(--primary, 181 100% 37%));
@@ -452,6 +461,10 @@ const NON_TEXT_INPUTS = ["checkbox", "radio", "button", "submit", "reset", "rang
 function isTypingTarget(t: EventTarget | null): boolean {
   const el = t as HTMLElement | null;
   if (!el) return false;
+  // A closed shadow root hides its field from the composed path, which then
+  // starts at the host: the host carries data-ft-typing while one of its
+  // fields has focus (the cluster map's search box).
+  if (el.dataset?.ftTyping !== undefined) return true;
   const tag = el.tagName;
   if (tag === "INPUT") return !NON_TEXT_INPUTS.includes((el as HTMLInputElement).type);
   return tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable === true;

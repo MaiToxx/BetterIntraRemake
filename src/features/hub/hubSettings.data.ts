@@ -16,7 +16,9 @@ import SHORTCUT from "../../assets/svg/shortcut.svg?raw";
 import ABOUT from "../../assets/svg/about.svg?raw";
 import ADVANCED_SVG from "../../assets/svg/advanced.svg?raw";
 import GRID_SVG from "../../assets/svg/grid.svg?raw";
-import CUSTOMIZE_SVG from "../../assets/svg/sun.svg?raw";
+// A filled icon, like every tab: the tab sheet (style.css) fills the icons and
+// drops strokes, which left the stroked sun this tab had as a bare dot.
+import CUSTOMIZE_SVG from "../../assets/svg/palette.svg?raw";
 import type { ConfigKey } from "../../core/config.ts";
 import { msg } from "../../core/i18n/i18n.ts";
 import { LOGTIME_SETTINGS } from "./settings/logtime.ts";
@@ -222,7 +224,13 @@ export type HubSettingDef = {
   maxLength?: number;
   placeholder?: string;
   actionLabel?: string;
-  actionType?: "export" | "import" | "reset" | "backup" | "reload-campus";
+  actionType?:
+    | "export"
+    | "import"
+    | "reset"
+    | "backup"
+    | "reload-campus"
+    | "open-visuals-editor";
 };
 
 /** Every setting of every tab, in the order the tab draws them. */
@@ -259,6 +267,7 @@ export const LIVE_KEYS: ReadonlySet<string> = new Set<string>([
   "LOGTIME_GOAL_HOURS",
   "LOGTIME_SHOW_AVERAGE",
   "LOGTIME_SHOW_GOAL",
+  "LOGTIME_SHOW_RECORDS",
   "LOGTIME_SHOW_TACOS",
   "LOGTIME_EMOJI",
   "LOGTIME_EMOJI_DIVISOR",

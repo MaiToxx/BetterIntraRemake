@@ -16,6 +16,7 @@ import { CLUSTERS } from "../../campus/campus.ts";
 import type { LinkKind } from "../../profile/extras/extras.ts";
 import { normalizeLink } from "../../profile/extras/extras-sanitize.ts";
 import { msg, t } from "../../../core/i18n/i18n.ts";
+import { eventKindLabel } from "../../../core/intra/event-kinds.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import {
   optionLabel,
@@ -107,10 +108,15 @@ function saveNumber(def: HubSettingDef) {
 
 /**
  * PROFILE_EVENT_TYPE_FILTER offers the fetched event types after "Show All".
- * The event type names come from the data files and are shown as written.
+ * Their names come from the data files, in English: the known types are
+ * shown in the hub's language (eventKindLabel), a type added later as
+ * written. The values stay the data's ids, which the saved filter holds.
  */
 function eventTypeChoices(live: LiveOptions) {
-  return [{ label: t("Show All"), value: "all" }, ...live.eventTypes];
+  return [
+    { label: t("Show All"), value: "all" },
+    ...live.eventTypes.map((c) => ({ label: eventKindLabel(c.value, c.label), value: c.value })),
+  ];
 }
 
 /** The options of a def, their labels as the hub shows them. */
@@ -200,8 +206,13 @@ export function renderSelect(
               value: c.id,
             }))
           : defChoices(def);
+  // Wider where the card has room (the whole card on a phone, 15 rem on a
+  // wide screen): at 11 rem the longer French options were cut ("Par défaut
+  // du navigateur", the scrollbar's default; "Couleur personnalisée"). A
+  // fixed width, not w-auto: some lists are data (campuses, clusters, event
+  // types) and could squeeze the label.
   return html`<select
-    class="select select-accent w-44"
+    class="select select-accent w-44 max-sm:w-full lg:w-60 max-w-full"
     data-setting-key="${def.key}"
     aria-labelledby="${settingIds(def).label}"
     aria-describedby="${describedBy(def)}"
@@ -252,9 +263,18 @@ export function renderRadioGroup(
       ? eventTypeChoices(live)
       : defChoices(def);
   // Each radio is named by its own option (aria-label is also what daisyUI
-  // shows on the button); the group carries the setting's label.
+  // shows on the button); the group carries the setting's label. A join
+  // never wraps: where it cannot fit, the buttons stack instead. On a phone
+  // one line spilled past the card's left edge, out of scroll's reach. A
+  // long list (the event types: seven from the data files, about 660 px in
+  // French) still ran past the card's right edge up to about 900 px, so it
+  // stays stacked, beside its label, until lg.
+  const joinClass =
+    options.length > 4
+      ? "join max-lg:join-vertical max-sm:w-full"
+      : "join max-sm:join-vertical max-sm:w-full";
   return html`<div
-    class="join"
+    class="${joinClass}"
     role="radiogroup"
     aria-labelledby="${settingIds(def).label}"
     aria-describedby="${describedBy(def)}"

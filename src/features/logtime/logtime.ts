@@ -18,6 +18,7 @@ import {
 import { renderCompactMonthGroup, type MonthEntry, chunkMonths } from "./compact.ts";
 import { renderHeatmapCard } from "./heatmap.ts";
 import { getLastSeenFormatted, limit } from "./utils.ts";
+import { computeRecords } from "./records.ts";
 import {
   getEffectiveTheme,
   getIsLight,
@@ -44,6 +45,8 @@ let restoreScrollLeft = -1;
 let skipScroll = false;
 let carouselYm: string | null = null;
 let viewOverflow = false;
+/** The records badge is out of the header line: no room even folded. */
+let recordsHidden = false;
 let headerResizeObserver: ResizeObserver | null = null;
 
 /**
@@ -167,6 +170,7 @@ const getConfigs = async (): Promise<LogtimeConfig> => {
     "LOGTIME_GOAL_HOURS",
     "LOGTIME_SHOW_AVERAGE",
     "LOGTIME_SHOW_GOAL",
+    "LOGTIME_SHOW_RECORDS",
     "LOGTIME_SHOW_TACOS",
     "LOGTIME_EMOJI",
     "LOGTIME_EMOJI_DIVISOR",
@@ -183,6 +187,7 @@ const getConfigs = async (): Promise<LogtimeConfig> => {
     goal_hours: positive(c.LOGTIME_GOAL_HOURS, CONFIG_DEFAULT.LOGTIME_GOAL_HOURS),
     show_average: c.LOGTIME_SHOW_AVERAGE,
     show_goal: c.LOGTIME_SHOW_GOAL,
+    show_records: c.LOGTIME_SHOW_RECORDS,
     show_tacos: c.LOGTIME_SHOW_TACOS,
     emoji: limit(c.LOGTIME_EMOJI),
     divisor: positive(
@@ -280,10 +285,39 @@ export function measureHeaderOverflow(root: ShadowRoot): boolean {
   const titleWidth = widthOf(header.querySelector(".lt-title"));
   const tacosWidth = widthOf(header.querySelector(".lt-tacos-badge"));
   const joinWidth = widthOf(header.querySelector(".lt-view-join"));
+  const recordsWidth = widthOf(header.querySelector(".lt-records-badge"));
   const activeWidth = widthOf(header.querySelector(".lt-active-badge"));
-  const gaps = 24;
-  const needed = titleWidth + tacosWidth + joinWidth + activeWidth + gaps;
+  // + the 6px between the records badge and the Active badge
+  const gaps = 24 + (recordsWidth > 0 ? 6 : 0);
+  const needed =
+    titleWidth + tacosWidth + joinWidth + recordsWidth + activeWidth + gaps;
   return needed - header.clientWidth > HEADER_OVERFLOW_TOLERANCE;
+}
+
+/**
+ * Whether the records badge fits beside the folded view switcher. On a phone
+ * the folded line can be full already (the tacos badge, a long Active text):
+ * the badge then steps aside rather than push the Active badge out of the
+ * card. Only meaningful while folded: the dropdown takes no room otherwise.
+ */
+export function measureRecordsRoom(root: ShadowRoot): boolean {
+  const header = root.querySelector<HTMLElement>(".lt-header");
+  if (!header || header.clientWidth === 0) return true;
+
+  const widthOf = (el: Element | null | undefined): number =>
+    el?.getBoundingClientRect().width ?? 0;
+
+  const recordsWidth = widthOf(header.querySelector(".lt-records-badge"));
+  if (recordsWidth === 0) return true;
+  const needed =
+    widthOf(header.querySelector(".lt-title")) +
+    widthOf(header.querySelector(".lt-tacos-badge")) +
+    widthOf(header.querySelector(".lt-view-dropdown")) +
+    recordsWidth +
+    widthOf(header.querySelector(".lt-active-badge")) +
+    24 +
+    6;
+  return needed - header.clientWidth <= HEADER_OVERFLOW_TOLERANCE;
 }
 
 function wireHeaderOverflow(shadowHost: HTMLElement) {
@@ -298,8 +332,14 @@ function wireHeaderOverflow(shadowHost: HTMLElement) {
   headerResizeObserver = new ResizeObserver(() => {
     requestAnimationFrame(() => {
       const overflowing = measureHeaderOverflow(root);
-      if (overflowing === viewOverflow) return;
+      // The folded switcher can only be measured once drawn: on the render
+      // that folds it, this observer is set up again, and its first call
+      // comes back here with the dropdown on screen.
+      const hideRecords =
+        overflowing && viewOverflow && !measureRecordsRoom(root);
+      if (overflowing === viewOverflow && hideRecords === recordsHidden) return;
       viewOverflow = overflowing;
+      recordsHidden = hideRecords;
       if (lastStats) renderLogtime(lastStats);
     });
   });
@@ -546,6 +586,8 @@ function renderLogtime(
     primaryColor,
     primaryContent,
     viewOverflow,
+    CONFIG.show_records ? computeRecords(stats) : null,
+    recordsHidden,
   );
 
   let shadowHost = document.getElementById("logtime-shadow-wrapper");
@@ -676,27 +718,30 @@ function installFetchHook() {
       hookDates.length > 0 ? hookDates[hookDates.length - 1] : undefined;
 
     if (isOwnProfile()) {
+      // Signed out too: the events come from the Intra with the page's own
+      // token. The cloud login only keys the history loader, dormant in intra
+      // mode. Gating the whole branch on it (a leftover of the days this
+      // handler also uploaded the calendar feed, which calendar-sync.ts now
+      // does behind its own cloud check) hid every event and exam marker
+      // from students who never signed in.
       const cloudLogin = await getConfig("CLOUD_LOGIN");
-      if (cloudLogin) {
-        const hasHistory = historyCache.has(cloudLogin);
-        armLoadOlder(
-          !hasHistory && (await canLoadOlder()) ? cloudLogin : null,
-          before,
-        );
-        const stats = hasHistory
-          ? mergeHistoryWithHook(detail, cloudLogin)
-          : detail;
-        renderLogtime(stats);
+      const hasHistory = !!cloudLogin && historyCache.has(cloudLogin);
+      armLoadOlder(
+        cloudLogin && !hasHistory && (await canLoadOlder()) ? cloudLogin : null,
+        before,
+      );
+      renderLogtime(
+        hasHistory ? mergeHistoryWithHook(detail, cloudLogin) : detail,
+      );
 
-        void fetchEvents().then((events) => {
-          // A failed read is not "no events": keep what is drawn.
-          if (!events) return;
-          // The student may have opened another profile meanwhile: these
-          // events are their own and must not land on someone else's days.
-          if (isOwnProfile()) renderLogtime(lastStats || detail, events);
-        });
-        return;
-      }
+      void fetchEvents().then((events) => {
+        // A failed read is not "no events": keep what is drawn.
+        if (!events) return;
+        // The student may have opened another profile meanwhile: these
+        // events are their own and must not land on someone else's days.
+        if (isOwnProfile()) renderLogtime(lastStats || detail, events);
+      });
+      return;
     }
 
     // Your events belong on your own calendar only.
@@ -726,7 +771,6 @@ type PublicLogtimeSettings = {
   labelsColor?: string;
   emoji?: string;
   emojiDivisor?: string | number;
-  emojiRate?: string | number;
   rainbowPalette?: string;
 };
 
@@ -741,7 +785,9 @@ export function applyPublicLogtimeSettings(logtime: PublicLogtimeSettings) {
   publicLogtime = logtime;
 
   // These values belong to the viewed user and are interpolated into <style>
-  // text: only accept plain hex colours and finite, positive numbers.
+  // text: only accept plain hex colours and finite, positive numbers. The
+  // value of an hour is not among them: it is the visitor's own (the worker
+  // no longer publishes it, and a copy cached before that is ignored).
   const isHex = (v: unknown): v is string => sanitizeHexColor(v) !== "";
 
   CONFIG.calendar_color = isHex(logtime.calendarColor)
@@ -755,10 +801,6 @@ export function applyPublicLogtimeSettings(logtime: PublicLogtimeSettings) {
     logtime.emojiDivisor !== undefined
       ? positive(logtime.emojiDivisor, CONFIG.divisor)
       : CONFIG.divisor;
-  CONFIG.rate =
-    logtime.emojiRate !== undefined
-      ? positive(logtime.emojiRate, CONFIG.rate)
-      : CONFIG.rate;
   if (logtime.rainbowPalette !== undefined) {
     CONFIG.rainbow_colors = resolveRainbowColors(logtime.rainbowPalette);
   }
@@ -780,6 +822,7 @@ export const LOGTIME_LIVE_KEYS: ReadonlySet<string> = new Set([
   "LOGTIME_GOAL_HOURS",
   "LOGTIME_SHOW_AVERAGE",
   "LOGTIME_SHOW_GOAL",
+  "LOGTIME_SHOW_RECORDS",
   "LOGTIME_SHOW_TACOS",
   "LOGTIME_EMOJI",
   "LOGTIME_EMOJI_DIVISOR",

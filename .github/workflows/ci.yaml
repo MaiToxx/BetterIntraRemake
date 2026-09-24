@@ -25,6 +25,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Generated theme files are up to date
+        run: npm run check:themes
+
       - name: Build (Chrome)
         run: npm run build:chrome
 
@@ -33,13 +36,16 @@ jobs:
 
       # The Chrome build in a real Chrome (docs/FIREFOX-TESTING.md, "Chrome").
       # ubuntu-latest ships google-chrome; if an image ever drops it the
-      # harness exits 2 ("no Chrome found") and this step fails softly, not
-      # the job. A failed check (exit 1) is a real failure and fails the job.
+      # harness exits 3 ("no Chrome found") and this step only warns: the
+      # heads-up before publish.yaml, whose gate has no such exception,
+      # refuses to release. Everything else fails the job: a failed check (1),
+      # and a usage error or a crash of the harness (2), which used to share
+      # "no Chrome"'s code and passed as skipped.
       - name: Smoke test (Chrome)
         run: |
           node scripts/firefox-smoke.mjs dist-chrome --browser chrome --runs 3 --cold 1 --no-sandbox
           code=$?
-          if [ "$code" -eq 2 ]; then echo "::warning::Chrome smoke test skipped: no usable Chrome on this runner"; exit 0; fi
+          if [ "$code" -eq 3 ]; then echo "::warning::Chrome smoke test skipped: no usable Chrome on this runner. publish.yaml will refuse to release until it has one."; exit 0; fi
           exit "$code"
         shell: bash {0}
 

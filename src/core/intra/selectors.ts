@@ -1,4 +1,10 @@
 export const AVATAR_SELECTOR = "div.rounded-full.w-52.h-52";
+/**
+ * Not a selector: the fragment the hub's Edit (avatar, banner and background)
+ * adds to my profile's URL from another page, so that visuals.ts opens the
+ * editor once my avatar is its button.
+ */
+export const EDIT_VISUALS_HASH = "#ft-edit-visuals";
 export const BANNER_SELECTOR = "div.border-neutral-600.bg-ft-gray\\/50";
 export const BACKGROUND_SELECTOR =
   ".w-full.xl\\:h-72.bg-center.bg-cover.bg-ft-black";

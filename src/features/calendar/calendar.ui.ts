@@ -1,7 +1,11 @@
 import { html, render } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { clearAuthFailed, loginWith42 } from "../account/account.ts";
+import {
+  clearAuthFailed,
+  forgetCloudCalendarLink,
+  loginWith42,
+} from "../account/account.ts";
 import { generateQrDataUrl } from "./qr.ts";
 import { maybeSyncCalendar } from "./calendar-sync.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
@@ -14,6 +18,11 @@ const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
 /** msg(): shown with t(REGENERATE_CONFIRM) (module code runs before the language is known). */
 export const REGENERATE_CONFIRM = msg(
   "Create a new calendar link? Calendars subscribed to the current link stop updating until you subscribe them to the new one.",
+);
+
+/** msg(): shown with t(STOP_SHARING_CONFIRM). */
+export const STOP_SHARING_CONFIRM = msg(
+  "Stop sharing your calendar? Calendars subscribed to this link stop updating, and the copy of your events on the Better Intra server is deleted.",
 );
 
 function calUrl(token: string): string {
@@ -38,6 +47,17 @@ export function generateError(status: number): string {
   return t("The server could not create the link (error {status}). Try again later.", { status });
 }
 
+/**
+ * What a failed Stop sharing tells the student: the words of generateError()
+ * for a rate limit or no answer, its own for the rest (an expired session
+ * there says "to create the link").
+ */
+export function stopError(status: number): string {
+  if (status === 401) return t("Your Better Intra session has expired. Sign in again to stop sharing.");
+  if (status === 429 || status === 0) return generateError(status);
+  return t("The server could not stop sharing (error {status}). Try again later.", { status });
+}
+
 export function renderCalendarPanel() {
   return html`<div ${ref(renderPanel)} class="col-span-full"></div>`;
 }
@@ -55,6 +75,11 @@ function renderPanel(el: Element | undefined) {
   let sessionExpired = false;
   let copied = false;
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+  /**
+   * A Stop sharing request is on its way: a second click would send another,
+   * and a Regenerate answered after it would store a link the stop revoked.
+   */
+  let stopping = false;
 
   const connect = () =>
     loginWith42(async () => {
@@ -195,6 +220,7 @@ function renderPanel(el: Element | undefined) {
                       type="button"
                       class="btn btn-sm"
                       style="border: 2px solid var(--color-info)"
+                      ?disabled=${stopping}
                       @click="${handleRegenerate}"
                     >
                       <span class="size-4 flex items-center justify-center"
@@ -205,6 +231,14 @@ function renderPanel(el: Element | undefined) {
                     <span class="text-xs opacity-50 ml-1"
                       >${t("New link invalidates the old one")}</span
                     >
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-ghost text-error sm:ml-auto"
+                      ?disabled=${stopping}
+                      @click="${handleStop}"
+                    >
+                      ${t("Stop sharing")}
+                    </button>
                   </div>
                 `
               : html`
@@ -286,6 +320,46 @@ function renderPanel(el: Element | undefined) {
     await update();
     // fill the new feed now rather than at the next profile visit
     void maybeSyncCalendar();
+  };
+
+  // Regenerate kept a feed on the server and Wipe All Data took the settings
+  // backup, the images and the sessions with it: nothing turned the feed off
+  // alone. The worker revokes the link and deletes the stored .ics.
+  const handleStop = async () => {
+    if (stopping || !window.confirm(t(STOP_SHARING_CONFIRM))) return;
+    // set before the first await: the storage read leaves room for a click
+    stopping = true;
+    const store = await chrome.storage.local.get(["CLOUD_TOKEN", "CLOUD_LOGIN"]);
+    const sessionToken = String(store.CLOUD_TOKEN || "");
+    const cloudLogin = String(store.CLOUD_LOGIN || "");
+    if (!sessionToken || !cloudLogin) {
+      stopping = false;
+      error = t("Sign in to Better Intra first (Sign in with 42 in the footer).");
+      await update();
+      return;
+    }
+
+    await update();
+    const res = await workerFetch("/api/v1/private/calendar/token", {
+      method: "DELETE",
+      auth: { login: cloudLogin, token: sessionToken },
+    });
+    stopping = false;
+    if (!res.ok) {
+      // the link stays: it still works until the stop goes through
+      sessionExpired = res.status === 401;
+      error = stopError(res.status);
+      await update();
+      return;
+    }
+    await chrome.storage.local.remove([TOKEN_KEY, "CALENDAR_EVENTS_HASH"]);
+    error = null;
+    sessionExpired = false;
+    await update();
+    // The link is a synced setting: the cloud copy must lose it too, or
+    // another browser could restore the dead one from it. Those two keys
+    // only, not a whole push (see forgetCloudCalendarLink).
+    void forgetCloudCalendarLink();
   };
 
   update();

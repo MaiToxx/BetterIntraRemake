@@ -5,6 +5,7 @@ import { THEMES, getEffectiveTheme } from "../../../../core/theme/theme-manager.
 
 import { WORKER_URL } from "../../../../core/worker.ts";
 import { t } from "../../../../core/i18n/i18n.ts";
+import { eventKindLabel } from "../../../../core/intra/event-kinds.ts";
 const DATA_BASE = `${WORKER_URL}/gh/data`;
 const EVENT_TYPES_CACHE_KEY = "EVENT_TYPES_DATA";
 const EVENT_TYPES_CACHE_TTL = 60 * 60 * 1000;
@@ -126,7 +127,7 @@ function renderFilterSelectBar(
             ?selected="${currentFilter === opt.value}"
             class="bg-base-100 text-base-content"
           >
-            ${opt.label === "all" ? t("SHOW ALL") : opt.label}
+            ${eventKindLabel(opt.value, opt.label)}
           </option>
         `,
       )}

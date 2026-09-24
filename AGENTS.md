@@ -24,7 +24,7 @@ npm run dev:firefox     # watch + web-ext hot-reload
 
 ## Build quirks
 
-Always set **both** `TARGET` and `BUILD_OUT_DIR` env vars (cross-env handles this). The build pipeline is: `tsc` → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker) → `vite build --config vite.auth.config.ts` (`auth-callback.js`, the content script for the worker's OAuth callback page). In intra mode that last file is still emitted but the manifest no longer registers it, so it never runs.
+Always set **both** `TARGET` and `BUILD_OUT_DIR` env vars (cross-env handles this). The build pipeline is: `tsc` → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker) → `node scripts/build-auth.mjs` (`auth-callback.js`, the content script for the worker's OAuth callback page, built with `vite.auth.config.ts` only in `authMode: "oauth"`; in intra mode it is not built and a stale copy is removed).
 
 ```bash
 cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.popup.config.ts && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.background.config.ts
@@ -74,7 +74,7 @@ Browser-level: `node scripts/firefox-smoke.mjs <build>` (Firefox) and `--browser
 
 - **`BETTER_INTRA_KV`** — one JSON record per login hash (session tokens, settings), plus small caches (JWKS, project map). The namespace shares 1,000 writes a day on the free plan: never add a write on a hot path.
 - **D1** (`better_intra_d1`) — `users` (login hash, country, first sign-in: the public stats), `calendar_ics`, subject tracker tables.
-- Routes worth knowing: `/auth/intra` (sign-in), `/api/v1/private/settings` (GET/POST/DELETE, `?all=true` wipes), `/api/v1/public/visuals` (unauthenticated, by login hash), `/api/v1/public/stats`, `/api/v1/public/announcement`, `/gh/*` (GitHub proxy for campus and data files), `/api/v1/private/calendar/*`, `/api/v1/private/subjects/*`.
+- Routes worth knowing: `/auth/intra` (sign-in), `/api/v1/private/settings` (GET/POST/DELETE, `?all=true` wipes), `/api/v1/public/visuals` (unauthenticated, by login hash), `/api/v1/public/stats`, `/api/v1/public/announcement`, `/gh/*` (GitHub proxy for campus and data files), `/api/v1/private/calendar/*` (`token` POST creates a link, DELETE stops sharing and deletes the feed; `update` answers 410 `calendar_stopped` once every link is revoked), `/api/v1/private/subjects/*`.
 - Dormant unless a 42 application is configured (`CLIENT_ID`): OAuth `/login` + `/callback`, the evaluation and Discord handlers and every cron. Do not design against them.
 
 ### Commands

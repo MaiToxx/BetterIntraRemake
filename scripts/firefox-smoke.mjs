@@ -10,9 +10,12 @@
  * WebDriver BiDi) or, with --browser chrome, as an unpacked extension in a
  * real Chrome (CDP), opens a synthetic Intra v3 page served locally but under
  * its real origin (https://profile-v3.intra.42.fr/), checks that the
- * extension works there, and times it. Exit code 1 when a check fails.
- * docs/FIREFOX-TESTING.md explains what is covered and how the DNS and
- * certificate trick works. Timings are only comparable within one browser.
+ * extension works there, and times it. Exit code 0 when every check passed,
+ * 1 when one failed, 2 for a usage error or a crash of the harness, 3 when
+ * there is nothing to run on (no browser, no puppeteer-core): CI soft-skips
+ * only 3 (firefox-smoke/browsers.mjs). docs/FIREFOX-TESTING.md explains what
+ * is covered and how the DNS and certificate trick works. Timings are only
+ * comparable within one browser.
  *
  * Options:
  *   --runs N        warm loads (reloads) in total, default 10
@@ -42,6 +45,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { HarnessStop, exitCodeFor, loadPuppeteer, resolveChrome, resolveFirefox } from "./firefox-smoke/browsers.mjs";
 import { makeSelfSignedCert } from "./firefox-smoke/cert.mjs";
 import {
   CAMPUS,
@@ -149,69 +153,6 @@ function readBuild(dir) {
     hosts,
     workerHosts,
   };
-}
-
-function resolveFirefox(explicit) {
-  if (explicit) {
-    if (!fs.existsSync(explicit)) usage(`Firefox not found at ${explicit}`);
-    return explicit;
-  }
-  const base = path.join(ROOT, ".browsers", "firefox");
-  const candidates = [];
-  if (fs.existsSync(base)) {
-    for (const d of fs.readdirSync(base)) {
-      for (const rel of [
-        ["core", "firefox.exe"],
-        ["firefox", "firefox"],
-        ["Firefox.app", "Contents", "MacOS", "firefox"],
-        ["Firefox Nightly.app", "Contents", "MacOS", "firefox"],
-      ]) {
-        const p = path.join(base, d, ...rel);
-        if (fs.existsSync(p)) candidates.push(p);
-      }
-    }
-  }
-  if (!candidates.length) {
-    usage(`no Firefox under ${base}; pass --firefox PATH or set FIREFOX_BIN`);
-  }
-  // Highest version first (folder names like win64-stable_156.0).
-  const ver = (p) => (/_(\d+)(?:\.(\d+))?/.exec(p) || []).slice(1).map(Number);
-  candidates.sort((a, b) => {
-    const [a1 = 0, a2 = 0] = ver(a);
-    const [b1 = 0, b2 = 0] = ver(b);
-    return b1 - a1 || b2 - a2;
-  });
-  return candidates[0];
-}
-
-const CHROME_DEFAULTS = {
-  win32: [
-    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-  ],
-  darwin: ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"],
-  linux: ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium-browser", "/usr/bin/chromium"],
-};
-
-function resolveChrome(explicit) {
-  if (explicit) {
-    if (!fs.existsSync(explicit)) usage(`Chrome not found at ${explicit}`);
-    return explicit;
-  }
-  const found = (CHROME_DEFAULTS[process.platform] || []).find((p) => fs.existsSync(p));
-  if (!found) usage("no Chrome found; pass --chrome PATH or set CHROME_BIN");
-  return found;
-}
-
-async function loadPuppeteer() {
-  try {
-    return (await import("puppeteer-core")).default;
-  } catch (e) {
-    if (e && e.code === "ERR_MODULE_NOT_FOUND") {
-      usage("puppeteer-core is not installed: npm install --no-save puppeteer-core");
-    }
-    throw e;
-  }
 }
 
 async function startNetwork(opts, builds, log) {
@@ -891,7 +832,7 @@ async function main() {
   const out = opts.json ? log : (m) => process.stdout.write(`${m}\n`);
   const builds = opts.builds.map(readBuild);
   if (opts.browser === "chrome") opts.chromePath = resolveChrome(opts.chrome);
-  else opts.firefoxPath = resolveFirefox(opts.firefox);
+  else opts.firefoxPath = resolveFirefox(opts.firefox, path.join(ROOT, ".browsers", "firefox"));
   const binary = opts.chromePath || opts.firefoxPath;
   const puppeteer = await loadPuppeteer();
   const net = await startNetwork(opts, builds, log);
@@ -944,6 +885,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  process.stderr.write(`firefox-smoke: ${(e && e.stack) || e}\n`);
-  process.exitCode = 2;
+  process.stderr.write(`firefox-smoke: ${e instanceof HarnessStop ? e.message : (e && e.stack) || e}\n`);
+  process.exitCode = exitCodeFor(e);
 });

@@ -15,6 +15,7 @@ import type { DialogState } from "./map-dialog/context.ts";
 import {
   buildClusters,
   ensureClusterData,
+  jumpToSeat,
   loadCluster,
   loadCampus,
   renderNoClusterData,
@@ -27,6 +28,8 @@ import {
   stopCountdown,
 } from "./map-dialog/occupancy.ts";
 import {
+  handleActiveSearchKey,
+  setActiveQuery,
   toggleActiveSort,
   toggleActiveWifi,
 } from "./map-dialog/active-sort.ts";
@@ -208,6 +211,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
     activeNameDir,
     activeSinceDir,
     activeWifiOnly,
+    activeQuery: "",
   };
 
   let isMaximized = false;
@@ -321,6 +325,13 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
       !path.includes(settingsMenu)
     ) {
       settingsMenu.style.display = "none";
+    }
+    const seatBtn = path.find(
+      (el) => el instanceof HTMLElement && el.hasAttribute("data-jump-seat"),
+    ) as HTMLElement | undefined;
+    if (seatBtn?.dataset.jumpSeat) {
+      void jumpToSeat(state, seatBtn.dataset.jumpSeat, abortController.signal);
+      return;
     }
     const btn = path.find(
       (el) => el instanceof HTMLElement && el.hasAttribute("data-cluster-id"),
@@ -445,6 +456,35 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
       "details.dropdown[open]",
     );
     if (openDropdown && !inDropdown) openDropdown.open = false;
+  });
+
+  const searchBox = (e: Event): HTMLInputElement | null => {
+    const el = e.target;
+    return el instanceof HTMLInputElement && el.id === "active-search"
+      ? el
+      : null;
+  };
+  // The shadow root is closed, so a page-wide key listener (the easter eggs)
+  // sees keys typed in its fields (the search box, the default cluster
+  // select) as typed on the page: the host says a field has focus instead.
+  const isField = (el: EventTarget | null) =>
+    el instanceof HTMLInputElement || el instanceof HTMLSelectElement;
+  shadow.addEventListener("focusin", (e) => {
+    if (isField(e.target)) wrapper.dataset.ftTyping = "";
+  });
+  shadow.addEventListener("focusout", (e) => {
+    if (isField(e.target)) delete wrapper.dataset.ftTyping;
+  });
+  shadow.addEventListener("input", (e) => {
+    const box = searchBox(e);
+    if (box) setActiveQuery(state, box.value);
+  });
+  shadow.addEventListener("keydown", (e) => {
+    const box = searchBox(e);
+    if (!box) return;
+    handleActiveSearchKey(state, box, e as KeyboardEvent, (seat) => {
+      void jumpToSeat(state, seat, abortController.signal);
+    });
   });
 
   shadow.addEventListener("change", (e) => {

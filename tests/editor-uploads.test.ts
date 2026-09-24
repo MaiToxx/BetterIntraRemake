@@ -379,6 +379,64 @@ describe("Save", () => {
     );
   });
 
+  it("a half-done Save keeps an upload that replaced the saved picture, and Cancel leaves it", async () => {
+    // The saved avatar is itself an upload: the new one overwrites its bytes
+    // on the worker, which redirects the old ?v= to them for every visitor.
+    await chrome.storage.local.set({
+      PROFILE_IMAGE_URL: uploadedUrl("avatar", 1),
+      PROFILE_DECORATION: "gold",
+      PROFILE_AVATAR_SCALE: 120,
+    });
+    stubFetch((call) => {
+      if (call.method === "DELETE") return new Response(null, { status: 204 });
+      return call.url.includes("slot=avatar")
+        ? json({ url: uploadedUrl("avatar", 2) })
+        : new Response("slow down", { status: 429 });
+    });
+    const onSave = await openEditor();
+    await pick(png());
+    openTab("Banner");
+    await pick(png("wide.png"));
+    saveButton().click();
+    await vi.waitFor(() => {
+      expect(shadow().querySelector("[data-save-error]")?.textContent).toContain(
+        "Banner: Too many uploads",
+      );
+    });
+    expect(shadow().querySelector("[data-save-error]")!.textContent).toContain(
+      "Saved anyway: Avatar",
+    );
+
+    // Stored and pushed: the new avatar, every other field as it was saved
+    // (not the unsaved banner, not a default).
+    const stored = await chrome.storage.local.get([
+      "PROFILE_IMAGE_URL",
+      "PROFILE_BANNER_URL",
+      "PROFILE_IMAGE_HISTORY",
+    ]);
+    expect(stored.PROFILE_IMAGE_URL).toBe(uploadedUrl("avatar", 2));
+    expect(stored.PROFILE_BANNER_URL).toBe("https://img.example/old-banner.png");
+    expect(stored.PROFILE_IMAGE_HISTORY).toContain(uploadedUrl("avatar", 2));
+    expect(account.syncMyVisuals).toHaveBeenCalledTimes(1);
+    expect(account.syncMyVisuals.mock.calls[0][0]).toMatchObject({
+      avatar: uploadedUrl("avatar", 2),
+      banner: "https://img.example/old-banner.png",
+      bannerMode: "fill",
+      decoration: "gold",
+      avatarScale: 120,
+    });
+    expect(onSave.mock.calls[0][0]).toMatchObject({ avatar: uploadedUrl("avatar", 2) });
+
+    account.fetchMySettings.mockResolvedValue({ PROFILE_IMAGE_URL: uploadedUrl("avatar", 2) });
+    shadow().querySelector<HTMLElement>("#profile-close-btn")!.click();
+    await settle();
+    expect(host()).toBeNull();
+    expect(deletes()).toHaveLength(0);
+    expect((await chrome.storage.local.get("PROFILE_IMAGE_URL")).PROFILE_IMAGE_URL).toBe(
+      uploadedUrl("avatar", 2),
+    );
+  });
+
   it("an error does not come back when the editor is opened again", async () => {
     stubFetch(() => new Response("slow down", { status: 429 }));
     await openEditor();

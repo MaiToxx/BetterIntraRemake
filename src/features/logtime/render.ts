@@ -17,6 +17,7 @@ import {
 } from "./utils";
 import { intlLocale, msg, t } from "../../core/i18n/i18n.ts";
 import type { LogtimeConfig, CalendarEvent, EventsByDate } from "./types.ts";
+import { recordsLines, type LogtimeRecords } from "./records.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { escapeHtml } from "../../core/dom/tooltip.ts";
 import LOGTIME_CSS from "./logtime.css?inline";
@@ -372,6 +373,8 @@ export function renderHeaderContent(
   primaryColor: string,
   primaryContent: string,
   collapsed = false,
+  records: LogtimeRecords | null = null,
+  recordsHidden = false,
 ) {
   let totalCappedEarnings = 0;
 
@@ -472,14 +475,45 @@ export function renderHeaderContent(
           </ul>
         </details>
       </div>
+      ${records ? renderRecordsBadge(records, recordsHidden) : ""}
       ${lastSeenValue !== "N/A"
         ? html`<span
-            class="ml-auto badge badge-success font-bold tracking-tight lt-active-badge"
+            class="${records && !recordsHidden
+              ? "ml-1.5"
+              : "ml-auto"} badge badge-success font-bold tracking-tight lt-active-badge"
             >${t("Active {when}", { when: lastSeenValue })}</span
           >`
         : ""}
     </div>
   </div>`;
+}
+
+/**
+ * The streak beside the Active badge, the records in its tooltip: one short
+ * badge, so the widget keeps its height and the header its line (its width
+ * counts in measureHeaderOverflow, logtime.ts). Focusable, as the tooltip
+ * also shows on focus. `hidden`: out of sight but still measured, like the
+ * folded view buttons, when even the folded header has no room for it.
+ */
+function renderRecordsBadge(records: LogtimeRecords, hidden: boolean) {
+  const lines = recordsLines(records);
+  const tip = lines
+    .map((line, i) =>
+      i === lines.length - 1
+        ? `<span style="opacity:0.6">${escapeHtml(line)}</span>`
+        : escapeHtml(line),
+    )
+    .join("<br/>");
+  return html`<span
+    class="ml-auto badge badge-outline badge-warning font-bold tracking-tight lt-records-badge ${hidden
+      ? "lt-records-off"
+      : ""}"
+    tabindex="0"
+    role="img"
+    aria-label="${lines.join(". ")}"
+    data-tip-html="${tip}"
+    >${records.currentStreak > 0 ? `🔥 ${records.currentStreak}` : "🏆"}</span
+  >`;
 }
 
 export function renderContainer(

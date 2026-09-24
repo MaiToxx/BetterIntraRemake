@@ -94,7 +94,6 @@ describe("sanitizeVisualUrls", () => {
         calendarColor: "red;} .lt-box-container{display:none}",
         labelsColor: "#26a641",
         emojiDivisor: -1,
-        emojiRate: "abc",
       },
     });
     expect(out.banner).toBe("");
@@ -108,7 +107,15 @@ describe("sanitizeVisualUrls", () => {
     expect(out.logtime?.calendarColor).toBeUndefined();
     expect(out.logtime?.labelsColor).toBe("#26a641");
     expect(out.logtime?.emojiDivisor).toBe(0.01);
-    expect(out.logtime?.emojiRate).toBe(2);
+  });
+
+  it("drops a published value of an hour (a copy from before the worker stopped serving it)", () => {
+    const out = sanitizeVisualUrls({
+      ...base,
+      logtime: { emoji: "🌮", emojiRate: 13.5 } as VisualUrls["logtime"],
+    });
+    expect(out.logtime).toEqual(expect.objectContaining({ emoji: "🌮" }));
+    expect(out.logtime).not.toHaveProperty("emojiRate");
   });
 
   it("passes a legitimate profile through unchanged", () => {
@@ -143,7 +150,6 @@ describe("sanitizeVisualUrls", () => {
         labelsColor: "#26a641",
         emoji: "🌮",
         emojiDivisor: undefined,
-        emojiRate: undefined,
         rainbowPalette: "rainbow",
       },
     });

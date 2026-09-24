@@ -1,7 +1,8 @@
 /**
- * Profile tab of the settings hub: theme accent, dashboard card order, the
- * cards the profile page shows, then the public profile section, which has a
- * contract of its own and lives in profile-public.ts.
+ * Profile tab of the settings hub: the visuals editor's button, theme
+ * accent, dashboard card order, the cards the profile page shows, then the
+ * public profile section, which has a contract of its own and lives in
+ * profile-public.ts.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
@@ -13,6 +14,16 @@ export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     label: "Appearance",
     kind: "divider",
+  },
+  {
+    // The editor used to open only from a click on my own avatar, which
+    // nothing in the hub mentioned. The desc keeps "click your avatar" for
+    // the settings search.
+    feature: "profile",
+    label: "Edit avatar, banner and background",
+    desc: "Custom images and colours for your profile, which other Better Intra users see too. Needs the cloud account. Shortcut: click your avatar on your own profile page.",
+    kind: "action",
+    actionType: "open-visuals-editor",
   },
   {
     feature: "profile",

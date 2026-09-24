@@ -1,4 +1,4 @@
-import { html, render } from "lit-html";
+import { html, nothing, render } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { getConfig } from "../../../core/config.ts";
 import { getCloudLogin } from "../../account/account.ts";
@@ -26,13 +26,18 @@ const INJECTED_ID = "ft-achievements-injected";
 /** How long to wait for the page to hand over a usable Intra token. */
 const TOKEN_WAIT_MS = 30000;
 /**
- * A failed request is asked again on a later pass, but not before this long:
- * profile.ts runs a pass on every burst of Intra mutations, and an API that
- * keeps failing must not be called on each of them.
+ * A failed request is asked again on a timer, a few times: a failure is not
+ * "no achievements". Not on a later profile pass: passes only run on Intra
+ * mutation bursts and stop 30 s after load, so a settled dashboard may never
+ * run another one (the list then stayed missing for the whole visit). The
+ * passes in between leave the card alone, so an API that keeps failing is
+ * not called on every burst either. Same scheme as marks.ts.
  */
-const RETRY_AFTER_MS = 30000;
+const RETRY_AFTER_MS = 10000;
+const MAX_RETRIES = 3;
 let achievementsInitialized = false;
 let lastInjectedLogin: string | null = null;
+let retriesLeft = MAX_RETRIES;
 let retryNotBefore = 0;
 
 /** The achievements of `login`, or null when the request failed. */
@@ -53,26 +58,38 @@ async function fetchAchievements(
   }
 }
 
-function formatDate(dateStr: string): string {
-  return parseIntraDate(dateStr).toLocaleDateString(intlLocale("en-US"), {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 const findCard = () => findDashboardCard("LAST ACHIEVEMENTS");
+
+/**
+ * The icons of one list, by URL: the SVG text, already stripped of its own
+ * size, or null when it could not be loaded. A URL not in the map is on its way.
+ */
+type Icons = Map<string, string | null>;
+
+function iconTile(icons: Icons, url: string) {
+  if (!icons.has(url)) {
+    return html`<div
+      class="w-8 h-8 bg-zinc-200 rounded-sm animate-pulse"
+    ></div>`;
+  }
+  const svg = icons.get(url);
+  // A lost icon leaves the tile empty: the placeholder used to pulse there
+  // for the rest of the visit.
+  if (!svg) return nothing;
+  return html`<div style="width:45px;height:45px">${unsafeHTML(svg)}</div>`;
+}
 
 function renderList(
   achievements: Achievement[],
-  svgCache: Map<string, string>,
+  dates: readonly string[],
+  icons: Icons,
 ) {
   return html`<div
     class="grid gap-4 mt-4"
     style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))"
   >
     ${achievements.map(
-      (a) =>
+      (a, i) =>
         html` <div
           class="w-full border-2 border-neutral-200 flex flex-row justify-between rounded-sm h-24"
         >
@@ -96,20 +113,12 @@ function renderList(
               </div>
               <div>
                 <p class="font-bold text-legacy-main">${t("Achieved")}</p>
-                <p>${formatDate(a.achieved_at)}</p>
+                <p>${dates[i]}</p>
               </div>
             </div>
           </div>
           <div class="bg-zinc-100 w-20 grid place-items-center shrink-0">
-            ${svgCache.has(a.svg)
-              ? html`<div style="width:45px;height:45px">
-                  ${unsafeHTML(
-                    svgCache.get(a.svg)!.replace(/(width|height)="[^"]*"/g, ""),
-                  )}
-                </div>`
-              : html`<div
-                  class="w-8 h-8 bg-zinc-200 rounded-sm animate-pulse"
-                ></div>`}
+            ${iconTile(icons, a.svg)}
           </div>
         </div>`,
     )}
@@ -140,23 +149,44 @@ function inject(achievements: Achievement[]) {
   container.id = INJECTED_ID;
   container.style.cssText = `font-family: ${INTRA_FONT};`;
 
-  const svgCache = new Map<string, string>();
-  const load = (a: Achievement) => {
-    const curried = () => render(renderList(achievements, svgCache), container);
-    if (svgCache.has(a.svg)) {
-      curried();
-      return;
-    }
-    fetch(a.svg)
-      .then((r) => (r.ok ? r.text() : null))
-      .then((svg) => {
-        if (svg) svgCache.set(a.svg, svg);
-        curried();
-      })
-      .catch(() => {});
+  // WHY formatted, stripped and rendered this way: the list used to be
+  // redrawn once per arriving icon, and every redraw formatted all N dates
+  // again (toLocaleDateString builds a new formatter per call) and re-stripped
+  // every icon already there: (N+1) x N formatter builds, about 355 ms of
+  // main thread for 100 achievements while the dashboard loads.
+  const dateFormat = new Intl.DateTimeFormat(intlLocale("en-US"), {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+  const dates = achievements.map((a) =>
+    dateFormat.format(parseIntraDate(a.achieved_at)),
+  );
+  const icons: Icons = new Map();
+  const draw = () => render(renderList(achievements, dates, icons), container);
+  // Icons that land in the same frame share one redraw. Not a single render
+  // after all of them: one slow icon would keep every other one a placeholder.
+  let frame = 0;
+  const scheduleDraw = () => {
+    frame ||= requestAnimationFrame(() => {
+      frame = 0;
+      draw();
+    });
   };
-  for (const a of achievements) load(a);
-  render(renderList(achievements, svgCache), container);
+  for (const url of new Set(achievements.map((a) => a.svg))) {
+    if (!url) {
+      icons.set(url, null);
+      continue;
+    }
+    fetch(url)
+      .then((r) => (r.ok ? r.text() : null))
+      .catch(() => null)
+      .then((svg) => {
+        icons.set(url, svg ? svg.replace(/(width|height)="[^"]*"/g, "") : null);
+        scheduleDraw();
+      });
+  }
+  draw();
   area.appendChild(container);
 }
 
@@ -193,9 +223,18 @@ export async function initAchievements() {
 
   const achievements = await fetchAchievements(login, token);
   if (achievements === null) {
-    // A failure is not "no achievements": leave the door open for a later pass
     achievementsInitialized = false;
-    retryNotBefore = Date.now() + RETRY_AFTER_MS;
+    if (retriesLeft > 0) {
+      retriesLeft--;
+      retryNotBefore = Date.now() + RETRY_AFTER_MS;
+      setTimeout(() => {
+        retryNotBefore = 0;
+        void initAchievements();
+      }, RETRY_AFTER_MS);
+    } else {
+      // given up for this page
+      retryNotBefore = Infinity;
+    }
     return;
   }
   if (achievements.length === 0) return;

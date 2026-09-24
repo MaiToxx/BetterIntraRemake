@@ -139,16 +139,17 @@ const computeVisualKey = (urls: VisualUrls) =>
 const CACHE_PREFIX = "visuals_cache_";
 
 /**
- * A stored record carries the time it was fetched, so the friends widget can
- * tell a recent answer (including "no visuals at all") from one worth asking
- * the worker about again. The profile page ignores the stamp: it reads the
- * record whatever its age and revalidates on every visit, as before.
+ * A stored record carries the time it was fetched, so that a recent answer
+ * (including "no visuals at all") can be told from one worth asking the worker
+ * about again. The friends widget and the profile page both trust a record
+ * for VISUALS_CACHE_FRESH_MS; past that, the profile page still paints the
+ * stored record at once and revalidates it in the background.
  */
 export interface CachedVisuals extends VisualUrls {
   fetchedAt?: number;
 }
 
-/** How long the friends widget trusts a stored record without refetching. */
+/** How long a stored record is trusted without asking the worker again. */
 export const VISUALS_CACHE_FRESH_MS = 10 * 60 * 1000;
 
 export function visualsAreFresh(cached: CachedVisuals | null | undefined): boolean {
@@ -187,6 +188,86 @@ export const getCachedVisualsMany = async (
   return out;
 };
 
+// ---------------------------------------------------------------------------
+// Sweep: records nobody refreshed for a month
+// ---------------------------------------------------------------------------
+
+/**
+ * A record not written for this long is dropped. The friends widget rewrites
+ * a friend's record whenever it finds it older than ten minutes; the profile
+ * page rewrites a peer's record only when their look changed (an identical
+ * answer is not stored again), so a peer visited all month with the same look
+ * loses it too. Either way the next visit fetches it, as on the first one.
+ */
+export const VISUALS_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+/** Above this many records the oldest go too, whatever their age. */
+export const VISUALS_CACHE_MAX_ENTRIES = 200;
+/** When the last sweep ran (raw key, not a setting: never exported or synced). */
+export const VISUALS_CACHE_SWEPT_AT_KEY = "VISUALS_CACHE_SWEPT_AT";
+const SWEEP_EVERY_MS = 24 * 60 * 60 * 1000;
+
+/** The storage keys of every stored record. */
+async function listCacheKeys(): Promise<string[]> {
+  // getKeys() lists the keys without reading the values: the campus files and
+  // cluster maps in the same area weigh megabytes. Browsers without it pay
+  // one full read, at most once a day.
+  const keys =
+    typeof chrome.storage.local.getKeys === "function"
+      ? await chrome.storage.local.getKeys()
+      : Object.keys(await chrome.storage.local.get(null));
+  return keys.filter((k) => k.startsWith(CACHE_PREFIX));
+}
+
+/**
+ * Remove the records older than VISUALS_CACHE_MAX_AGE_MS (or without a stamp,
+ * from builds before it), then the oldest beyond VISUALS_CACHE_MAX_ENTRIES.
+ *
+ * WHY: every Better Intra profile a student opened and every friend they
+ * followed stayed in chrome.storage.local for the life of the install (bio,
+ * pronouns, status and links included), against a 10 MB quota the settings
+ * share. Runs at most once a day, after a write: a page that only reads the
+ * cache never pays for it.
+ */
+export async function sweepVisualsCache(
+  now: number = Date.now(),
+): Promise<void> {
+  const last = (await chrome.storage.local.get(VISUALS_CACHE_SWEPT_AT_KEY))[
+    VISUALS_CACHE_SWEPT_AT_KEY
+  ];
+  // A stamp in the future (a clock set back) must not stop sweeps for good.
+  if (typeof last === "number" && last <= now && now - last < SWEEP_EVERY_MS)
+    return;
+  await chrome.storage.local.set({ [VISUALS_CACHE_SWEPT_AT_KEY]: now });
+
+  const keys = await listCacheKeys();
+  if (keys.length === 0) return;
+  const records = (await chrome.storage.local.get(keys)) as Record<
+    string,
+    CachedVisuals | undefined
+  >;
+  const remove: string[] = [];
+  const kept: { key: string; at: number }[] = [];
+  for (const key of keys) {
+    const at = records[key]?.fetchedAt;
+    if (typeof at !== "number" || now - at > VISUALS_CACHE_MAX_AGE_MS)
+      remove.push(key);
+    else kept.push({ key, at });
+  }
+  kept.sort((a, b) => b.at - a.at);
+  for (const { key } of kept.slice(VISUALS_CACHE_MAX_ENTRIES)) remove.push(key);
+  if (remove.length > 0) await chrome.storage.local.remove(remove);
+}
+
+/** One sweep check per page, on its first write. */
+let sweepChecked = false;
+
+function sweepOncePerPage(): void {
+  if (sweepChecked) return;
+  sweepChecked = true;
+  // Best effort: a sweep that cannot run only leaves the records for later.
+  sweepVisualsCache().catch(() => {});
+}
+
 export const setCachedVisuals = (login: string, urls: VisualUrls) => {
   setCachedVisualsMany({ [login]: urls });
 };
@@ -204,7 +285,9 @@ export const setCachedVisualsMany = (entries: Record<string, VisualUrls>) => {
     Promise.resolve(chrome.storage.local.set(items)).catch(() => {});
   } catch {
     // storage.local.set threw synchronously (orphaned content script)
+    return;
   }
+  sweepOncePerPage();
 };
 
 /** Logins known to have no cloud visuals, with the time we learned it. */

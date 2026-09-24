@@ -72,9 +72,24 @@ let otherProfileRunning = false;
 let cachedLogin: string | null = null;
 /** Sort order read by initMarks, reused when the cursus is switched. */
 let marksOrder: MarksOrder = "newest_first";
+/** One 42_CURSUS_ID listener per page, however many passes retry the load. */
+let cursusListenerAdded = false;
 
 /** How long to wait for the page to hand over a usable Intra token. */
 const TOKEN_WAIT_MS = 15000;
+
+/**
+ * After a failed request on your own dashboard the list is asked again on a
+ * timer, a few times: a failure is not "no finished projects". Not on a later
+ * profile pass: passes only run on Intra mutation bursts and stop 30 s after
+ * load, so a settled dashboard may never run another one. The passes in
+ * between leave the card alone, so an intrapy that keeps failing is not asked
+ * on every burst either.
+ */
+const RETRY_AFTER_MS = 10000;
+const MAX_RETRIES = 3;
+let retriesLeft = MAX_RETRIES;
+let retryNotBefore = 0;
 
 function formatDate(dateStr: string): string {
   const d = parseIntraDate(dateStr);
@@ -143,9 +158,9 @@ function waitForCursusId(timeout = 10000): Promise<string> {
 
 /**
  * The marked projects of `login` in `cursusId`, or null when the request
- * failed (expired token, network error...). null is never cached, so the next
- * cursus switch asks again instead of showing "no projects" for the rest of
- * the page.
+ * failed (expired token, network error...). null is never cached, so a later
+ * pass or the next cursus switch asks again instead of showing "no projects"
+ * for the rest of the page.
  */
 async function fetchMarks(
   login: string,
@@ -493,6 +508,9 @@ async function handleCursusSwitch(cursusId: string) {
   } else {
     removeMarksSkeleton();
   }
+  // The list is there: a retry pass left over from a failed page load must
+  // not draw the page-load cursus over the one just picked.
+  if (marks) marksInitialized = true;
 }
 
 function collectEntries(
@@ -776,6 +794,7 @@ export async function initMarks() {
   const isOwnProfile = location.pathname === "/";
   if (isOwnProfile) {
     if (ownProfileLoading) return;
+    if (Date.now() < retryNotBefore) return;
     ownProfileLoading = true;
 
     const pageLogin = getLoginFromPage();
@@ -799,18 +818,40 @@ export async function initMarks() {
 
     cachedLogin = profileLogin;
 
-    document.addEventListener("42_CURSUS_ID", ((e: CustomEvent) => {
-      const cursusId =
-        e.detail || sessionStorage.getItem("ft_active_cursus_id") || "21";
-      handleCursusSwitch(cursusId);
-    }) as EventListener);
+    if (!cursusListenerAdded) {
+      cursusListenerAdded = true;
+      document.addEventListener("42_CURSUS_ID", ((e: CustomEvent) => {
+        const cursusId =
+          e.detail || sessionStorage.getItem("ft_active_cursus_id") || "21";
+        handleCursusSwitch(cursusId);
+      }) as EventListener);
+    }
 
     const cursusId = await waitForCursusId(10000);
     const marks = await getMarks(cursusId, profileLogin, token, cursusId);
 
     const card = await cardPromise;
+    if (!marks) {
+      // A 401 on a token that expired in flight, a 429, a network error: the
+      // list used to vanish for the whole visit, as if nothing was finished.
+      // The retry takes the token of its own moment (waitForIntrapyToken).
+      removeMarksSkeleton();
+      ownProfileLoading = false;
+      if (retriesLeft > 0) {
+        retriesLeft--;
+        retryNotBefore = Date.now() + RETRY_AFTER_MS;
+        setTimeout(() => {
+          retryNotBefore = 0;
+          void initMarks();
+        }, RETRY_AFTER_MS);
+      } else {
+        // Given up for this page: only a cursus switch asks again.
+        retryNotBefore = Infinity;
+      }
+      return;
+    }
     if (card) {
-      injectFinishedProjects(card, marks ?? [], marksOrder);
+      injectFinishedProjects(card, marks, marksOrder);
     } else {
       removeMarksSkeleton();
     }

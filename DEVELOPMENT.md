@@ -25,18 +25,19 @@ npm test                # vitest (jsdom)
 npm run measure         # size of every built file, and what fills the bundles
 npm run check:size      # fails when a built file is over its budget (CI)
 npm run check:cycles    # fails on a runtime import cycle in src/ (CI)
+npm run release:check   # the release gate: tests, theme and cycle checks, both builds, budgets, Chrome smoke test
 npm run generate:themes # themes.json + style.css theme blocks + hub list from scripts/themes/palettes.mjs
 npm run smoke:firefox -- dist-firefox                    # automated Firefox smoke + timings
 npm run smoke:firefox -- --compare <build-A> <build-B>   # side-by-side timing table
 ```
 
-The Firefox harness needs a Firefox binary: `npx @puppeteer/browsers install firefox@stable --path .browsers` puts a portable copy in `.browsers/` (gitignored), or pass `--firefox <path>`. `npm run smoke:chrome -- dist-chrome` runs the same checks in an installed Chrome (`--chrome <path>` or `CHROME_BIN` otherwise); CI runs it on every push. Both serve a synthetic Intra page under the real `https://profile-v3.intra.42.fr` origin; see docs/FIREFOX-TESTING.md.
+The Firefox harness needs a Firefox binary: `npx @puppeteer/browsers install firefox@stable --path .browsers` puts a portable copy in `.browsers/` (gitignored), or pass `--firefox <path>`. `npm run smoke:chrome -- dist-chrome` runs the same checks in an installed Chrome (`--chrome <path>` or `CHROME_BIN` otherwise); CI runs it on every push, and `npm run release:check` before every release. Both serve a synthetic Intra page under the real `https://profile-v3.intra.42.fr` origin; see docs/FIREFOX-TESTING.md.
 
 Output goes to `dist-firefox/` or `dist-chrome/`.
 
 ## Build pipeline
 
-Always `tsc` (type-check only, `noEmit`) → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker) → `vite build --config vite.auth.config.ts` (`auth-callback.js`, content script for the worker's OAuth callback page so the login completes even when the opener window is gone). The last one only matters in `config.authMode: "oauth"`: in intra mode (this deployment) `finalizeManifest()` leaves it out of the manifest.
+Always `tsc` (type-check only, `noEmit`) → `vite build` (content script) → `vite build --config vite.popup.config.ts` (popup) → `vite build --config vite.background.config.ts` (background service worker) → `node scripts/build-auth.mjs` (`auth-callback.js`, content script for the worker's OAuth callback page so the login completes even when the opener window is gone). The last one only builds in `config.authMode: "oauth"`: in intra mode (this deployment) `finalizeManifest()` leaves the script out of the manifest, so `build-auth.mjs` does not build it and removes a copy an older build left in the output folder.
 
 ```bash
 cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.popup.config.ts && cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox vite build --config vite.background.config.ts
@@ -114,13 +115,15 @@ Test files: `tests/*.test.ts`, one per feature or concern (about a hundred). Glo
 ## Coding conventions
 
 - **No `innerHTML`** — use `lit-html` (`render`, `unsafeHTML`) for all DOM templating.
+- **Stylesheets in template literals** — tag them `css` (`src/core/dom/css.ts`): the build (`scripts/collapse-lit-templates.ts`) ships a `css` block and the `<style>` of an `html` template without comments or indentation, so comment them as freely as code. `tests/collapse-css-equivalence.test.ts` checks that the shipped text parses to the same rules.
 - Features register in the `featureInitializers` map in `src/main.ts`.
 
 ## CI
 
-- **CI** (`ci.yaml`) — on push/PR: type-check, tests, both builds, the Chrome smoke test in the runner's Chrome (soft-skipped when none is found), size budgets, import cycles.
+- **CI** (`ci.yaml`) — on push/PR: type-check, tests, generated themes, both builds, the Chrome smoke test in the runner's Chrome (soft-skipped only when none is found, exit code 3), size budgets, import cycles.
 - **Release drafter** — on push/PR to `main`; auto-categorizes commits.
-- **Publish** — triggers on GitHub Release publish; builds Firefox (`.xpi`) and Chrome (`.zip`); signs Firefox via AMO for full releases.
+- **Publish** (`publish.yaml`) — on GitHub Release publish: the tag must name `package.json`'s version (`scripts/check-release-tag.mjs`, also worth running before `gh release create`), then `npm run release:check`, then the Chrome zip and `.crx`, the Chrome Web Store package (`chrome-web-store-upload.zip`, attached and kept as a run artifact), `updates.xml`, the store upload when its secrets exist, and last the AMO signing, the `.xpi` and `updates.json`. A submission Mozilla never created or refused turns the run red at its last step.
+- **Finish release** (`finish-release.yaml`) — every half hour and on `gh workflow run finish-release.yaml -f tag=vX`: completes the latest release (the Chrome files a failed publish run left out, for a day and after that only on a manual run; the signed `.xpi` once Mozilla approves it; an `updates.json`/`updates.xml` push that failed). Never while a publish run for the tag is going or in the release's first 30 minutes (`scripts/release-state.mjs`), and it runs the same `release:check` before attaching Chrome files. A publish run that stopped before the AMO submission is recovered with `gh run rerun <id> --failed`; after the submission, leave the rest to this workflow (a rerun resubmits a version AMO already has, and its signing step fails).
 
 ## Formatting
 

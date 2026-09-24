@@ -128,6 +128,9 @@ function countryName(code: string): string {
 
 // Follow goes to this fork's author; the upstream author is credited under
 // it, where his project and his Sponsors page are named as his.
+// Every row wraps or stacks on a phone: in one line the egg counter, Star,
+// three of the five community tiles and a quick link sat past the card's
+// edge, reachable only by swiping the card sideways.
 export function renderAboutPanel(
   { storeBuild = STORE_BUILD }: { storeBuild?: boolean } = {},
 ): ReturnType<typeof html> {
@@ -141,14 +144,14 @@ export function renderAboutPanel(
         <!-- Hero -->
         <div class="flex flex-col gap-3 shrink-0">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 min-w-0">
               <div
-                class="size-12 flex items-center justify-center"
+                class="size-12 shrink-0 flex items-center justify-center"
                 style="color: #00babc;"
               >
                 ${unsafeHTML(ICON_SVG)}
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2 min-w-0">
                 <h1 class="text-2xl font-bold tracking-tight">
                   ${HUB_INFO.name}
                 </h1>
@@ -246,7 +249,9 @@ export function renderAboutPanel(
                     <div
                       class="flex flex-col gap-3 p-4 bg-base-200 rounded-xl border border-base-300"
                     >
-                      <div class="flex items-start justify-between gap-4">
+                      <div
+                        class="flex flex-wrap items-start justify-center sm:justify-between gap-4"
+                      >
                         <div
                           class="flex flex-col items-center rounded-xl bg-base-100 px-6 py-3"
                           style="border: 2px solid #00babc"
@@ -259,7 +264,9 @@ export function renderAboutPanel(
                             >${t("users")}</span
                           >
                         </div>
-                        <div class="flex items-start justify-end gap-6">
+                        <div
+                          class="flex flex-wrap items-start justify-center sm:justify-end gap-3 sm:gap-6"
+                        >
                           ${[
                             {
                               label: t("today"),
@@ -284,7 +291,7 @@ export function renderAboutPanel(
                           ].map(
                             (w) => html`
                               <div
-                                class="flex flex-col items-center rounded-xl bg-base-100 px-6 py-3"
+                                class="flex flex-col items-center rounded-xl bg-base-100 px-4 sm:px-6 py-3"
                                 style="border: 2px solid ${w.color}"
                               >
                                 <span
@@ -338,7 +345,7 @@ export function renderAboutPanel(
             </h2>
             <div class="flex-1 h-px bg-base-300/40"></div>
           </div>
-          <div class="join w-full">
+          <div class="join max-sm:join-vertical w-full">
             ${QUICK_LINKS.map(
               (link) => html`
                 <a

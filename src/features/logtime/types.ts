@@ -19,6 +19,7 @@ export interface LogtimeConfig {
   goal_hours: BetterIntraConfig["LOGTIME_GOAL_HOURS"];
   show_average: BetterIntraConfig["LOGTIME_SHOW_AVERAGE"];
   show_goal: BetterIntraConfig["LOGTIME_SHOW_GOAL"];
+  show_records: BetterIntraConfig["LOGTIME_SHOW_RECORDS"];
   show_tacos: BetterIntraConfig["LOGTIME_SHOW_TACOS"];
   /** LOGTIME_EMOJI, cut to three code points by limit() (utils.ts). */
   emoji: string;

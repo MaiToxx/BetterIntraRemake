@@ -48,10 +48,6 @@ export function sanitizeVisualUrls(urls: VisualUrls): VisualUrls {
           lt.emojiDivisor !== undefined
             ? clampNumber(lt.emojiDivisor, 0.01, 1_000_000, 8.7)
             : undefined,
-        emojiRate:
-          lt.emojiRate !== undefined
-            ? clampNumber(lt.emojiRate, 0, 1_000_000, 2)
-            : undefined,
         // palette ids are looked up in a fixed table (unknown ids fall back)
         rainbowPalette:
           typeof lt.rainbowPalette === "string"

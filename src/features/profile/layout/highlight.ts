@@ -1,8 +1,9 @@
-import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
+import { CLUSTERS, ensureCampusData } from "../../clusters/clusters.data.ts";
 import { openClusterDialog } from "../../clusters/map-dialog.ts";
 import { normalizeSeatId } from "../../clusters/map-dialog/seats.ts";
 import { getConfig } from "../../../core/config.ts";
 import { watchDom } from "../../../core/dom/dom-wait.ts";
+import { css } from "../../../core/dom/css.ts";
 
 /** The unique ID for the injected stylesheet. */
 const GLOW_STYLE_ID = "ft-glow-styles";
@@ -26,6 +27,13 @@ const SEAT_WAIT_MS = 15_500;
 let stopSeatWatch: (() => void) | null = null;
 
 /**
+ * Set once a seat is highlighted on this page. Until then there is nothing to
+ * clear, so the check that follows every click on every Intra page skips its
+ * scan of the whole document.
+ */
+let highlightApplied = false;
+
+/**
  * Injects the CSS styles for the seat highlight animation into the document head.
  * The styles are only injected once.
  */
@@ -34,7 +42,7 @@ function injectHighlightStyles() {
 
   const style = document.createElement("style");
   style.id = GLOW_STYLE_ID;
-  style.textContent = `
+  style.textContent = css`
     @keyframes ft-pulsate {
       0%, 100% {
         filter: drop-shadow(0 0 2px #ff0055) drop-shadow(0 0 5px #ff0055);
@@ -69,6 +77,7 @@ function injectHighlightStyles() {
  * Finds and removes all active highlight effects from any seat on the page.
  */
 function clearExistingHighlight() {
+  if (!highlightApplied) return;
   document.querySelectorAll(`[${HIGHLIGHT_ATTR}='true']`).forEach((el) => {
     el.removeAttribute(HIGHLIGHT_ATTR);
     el.removeAttribute("transform");
@@ -129,6 +138,7 @@ export function highlightSeatFromURL() {
   const transY = (y + h / 2) * (1 - HIGHLIGHT_SCALE);
   const transformString = `translate(${transX}, ${transY}) scale(${HIGHLIGHT_SCALE})`;
 
+  highlightApplied = true;
   elements.forEach((el) => {
     el.setAttribute(HIGHLIGHT_ATTR, "true");
     el.setAttribute("transform", transformString);
@@ -290,12 +300,14 @@ export async function handleProfileRedirect() {
  * Sets up event listeners to handle navigation and dynamic content.
  */
 async function init() {
-  if (CLUSTERS.length === 0) {
-    try {
-      const campus = await getConfig("CLUSTERS_CAMPUS");
-      await getClusterData(campus);
-    } catch {}
-  }
+  // ensureCampusData() loads a known campus only. getClusterData() with the
+  // empty id of a campus not detected yet probed every campus file and loaded
+  // the first one (Paris) into the shared list, on every Intra page: the
+  // cluster pickers then offered Paris's clusters, and the detection handler
+  // and ensureCampusData(), seeing a list, never loaded the real campus.
+  try {
+    await ensureCampusData();
+  } catch {}
 
   injectHighlightStyles();
   installSeatClickGuard();

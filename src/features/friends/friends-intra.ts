@@ -13,7 +13,10 @@
  */
 import type { FriendData } from "./friends-types.ts";
 import { getConfig } from "../../core/config.ts";
-import { waitForIntrapyToken } from "../../core/intra/intrapy.ts";
+import {
+  parseIntraDate,
+  waitForIntrapyToken,
+} from "../../core/intra/intrapy.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import { hashLogin } from "../../core/crypto.ts";
 import { MAX_REMOTE_URL_LENGTH } from "../../core/security/safe-url.ts";
@@ -65,6 +68,27 @@ export function pickMainCursus(cursus: unknown): Raw | null {
     (best, c) => (!best || num(c.level) > num(best.level) ? c : best),
     null,
   );
+}
+
+/**
+ * The end of a freeze still running, from any cursus entry (a freeze is not
+ * always on the main one), the latest if several: what the profile's freeze
+ * card reads, so a frozen friend no longer just looks offline.
+ */
+export function freezeEnd(cursus: unknown, now = Date.now()): string | null {
+  if (!Array.isArray(cursus)) return null;
+  let best: string | null = null;
+  let bestTime = now;
+  for (const c of cursus) {
+    const until = c && typeof c === "object" ? str((c as Raw).freeze_until) : null;
+    if (!until) continue;
+    const time = parseIntraDate(until).getTime();
+    if (time > bestTime) {
+      best = until;
+      bestTime = time;
+    }
+  }
+  return best;
 }
 
 function poolLabel(user: Raw): string | null {
@@ -149,6 +173,7 @@ export function buildFriendFromIntra(
     wallet: num(u.wallet),
     correctionPoints: num(u.evaluation_points ?? u.correction_point),
     lastOnlineTimestamp,
+    freezeUntil: freezeEnd(cursus),
   };
 }
 
@@ -366,6 +391,7 @@ function inheritDetails(
     avatar: fresh.avatar ?? old.avatar,
     level: old.level,
     grade: old.grade,
+    freezeUntil: old.freezeUntil ?? null,
     customAvatar: old.customAvatar,
     avatarBg: old.avatarBg,
     avatarPosX: old.avatarPosX,

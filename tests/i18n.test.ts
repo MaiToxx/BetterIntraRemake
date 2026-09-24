@@ -2,7 +2,7 @@
  * The i18n core (src/core/i18n/i18n.ts) and the build's per-bundle cut of
  * the French catalog (scripts/i18n-catalog.ts).
  */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -80,6 +80,33 @@ describe("t / tp / msg", () => {
     expect(intlLocale("en-GB")).toBe("en-GB");
     setLang("fr");
     expect(intlLocale("en-GB")).toBe("fr-FR");
+  });
+});
+
+describe("the French catalog is parsed on demand", () => {
+  it("an English page never parses it; the first French text parses it once", async () => {
+    const catalog = loadCatalog();
+    const [english, french] = Object.entries(catalog)[0]!;
+    // the parse of the catalog, told apart from any other JSON.parse
+    const parse = vi.spyOn(JSON, "parse");
+    const catalogParses = () =>
+      parse.mock.calls.filter(([text]) => typeof text === "string" && text.includes(JSON.stringify(french)))
+        .length;
+    try {
+      vi.resetModules();
+      const fresh = await import("../src/core/i18n/i18n.ts");
+      fresh.setLang("en");
+      expect(fresh.t(english)).toBe(english);
+      expect(fresh.tp(2, "{n} thing", "{n} things")).toBe("2 things");
+      expect(catalogParses()).toBe(0);
+
+      fresh.setLang("fr");
+      expect(fresh.t(english)).toBe(french);
+      expect(fresh.t(english)).toBe(french);
+      expect(catalogParses()).toBe(1);
+    } finally {
+      parse.mockRestore();
+    }
   });
 });
 

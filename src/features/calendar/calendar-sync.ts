@@ -146,6 +146,16 @@ export async function syncCalendarIcs(
   });
   if (res.ok) {
     await chrome.storage.local.set({ CALENDAR_EVENTS_HASH: currentHash });
+  } else if (res.status === 410) {
+    // Every link of this login was stopped (Stop sharing, maybe in another
+    // browser): the worker refuses the upload. Forget the dead link, or each
+    // profile visit would try again and the Calendar tab would keep offering
+    // a feed that no longer exists. Unless a new link was generated while
+    // this upload was on its way: that one is live.
+    const { CALENDAR_SYNC_TOKEN: current } = await chrome.storage.local.get("CALENDAR_SYNC_TOKEN");
+    if (current === calendarToken) {
+      await chrome.storage.local.remove(["CALENDAR_SYNC_TOKEN", "CALENDAR_EVENTS_HASH"]);
+    }
   }
 }
 

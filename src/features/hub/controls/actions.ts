@@ -1,11 +1,13 @@
 /**
  * The maintenance block of the Advanced tab: backup export and import, the
  * detected campus and the reload of its configuration, and Reset all data.
- * These are one-shot buttons, not stored settings.
+ * Also the Profile tab's way into the visuals editor. These are one-shot
+ * buttons, not stored settings.
  */
-import { html, nothing } from "lit-html";
+import { html, nothing, render } from "lit-html";
 import { getConfig } from "../../../core/config.ts";
 import { getLang, intlLocale, t, tp } from "../../../core/i18n/i18n.ts";
+import { AVATAR_SELECTOR, EDIT_VISUALS_HASH } from "../../../core/intra/selectors.ts";
 import { logoutCloud } from "../../account/account.ts";
 import { fetchCampusList } from "../../clusters/clusters.data.ts";
 import { loadCampusData } from "../../campus/campus.ts";
@@ -17,6 +19,7 @@ import {
   wrapBackup,
 } from "../backup.ts";
 import { HUB_INFO, type HubSettingDef } from "../hubSettings.data.ts";
+import { getActiveFeatures } from "../hubSettings.storage.ts";
 import { settingIds, type LiveOptions } from "./context.ts";
 
 export function renderAction(def: HubSettingDef) {
@@ -72,6 +75,23 @@ export function renderAction(def: HubSettingDef) {
     </div>`;
   }
 
+  // Its own branch: an action type this function does not know falls
+  // through to the red Reset all data below.
+  if (actionType === "open-visuals-editor") {
+    return html`<div class="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        class="btn btn-sm btn-primary font-bold"
+        aria-labelledby="${ids.label}"
+        aria-describedby="${desc}"
+        @click="${(e: Event) => void openVisualsEditor(e.currentTarget as HTMLButtonElement)}"
+      >
+        ${t("Edit")}
+      </button>
+      <p class="text-xs text-right max-w-xs hidden" role="status" data-visuals-editor-status></p>
+    </div>`;
+  }
+
   return html`<button
     type="button"
     class="btn btn-sm btn-error font-bold"
@@ -81,6 +101,65 @@ export function renderAction(def: HubSettingDef) {
   >
     ${actionLabel ? t(actionLabel) : t("Reset")}
   </button>`;
+}
+
+/** My own profile page: the Intra v3 dashboard. */
+export const OWN_PROFILE_URL = "https://profile-v3.intra.42.fr/";
+
+/**
+ * Opens the avatar, banner and background editor. It belongs to my own
+ * profile page, where visuals.ts turns my avatar into its button (marked
+ * data-modal-listener by avatar-clicks.ts): the hub clicks that very avatar
+ * instead of opening the dialog itself, because the avatar's listener holds
+ * the save callback that keeps visuals.ts's cache in step. Opened without
+ * it, a save would be followed by the old look painted back on the page's
+ * next pass. Anywhere else (someone else's profile, another page, the
+ * Profile feature off), the line under the button says where to go; its
+ * link carries EDIT_VISUALS_HASH, and visuals.ts opens the editor there.
+ */
+export async function openVisualsEditor(button?: HTMLButtonElement | null): Promise<void> {
+  const avatar = document.querySelector<HTMLElement>(`${AVATAR_SELECTOR}[data-modal-listener]`);
+  if (avatar) {
+    // the editor is a modal of its own: it would open over the hub
+    document.querySelector<HTMLDialogElement>("#hub-dialog")?.close();
+    avatar.click();
+    return;
+  }
+  const status = button?.parentElement?.querySelector<HTMLElement>(
+    "[data-visuals-editor-status]",
+  );
+  if (!status) return;
+  // Profile off: visuals.ts never runs, so no page has the editor.
+  const profileOn = (await getActiveFeatures()).includes("profile");
+  render(
+    profileOn
+      ? html`${t(
+            "The editor opens on your own profile page: go there, then click your avatar or this button again.",
+          )}
+          <a
+            class="underline"
+            href="${OWN_PROFILE_URL}${EDIT_VISUALS_HASH}"
+            @click="${reloadIfOnOwnProfile}"
+            >${t("Open my profile")}</a
+          >`
+      : t(
+          "Turn on Profile (the switch at the top of this tab) and reload the page first: the editor needs it.",
+        ),
+    status,
+  );
+  status.classList.remove("hidden");
+}
+
+/**
+ * Already on my profile page (Profile turned on since it loaded): a link that
+ * only adds a fragment would not reload it, and the editor comes with the
+ * reload.
+ */
+function reloadIfOnOwnProfile(e: Event): void {
+  if (location.origin + location.pathname !== OWN_PROFILE_URL) return;
+  e.preventDefault();
+  history.replaceState(history.state, "", EDIT_VISUALS_HASH);
+  location.reload();
 }
 
 /** The campus the 42 API reported, named from the campus manifest. */

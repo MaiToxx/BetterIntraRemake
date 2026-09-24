@@ -54,6 +54,20 @@ export function findClusterForSeat<T extends { id: string; name: string }>(
   return best;
 }
 
+/**
+ * The cluster the map dialog can show `seat` on: findClusterForSeat()'s
+ * answer when it has a map (an svg), else none. The longest match is taken
+ * first and only then checked, so an f1b seat never lands on the f1 map just
+ * because f1b has none.
+ */
+export function seatCluster<T extends { id: string; name: string; svg?: string }>(
+  clusters: readonly T[],
+  seat: string,
+): T | undefined {
+  const cluster = findClusterForSeat(clusters, seat);
+  return cluster?.svg ? cluster : undefined;
+}
+
 export interface PseudoClusterChange {
   clusters: ClusterInfo[];
   added: boolean;

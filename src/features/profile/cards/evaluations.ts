@@ -18,8 +18,6 @@ function findNativeCard(): HTMLElement | null {
   return null;
 }
 
-let sorted = false;
-
 function sortRows(nativeCard: HTMLElement) {
   const oldWraps = nativeCard.querySelectorAll(
     ".ft-ev-top, .ft-ev-bot, .ft-ev-fdb",
@@ -106,8 +104,6 @@ function sortRows(nativeCard: HTMLElement) {
   edLabel.textContent = t("Evaluated ({n})", { n: evaluatedRows.length });
   botWrap.insertBefore(edLabel, botWrap.firstChild);
 
-  sorted = true;
-
   nativeCard.querySelectorAll(".lucide-clock5").forEach((svg) => {
     const btn = svg.closest("button");
     if (btn) btn.style.fontSize = "0.80rem";
@@ -155,8 +151,6 @@ function unsortRows(nativeCard: HTMLElement) {
 
   contentParent.style.cssText = "";
 
-  sorted = false;
-
   const hideBtn = findHideBtn(nativeCard);
   if (hideBtn) hideBtn.textContent = "Hide";
 }
@@ -170,26 +164,25 @@ function findHideBtn(nativeCard: HTMLElement): HTMLElement | null {
   return null;
 }
 
-function toggleSort(nativeCard: HTMLElement) {
-  if (sorted) {
-    unsortRows(nativeCard);
-    chrome.storage.local.set({ PROFILE_SHOW_EVALUATIONS: false });
-  } else {
-    sortRows(nativeCard);
-    chrome.storage.local.set({ PROFILE_SHOW_EVALUATIONS: true });
-  }
-}
-
+/**
+ * While the rows are grouped, the Intra's Hide button (relabelled "Show")
+ * ungroups them and turns the extra off, instead of running the Intra's own
+ * action: the rows sit in our wrappers then, and React re-rendering them from
+ * there could fail on removeChild and take the dashboard down. Once they are
+ * back in place the button is the Intra's again, as with the extra off.
+ */
 function hookToggleButton(nativeCard: HTMLElement) {
-  nativeCard.addEventListener("click", (e) => {
+  const onClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
     const text = target.textContent?.trim().toLowerCase() || "";
-    if (text === "hide" || text === "show") {
-      e.preventDefault();
-      e.stopPropagation();
-      toggleSort(nativeCard);
-    }
-  });
+    if (text !== "hide" && text !== "show") return;
+    e.preventDefault();
+    e.stopPropagation();
+    nativeCard.removeEventListener("click", onClick);
+    unsortRows(nativeCard);
+    chrome.storage.local.set({ PROFILE_SHOW_EVALUATIONS: false });
+  };
+  nativeCard.addEventListener("click", onClick);
 }
 
 let evInitialized = false;
@@ -204,7 +197,10 @@ export async function initEvaluations() {
   )
     return;
 
-  const show = await getConfig("PROFILE_SHOW_EVALUATIONS");
+  // With the extra off (the default) the card and its Hide button stay the
+  // Intra's: the button used to be taken over for everyone, and a click on it
+  // regrouped the rows and switched this extra on in the hub.
+  if (!(await getConfig("PROFILE_SHOW_EVALUATIONS"))) return;
 
   // Give up after ~10 s: pages without a pending-evaluations card (every
   // /users/* page, or a dashboard with nothing pending) used to run this
@@ -225,12 +221,7 @@ export async function initEvaluations() {
       requestAnimationFrame(check);
       return;
     }
-    if (show) {
-      sortRows(native);
-    } else {
-      const btn = findHideBtn(native);
-      if (btn) btn.textContent = "Hide";
-    }
+    sortRows(native);
     hookToggleButton(native);
   };
 

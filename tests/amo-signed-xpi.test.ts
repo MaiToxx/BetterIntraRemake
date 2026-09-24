@@ -85,14 +85,73 @@ describe("publish.yaml hands a slow signing over to finish-release.yaml", () => 
   it("the finisher runs on a schedule, completes both browsers, and never commits a secret", () => {
     expect(finish).toMatch(/schedule:\s*\n\s*- cron:/);
     expect(finish).toContain("scripts/amo-signed-xpi.mjs");
-    expect(finish).toContain("update-updates-json.js");
-    expect(finish).toContain("update-updates-xml.js");
+    expect(finish).toContain('node scripts/push-update-manifest.mjs updates.json "$TAG"');
+    expect(finish).toContain('node scripts/push-update-manifest.mjs updates.xml "$TAG"');
     expect(finish).toContain("rm -f crx-key.pem");
   });
 
-  it("the finisher runs the tests before it builds the Chrome files", () => {
-    const step = finish.slice(finish.indexOf("- name: Build and attach the Chrome files"));
-    expect(step.indexOf("npm test")).toBeGreaterThan(0);
-    expect(step.indexOf("npm test")).toBeLessThan(step.indexOf("npm run build:chrome"));
+  /** One step of finish-release.yaml, from its `- name:` to the next. */
+  const step = (name: string) => {
+    const at = finish.indexOf(`- name: ${name}\n`);
+    expect(at, name).toBeGreaterThan(-1);
+    const next = finish.indexOf("\n      - name:", at + 1);
+    return finish.slice(at, next < 0 ? undefined : next);
+  };
+
+  it("the finisher decides first, and never alongside publish.yaml", () => {
+    // gh run list needs the actions scope; contents: write alone refuses it
+    expect(finish).toMatch(/permissions:\n\s+contents: write\n(\s+#.*\n)*\s+actions: read/);
+    expect(step("What the release lacks")).toContain("node scripts/release-state.mjs");
+    const acting = [
+      "Checkout the release",
+      "Build the Chrome files",
+      "Pack the Chrome .crx",
+      "Attach the Chrome files",
+      "Chrome auto-update manifest",
+      "Signed .xpi from Mozilla",
+      "Attach the .xpi and publish the Firefox update",
+    ];
+    for (const name of acting) {
+      expect(step(name), name).toMatch(/if: .*steps\.(state|chrome-build|chrome|amo)\.outputs\./);
+    }
+    // a shared concurrency group would let a scheduled run cancel a queued release
+    expect(finish).not.toMatch(/group: .*publish/);
+  });
+
+  it("the finisher runs publish.yaml's whole gate, after the tag check, before it attaches Chrome files", () => {
+    const build = step("Build the Chrome files");
+    const tag = build.indexOf("check-release-tag.mjs");
+    const gate = build.indexOf("npm run release:check");
+    expect(tag).toBeGreaterThan(0);
+    expect(gate).toBeGreaterThan(tag);
+    expect(gate).toBeLessThan(build.indexOf("web-ext build"));
+    // packing and attaching follow only a build that went through the gate
+    expect(build).toContain('echo "built=true" >> "$GITHUB_OUTPUT"');
+    for (const name of ["Pack the Chrome .crx", "Attach the Chrome files"]) {
+      expect(step(name), name).toContain("steps.chrome-build.outputs.built == 'true'");
+      expect(finish.indexOf(`- name: ${name}\n`), name).toBeGreaterThan(finish.indexOf("- name: Build the Chrome files\n"));
+    }
+    const attach = step("Attach the Chrome files");
+    expect(attach).toContain("gh release upload");
+    // updates.xml follows only files this run attached (or a repair)
+    expect(attach).toContain('echo "attached=true" >> "$GITHUB_OUTPUT"');
+    expect(step("Chrome auto-update manifest")).toContain("steps.chrome.outputs.attached == 'true'");
+  });
+
+  it("the .crx key reaches the packing step alone, never the install, the tests or the builds", () => {
+    // HAS_CRX (job env) is a boolean made from the secret, not the key itself
+    const withKey = finish
+      .split(/\n(?=      - name: )/)
+      .filter((s) => s.includes("${{ secrets.CRX_PRIVATE_KEY }}"));
+    expect(withKey.map((s) => s.trim().split("\n")[0])).toEqual(["- name: Pack the Chrome .crx"]);
+    expect(withKey[0]).not.toMatch(/npm (ci|test|run)/);
+    expect(step("Build the Chrome files")).not.toContain("CRX_PRIVATE_KEY");
+  });
+
+  it("the finisher fails on a version Mozilla never created or refused, only inside the alarm window", () => {
+    const amo = step("Signed .xpi from Mozilla");
+    expect(amo).toContain("ALARM: ${{ steps.state.outputs.amo_alarm }}");
+    expect(amo).toMatch(/2\|4\)[\s\S]*if \[ "\$ALARM" = "true" \]; then echo "::error::\$what\."; exit 1; fi/);
+    expect(amo).toContain("*) exit $code ;;");
   });
 });

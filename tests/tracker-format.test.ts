@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatHours } from "../src/features/logtime/tracker";
+import { formatHours, trackerStateFor, TRACKER_MODES } from "../src/features/logtime/tracker";
 import { sanitizeHttpUrl } from "../src/core/security/safe-url";
 import { getActiveFeatures } from "../src/features/hub/hubSettings.storage.ts";
 
@@ -10,6 +10,19 @@ describe("formatHours", () => {
     expect(formatHours(4.5)).toBe("4h30");
     expect(formatHours(0)).toBe("0h");
     expect(formatHours(2 + 5 / 60)).toBe("2h05");
+  });
+});
+
+describe("trackerStateFor", () => {
+  // the badge popover and the stored mode read the same table (it had a copy)
+  it("knows the nine phases, and neither off nor a name every object inherits", () => {
+    expect(TRACKER_MODES).toHaveLength(9);
+    expect(trackerStateFor("pegasus-gold")).toMatchObject({
+      label: "Pegasus - Gold",
+      thresholds: { days: 5, hours: 40 },
+    });
+    expect(trackerStateFor("off")).toBeNull();
+    expect(trackerStateFor("toString")).toBeNull();
   });
 });
 

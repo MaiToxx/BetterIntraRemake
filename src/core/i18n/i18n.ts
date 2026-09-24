@@ -4,7 +4,9 @@
  * The English text IS the key: code writes t("Reload to apply") and the
  * French catalog (src/core/i18n/fr/*.json, English → French) gives the
  * translation. A missing entry falls back to the English text, so an
- * untranslated string still reads, and the English build path costs nothing.
+ * untranslated string still reads. The bundle holds the catalog as a JSON
+ * string, parsed on the first French lookup: a page in English never parses
+ * it (about 0.15 ms on every Intra page) nor keeps the object.
  *
  * The language is the UI_LANGUAGE setting ("auto", "en", "fr"); "auto" is the
  * browser's language (French for any fr-*, English otherwise). It is read
@@ -22,7 +24,7 @@
  *  - never translate a string that is matched against the Intra's own page
  *    (labels read from its DOM, selectors).
  */
-import FR from "virtual:bi-fr-catalog";
+import FR_JSON from "virtual:bi-fr-catalog";
 import { getConfig } from "../config.ts";
 
 export type Lang = "en" | "fr";
@@ -30,7 +32,13 @@ export type LangSetting = "auto" | Lang;
 
 export const LANG_SETTINGS: readonly LangSetting[] = ["auto", "fr", "en"];
 
-const catalog: Readonly<Record<string, string>> = FR;
+/** The French catalog once a French text was asked for; null until then. */
+let catalog: Readonly<Record<string, string>> | null = null;
+
+function french(key: string): string {
+  catalog ??= JSON.parse(FR_JSON) as Readonly<Record<string, string>>;
+  return catalog[key] ?? key;
+}
 
 /** The browser's language: its UI language for an extension, else the page's. */
 export function detectLang(): Lang {
@@ -86,7 +94,7 @@ function fill(text: string, params?: Record<string, string | number>): string {
 
 /** `key` (the English text) in the current language, {placeholders} filled. */
 export function t(key: string, params?: Record<string, string | number>): string {
-  const text = lang === "fr" ? (catalog[key] ?? key) : key;
+  const text = lang === "fr" ? french(key) : key;
   return fill(text, params);
 }
 

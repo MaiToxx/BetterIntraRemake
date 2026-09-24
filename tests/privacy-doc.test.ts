@@ -138,6 +138,104 @@ describe("PRIVACY.md matches the build", () => {
   });
 });
 
+describe("Firefox's data collection declaration matches PRIVACY.md and the store answers", () => {
+  const firefox = manifests[1];
+  const declared = firefox.browser_specific_settings?.gecko?.data_collection_permissions ?? {};
+  const required: string[] = declared.required ?? [];
+  const storeDoc = fs.readFileSync(path.join(ROOT, "docs/CHROME-WEB-STORE.md"), "utf8");
+  // Firefox category -> the Chrome Web Store "Data usage" row it answers to
+  const STORE_ROW: Record<string, string> = {
+    personallyIdentifyingInfo: "Personally identifiable information",
+    authenticationInfo: "Authentication information",
+    locationInfo: "Location",
+    browsingActivity: "Web history",
+    websiteContent: "Website content",
+    websiteActivity: "User activity",
+    personalCommunications: "Personal communications",
+    healthInfo: "Health information",
+    financialAndPaymentInfo: "Financial and payment information",
+  };
+  /** The store row for a category, or "" when the table has none. */
+  const storeRow = (label: string) => storeDoc.split("\n").find((l) => l.startsWith(`| ${label} |`)) ?? "";
+
+  it("does not tell Firefox users that nothing leaves the browser while PRIVACY.md lists what does", () => {
+    // "none" made Firefox's install prompt say the add-on collects no data
+    // (upstream's value, never revisited) while the sign-in token and the
+    // profile lookups below reach the worker.
+    if (privacy.includes("/auth/intra") || privacy.includes("/api/v1/public/visuals")) {
+      expect(required).not.toContain("none");
+      expect(required.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("declares what the code sends: the sign-in token, the pages opened, the login and friends' logins, the pushed content", () => {
+    expect(required).toEqual(
+      expect.arrayContaining(["authenticationInfo", "browsingActivity", "personallyIdentifyingInfo", "websiteContent"]),
+    );
+  });
+
+  it("every category is required: nothing in the code asks for an optional one", () => {
+    // The signed-out profile lookup runs before any sign-in, and an optional
+    // grant would need a permissions.request({ data_collection }) flow from
+    // an extension page, which the extension does not have.
+    expect(declared.optional).toBeUndefined();
+    const sources = [src("popup/popup.ts"), src("features/account/handlers.ts"), src("background.ts")].join("\n");
+    expect(sources).not.toMatch(/data_collection/);
+  });
+
+  it("each category is named in PRIVACY.md and answers a box ticked on the store form", () => {
+    for (const category of required) {
+      expect(privacy, category).toContain(`\`${category}\``);
+      const label = STORE_ROW[category];
+      expect(label, `${category} has no store row mapped`).toBeTruthy();
+      const row = storeRow(label);
+      expect(row, label).not.toBe("");
+      expect(row, label).not.toMatch(/Not collected|unticked/);
+    }
+  });
+
+  it("each box ticked on the store form has its category declared to Firefox", () => {
+    // The other direction: the Chrome form ticked "Personally identifiable
+    // information" (the login hash, the token carrying the login, friends'
+    // logins) while Firefox's install prompt was left without it.
+    const ticked = Object.entries(STORE_ROW).filter(([, label]) => {
+      const row = storeRow(label);
+      return row !== "" && !/Not collected|unticked/.test(row);
+    });
+    expect(ticked.length).toBeGreaterThan(0);
+    for (const [category, label] of ticked) expect(required, `${label} is ticked for Chrome`).toContain(category);
+  });
+});
+
+describe("PRIVACY.md names the Logtime values the public visuals route serves", () => {
+  const settingsPath = path.join(ROOT, "../better-intra-worker/src/handlers/settings.ts");
+  // The worker is a sibling repository: present on the maintainer's machine, not in CI.
+  it.skipIf(!fs.existsSync(settingsPath))("lists each served value, and says the rate is private exactly when it is", () => {
+    const worker = fs.readFileSync(settingsPath, "utf8");
+    const block = /\n\s*logtime: \{([\s\S]*?)\n\s*\},/.exec(worker.slice(worker.indexOf("export function publicVisuals")))?.[1] ?? "";
+    const served = [...block.matchAll(/settings\.(LOGTIME_\w+)/g)].map((m) => m[1]);
+    expect(served.length).toBeGreaterThan(0);
+    const item = line("- **Public visuals and look**");
+    const PHRASE: Record<string, RegExp> = {
+      LOGTIME_CALENDAR_COLOR: /calendar colour/,
+      LOGTIME_LABELS_COLOR: /labels colour/,
+      // the emoji itself, not only "emoji value" or "emoji count"
+      LOGTIME_EMOJI: /\bemoji\b(?! value| count)/,
+      LOGTIME_EMOJI_DIVISOR: /emoji value/,
+      LOGTIME_RAINBOW_PALETTE: /rainbow colours/,
+    };
+    for (const key of served) {
+      if (key === "LOGTIME_EMOJI_RATE") continue;
+      expect(PHRASE[key], `${key}: add its phrase here and to PRIVACY.md`).toBeDefined();
+      expect(item, key).toMatch(PHRASE[key]);
+    }
+    // The hub asks for the rate as an hourly pay: PRIVACY.md must say
+    // whether it is public, and say it right.
+    if (served.includes("LOGTIME_EMOJI_RATE")) expect(item).not.toMatch(/rate of the emoji count is not published/);
+    else expect(item).toMatch(/rate of the emoji count is not published/);
+  });
+});
+
 describe("the worker's logging matches the Server logs section", () => {
   const wranglerPath = path.join(ROOT, "../better-intra-worker/wrangler.json");
   // The worker is a sibling repository: present on the maintainer's machine, not in CI.

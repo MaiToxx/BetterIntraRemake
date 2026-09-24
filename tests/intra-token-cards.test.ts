@@ -89,11 +89,9 @@ describe("achievements", () => {
     expect(sentTokens(fetchMock)).toEqual([fresh]);
   });
 
-  it("retries a failed request on a later pass instead of giving up for the page", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-09-21T10:00:00Z"));
-    sessionStorage.setItem("ft_intrapy_token", jwt(nowS() + 3600, "fresh"));
-
+  // The profile watcher runs passes only on Intra mutations and stops 30 s
+  // after load: a retry that waited for a later pass never came.
+  function failingThenOk() {
     let fail = true;
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes("/achievements")) {
@@ -104,32 +102,55 @@ describe("achievements", () => {
       return { ok: true, text: async () => "<svg></svg>" };
     });
     vi.stubGlobal("fetch", fetchMock);
-    const achievementCalls = () =>
+    const calls = () =>
       fetchMock.mock.calls.filter((c) => String(c[0]).includes("/achievements")).length;
+    return { calls, recover: () => (fail = false) };
+  }
+
+  it("asks again by itself 10 s after a failure, with no pass", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("ft_intrapy_token", jwt(nowS() + 3600, "fresh"));
+    const { calls, recover } = failingThenOk();
 
     const initAchievements = await loadAchievements();
     await initAchievements();
-    expect(achievementCalls()).toBe(1);
+    expect(calls()).toBe(1);
 
-    // the very next pass (profile.ts runs one per burst of Intra mutations)
-    // does not hammer the API
+    // a pass inside the window (profile.ts runs one per burst of Intra
+    // mutations) does not hammer the API
+    await vi.advanceTimersByTimeAsync(3000);
     await initAchievements();
-    expect(achievementCalls()).toBe(1);
+    expect(calls()).toBe(1);
 
-    // a little later, the Intra answers again and the list is shown
-    fail = false;
-    vi.setSystemTime(new Date("2026-09-21T10:01:00Z"));
-    await initAchievements();
-    expect(achievementCalls()).toBe(2);
-    await settle(80);
+    // the Intra answers again: the timer's own retry shows the list
+    recover();
+    await vi.advanceTimersByTimeAsync(7100);
+    expect(calls()).toBe(2);
+    await vi.advanceTimersByTimeAsync(200);
     expect(document.getElementById("ft-achievements-injected")?.textContent).toContain(
       "Bonus hunter",
     );
 
-    // once it succeeded, it is not fetched again
-    vi.setSystemTime(new Date("2026-09-21T10:05:00Z"));
+    // once it succeeded, a later pass does not fetch it again
+    await vi.advanceTimersByTimeAsync(60000);
     await initAchievements();
-    expect(achievementCalls()).toBe(2);
+    expect(calls()).toBe(2);
+  });
+
+  it("gives up after three retries", async () => {
+    vi.useFakeTimers();
+    sessionStorage.setItem("ft_intrapy_token", jwt(nowS() + 3600, "fresh"));
+    const { calls } = failingThenOk();
+
+    const initAchievements = await loadAchievements();
+    await initAchievements();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(calls()).toBe(4); // the first request and three retries
+
+    // nor does a later pass ask again
+    await initAchievements();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(calls()).toBe(4);
   });
 });
 

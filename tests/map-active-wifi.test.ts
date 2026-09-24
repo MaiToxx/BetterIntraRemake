@@ -88,8 +88,9 @@ describe("friends on the map", () => {
     expect(sortActiveUsers(list, "name", "asc", "asc").map((u) => u.login)).toEqual(["zed", "alice", "bob"]);
     expect(sortActiveUsers(list, "since", "asc", "asc").map((u) => u.login)).toEqual(["zed", "bob", "alice"]);
     const s = state(false);
-    renderActiveList(s.shadow, sortActiveUsers(list, "name", "asc", "asc"));
-    const cards = [...s.shadow.querySelectorAll<HTMLAnchorElement>("#map-area a")];
+    s.activeUsers = sortActiveUsers(list, "name", "asc", "asc");
+    renderActiveList(s);
+    const cards = [...s.shadow.querySelectorAll<HTMLElement>("#map-area .active-card")];
     expect(cards[0].dataset.friend).toBe("true");
     expect(cards[0].textContent).toContain("★ zed");
     expect(cards[1].dataset.friend).toBeUndefined();

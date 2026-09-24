@@ -31,6 +31,7 @@ import {
 } from "../extras/extras-apply.ts";
 import type { VisualUrls } from "./visuals-types.ts";
 import { t } from "../../../core/i18n/i18n.ts";
+import { css } from "../../../core/dom/css.ts";
 
 /**
  * What the apply step needs to know about the page it paints. visuals.ts
@@ -253,7 +254,7 @@ export const injectCustomStyles = () => {
   if (document.getElementById("ft-profile-host-styles")) return;
   const style = document.createElement("style");
   style.id = "ft-profile-host-styles";
-  style.textContent = `
+  style.textContent = css`
     .bg-ft-gray b,
       .bg-ft-gray span {font-size: 1.2rem !important;font-weight: bold !important;font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;}
       p.text-sm:nth-child(2) {font-size: 1.3rem !important;}

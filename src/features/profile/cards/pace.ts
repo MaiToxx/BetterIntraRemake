@@ -4,6 +4,12 @@ import { t, tp } from "../../../core/i18n/i18n.ts";
 let paceData: Record<string, string> | null = null;
 let pacePollAttempts = 0;
 let paceInitialized = false;
+/**
+ * The bars' tooltip texts, rewritten by every updatePaceBars(). The hover
+ * handlers are bound once per bar and read this, so a later payload (a page
+ * refetch) shows its own hours instead of the first ones.
+ */
+let tipTexts: string[] = [];
 
 function getWeekKey(date: Date): string {
   const d = new Date(
@@ -177,7 +183,7 @@ function updatePaceBars() {
           t("W{week}", { week: weeks[i].replace(/^\d+-W/, "") });
   }
 
-  const tipTexts = weekMins.map((m) => formatDuration(m).toUpperCase());
+  tipTexts = weekMins.map((m) => formatDuration(m).toUpperCase());
   for (let i = 0; i < 4; i++) {
     if (bars[i].dataset.ftPaceListener === "true") continue;
     bars[i].dataset.ftPaceListener = "true";
@@ -210,19 +216,35 @@ function updatePaceBars() {
   }
 }
 
+/**
+ * The logtime payload is caught from import time, not from initPace().
+ *
+ * WHY: hook.js dispatches the /locations_stats payload once and replays it
+ * only on 42_LOGTIME_REQUEST, which logtime.ts sends at the end of its own
+ * init, before any profile pass can have run initPace() (a pass waits for the
+ * profile card, a debounce, a frame and the visuals step). A payload that
+ * landed before initPace() was lost to the pace card for the whole visit, so
+ * the week labels, hour tooltips and ring toggle came and went from one reload
+ * to the next. content.js runs at document_start, so this listener exists
+ * before the page's own fetch; it only keeps the payload until initPace().
+ * Asking the hook for another replay instead would make logtime.ts render and
+ * fetch its events a second time.
+ */
+if (location.hostname === "profile-v3.intra.42.fr") {
+  document.addEventListener("42_LOGTIME_DATA", (event: Event) => {
+    const detail = (event as CustomEvent<Record<string, string>>).detail;
+    if (!detail || typeof detail !== "object") return;
+    paceData = detail;
+    if (paceInitialized) updatePaceBars();
+  });
+}
+
 export function initPace() {
   if (paceInitialized) return;
   if (location.hostname !== "profile-v3.intra.42.fr") return;
   if (location.pathname !== "/" && !location.pathname.startsWith("/users/"))
     return;
   paceInitialized = true;
-
-  document.addEventListener("42_LOGTIME_DATA", (event: Event) => {
-    const detail = (event as CustomEvent<Record<string, string>>).detail;
-    if (!detail) return;
-    paceData = detail;
-    updatePaceBars();
-  });
 
   if (paceData) updatePaceBars();
 }
