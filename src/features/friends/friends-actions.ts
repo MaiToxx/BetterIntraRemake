@@ -7,6 +7,7 @@ import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import type { WidgetState } from "./friends-widget-state.ts";
 import { svgIcon } from "./friends-format.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import TRASH_SVG from "../../assets/svg/trash.svg?raw";
 import PLUS_SVG from "../../assets/svg/plus.svg?raw";
 
@@ -15,7 +16,7 @@ function renderDeleteBar(state: WidgetState) {
     <span
       class="badge badge-error badge-md font-bold shrink-0"
       style="border:3px solid color-mix(in oklab, var(--color-error) 55%, transparent);border-radius:0.75rem;height:auto;padding-block:0.15rem;font-weight:600;"
-      >${state.selected.length} selected</span
+      >${t("{n} selected", { n: state.selected.length })}</span
     >
     <button
       type="button"
@@ -23,14 +24,14 @@ function renderDeleteBar(state: WidgetState) {
       @click="${state.onConfirmDelete}"
       ?disabled="${state.selected.length === 0}"
     >
-      Delete
+      ${t("Delete")}
     </button>
     <button
       type="button"
       class="btn btn-sm btn-ghost"
       @click="${state.onCancelDelete}"
     >
-      Cancel
+      ${t("Cancel")}
     </button>
   </div>`;
 }
@@ -52,16 +53,18 @@ function renderAddError(state: WidgetState) {
           @click="${state.onRetryAdd}"
           ?disabled="${state.addLoading}"
         >
-          Retry
+          ${t("Retry")}
         </button>
         <button
           type="button"
           class="btn btn-xs btn-ghost shrink-0"
-          aria-label="Remove ${state.addPending} from my friends"
+          aria-label="${t("Remove {login} from my friends", {
+            login: state.addPending,
+          })}"
           @click="${state.onCancelAdd}"
           ?disabled="${state.addLoading}"
         >
-          Remove
+          ${t("Remove")}
         </button>`
       : ""}
   </div>`;
@@ -83,10 +86,10 @@ function renderAddForm(state: WidgetState) {
         ? html`<button
             type="button"
             class="btn btn-circle btn-md btn-error"
-            data-tip="Delete friend"
+            data-tip="${t("Delete friend")}"
             @click="${state.onDeleteMode}"
             ?disabled="${state.friends.length === 0}"
-            aria-label="Delete friends"
+            aria-label="${t("Delete friends")}"
           >
             <span
               class="w-5 h-5 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:fill-current"
@@ -98,7 +101,7 @@ function renderAddForm(state: WidgetState) {
         ? html`<input
             type="text"
             class="input input-bordered input-primary input-sm"
-            placeholder="Login..."
+            placeholder="${t("Login...")}"
             .value="${state.addInput}"
             @input="${(e: Event) =>
               state.onInputChange(
@@ -115,7 +118,7 @@ function renderAddForm(state: WidgetState) {
                 state.onToggleAdd();
               }
             }}"
-            aria-label="Login to add"
+            aria-label="${t("Login to add")}"
             ?disabled="${state.addLoading}"
           />`
         : ""}
@@ -129,14 +132,15 @@ function renderAddForm(state: WidgetState) {
             ?disabled="${state.addLoading ||
             !state.addInput.trim()}"
           >
-            ${state.addLoading ? "" : "Add"}
+            ${state.addLoading ? "" : t("Add")}
           </button>`
         : html`<button
             type="button"
             class="btn btn-circle btn-md btn-primary"
-            data-tip="Add / delete friend"
+            data-tip="${t("Add / delete friend")}"
             @click="${state.onToggleAdd}"
-            aria-label="Add friend"
+            aria-label="${t("Add friend")}"
+            data-ft-add-toggle
           >
             <span
               class="w-5 h-5 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full [&>svg]:fill-current"
@@ -148,7 +152,7 @@ function renderAddForm(state: WidgetState) {
             type="button"
             class="btn btn-circle btn-md btn-ghost"
             @click="${state.onToggleAdd}"
-            aria-label="Close"
+            aria-label="${t("Close")}"
           >
             <span class="text-lg leading-none">✕</span>
           </button>`

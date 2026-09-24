@@ -17,6 +17,7 @@ import { html, render, type TemplateResult } from "lit-html";
 import { getConfig } from "../../core/config.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { WORKER_HOST } from "../../core/worker.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export const PRIVACY_POLICY_URL = `${__REPO_URL__}/blob/main/PRIVACY.md`;
 
@@ -39,31 +40,30 @@ export async function acceptSignInDisclosure(): Promise<void> {
  * (handlers/intra-auth.ts) and PRIVACY.md. Change them together.
  */
 export function signInDisclosureText(): TemplateResult {
+  // One sentence for the translation, {host} drawn in bold where it falls.
+  const [beforeHost, afterHost = ""] = t(
+    "Signing in sends the Intra session token this page already holds, once, to {host}, the Better Intra server. It checks the token against 42's public keys and does not keep it.",
+  ).split("{host}");
   return html`
+    <p>${beforeHost}<strong>${WORKER_HOST}</strong>${afterHost}</p>
     <p>
-      Signing in sends the Intra session token this page already holds, once,
-      to <strong>${WORKER_HOST}</strong>, the Better Intra server. It checks
-      the token against 42's public keys and does not keep it.
+      ${t(
+        "The server stores a hash of your login and the date you first signed in, nothing else about you.",
+      )}
     </p>
     <p>
-      The server stores a hash of your login and the date you first signed
-      in, nothing else about you.
+      ${t(
+        "Once you are signed in, other Better Intra users see the profile visuals, look and public profile you set, project pages you open report their subject link to the community tracker, and the settings you push are stored under your login hash. You can clear or switch off each of these in the settings.",
+      )}
     </p>
     <p>
-      Once you are signed in, other Better Intra users see the profile visuals,
-      look and public profile you set, project pages you open report their
-      subject link to the community tracker, and the settings you push are
-      stored under your login hash. You can clear or switch off each of these
-      in the settings.
-    </p>
-    <p>
-      Optional: everything else works without signing in.
+      ${t("Optional: everything else works without signing in.")}
       <a
         class="underline font-semibold text-primary"
         href="${PRIVACY_POLICY_URL}"
         target="_blank"
         rel="noopener noreferrer"
-        >Privacy policy</a
+        >${t("Privacy policy")}</a
       >
     </p>
   `;
@@ -123,7 +123,7 @@ function showDisclosureDialog(theme: "light" | "dark"): Promise<boolean> {
           style="border-radius:1rem;"
         >
           <h2 id="ft-signin-disclosure-title" class="text-lg font-bold">
-            Before you sign in
+            ${t("Before you sign in")}
           </h2>
           <div class="flex flex-col gap-2 opacity-90">
             ${signInDisclosureText()}
@@ -134,7 +134,7 @@ function showDisclosureDialog(theme: "light" | "dark"): Promise<boolean> {
               class="btn btn-sm btn-ghost"
               @click="${() => finish(false)}"
             >
-              Cancel
+              ${t("Cancel")}
             </button>
             <button
               type="button"
@@ -142,7 +142,7 @@ function showDisclosureDialog(theme: "light" | "dark"): Promise<boolean> {
               data-accept
               @click="${() => finish(true)}"
             >
-              Sign in
+              ${t("Sign in")}
             </button>
           </div>
         </div>

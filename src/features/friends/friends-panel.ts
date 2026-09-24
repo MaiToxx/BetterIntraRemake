@@ -15,6 +15,7 @@ import { renderSortControl, visibleFriends } from "./friends-sort.ts";
 import { renderFriendsList } from "./friends-list.ts";
 import { renderFloatingActions } from "./friends-actions.ts";
 import { FRIENDS_WIDGET_STYLES } from "./friends-widget-styles.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import FRIENDS_SVG from "../../assets/svg/friends.svg?raw";
 import WARNING_SVG from "../../assets/svg/triangle-exclamation.svg?raw";
 import GLOBE_SVG from "../../assets/svg/globe-lucide.svg?raw";
@@ -35,9 +36,11 @@ function renderHeaderControls(state: WidgetState, onlineCount: number) {
       style="height:1.875rem;${state.onlineOnly
         ? `background-color:${primaryColor};border-color:${primaryColor};color:${primaryContent};`
         : ""}"
-      data-tip="${state.onlineOnly
-        ? "Showing online users only (click to show all)"
-        : "Show only online users"}"
+      data-tip="${t(
+        state.onlineOnly
+          ? "Showing online users only (click to show all)"
+          : "Show only online users",
+      )}"
       @click="${state.onToggleOnline}"
       aria-pressed="${state.onlineOnly}"
     >
@@ -72,11 +75,11 @@ function renderHeaderControls(state: WidgetState, onlineCount: number) {
         : "btn-ghost"}"
       style="height:1.875rem;"
       data-tip="${state.loadError
-        ? "Refresh failed (click to retry)"
+        ? t("Refresh failed (click to retry)")
         : state.lastFetch
-          ? `Updated ${formatTimeAgo(state.lastFetch)}`
-          : "Not yet updated"}"
-      aria-label="Refresh friends"
+          ? t("Updated {ago}", { ago: formatTimeAgo(state.lastFetch) })
+          : t("Not yet updated")}"
+      aria-label="${t("Refresh friends")}"
       @click="${state.onRefresh}"
     >
       <div
@@ -122,15 +125,11 @@ export function renderWidget(state: WidgetState) {
               : "btn-primary"} shadow-xl"
             @click="${state.needsReconnect ? state.onConnect : state.onToggle}"
             data-tip="${state.needsReconnect
-              ? "Token expired — reconnect"
-              : state.open
-                ? "Close"
-                : "Friends"}"
+              ? t("Token expired — reconnect")
+              : t(state.open ? "Close" : "Friends")}"
             aria-label="${state.needsReconnect
-              ? "Friends: session expired, reconnect"
-              : state.open
-                ? "Close friends"
-                : "Friends"}"
+              ? t("Friends: session expired, reconnect")
+              : t(state.open ? "Close friends" : "Friends")}"
             aria-expanded="${ifDefined(
               state.needsReconnect ? undefined : String(state.open),
             )}"
@@ -184,7 +183,9 @@ export function renderWidget(state: WidgetState) {
           class="friends-header flex flex-wrap items-center gap-2 px-5 pt-3 pb-3 border-b border-base-300 bg-base-200/50 shrink-0"
         >
           <div class="flex items-center gap-2.5 min-w-0 flex-none flex-wrap">
-            <span class="font-bold text-lg text-base-content">Friends</span>
+            <span class="font-bold text-lg text-base-content"
+              >${t("Friends")}</span
+            >
             ${state.friends.length > 0
               ? html`<span
                   class="badge badge-primary badge-md font-bold"

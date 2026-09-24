@@ -6,6 +6,7 @@ import { findDashboardCard } from "../../../core/intra/selectors.ts";
 import { getEffectiveTheme, THEMES } from "../../../core/theme/theme-manager.ts";
 import { loadCampusData, TranscriptEntry } from "../../campus/campus.ts";
 import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 async function openTranscriptDialog(
   login: string,
@@ -102,7 +103,7 @@ async function openTranscriptDialog(
           class="flex flex-col p-4 gap-3 bg-base-100"
         >
           <div class="flex justify-between items-center shrink-0">
-            <span class="text-sm font-bold uppercase">Transcript</span>
+            <span class="text-sm font-bold uppercase">${t("Transcript")}</span>
             <button
               type="button"
               class="btn btn-circle btn-ghost btn-sm"
@@ -114,12 +115,12 @@ async function openTranscriptDialog(
 
           <div class="join">
             ${transcripts.map(
-              (t, i) =>
+              (cursus, i) =>
                 html`<input
                   type="radio"
                   name="ft-ts-cursus"
                   class="join-item btn btn-outline btn-sm flex-1"
-                  aria-label="${t.cursusLabel}"
+                  aria-label="${cursus.cursusLabel}"
                   value="${i}"
                   ?checked="${i === cursusIdx}"
                   @change="${(e: Event) => {
@@ -152,7 +153,7 @@ async function openTranscriptDialog(
               min="2013"
               max=${currentYear}
               value=${currentYear}
-              placeholder="Start"
+              placeholder="${t("Start")}"
             />
             <input
               class="ft-ts-end input input-sm flex-1 w-0"
@@ -160,7 +161,7 @@ async function openTranscriptDialog(
               min="2013"
               max=${currentYear}
               value=${currentYear}
-              placeholder="End"
+              placeholder="${t("End")}"
             />
           </div>
 
@@ -170,14 +171,14 @@ async function openTranscriptDialog(
               class="btn btn-sm btn-ghost flex-1"
               @click=${close}
             >
-              Cancel
+              ${t("Cancel")}
             </button>
             <button
               type="button"
               class="btn btn-sm btn-success flex-1"
               @click=${handleSubmit}
             >
-              Download
+              ${t("Download")}
             </button>
           </div>
         </div>
@@ -246,7 +247,7 @@ function injectTranscriptButton(
   transcriptBtn.className =
     "text-center text-legacy-main bg-transparent border border-legacy-main py-1.5 px-2 cursor-pointer text-xs uppercase hover:opacity-80";
   transcriptBtn.style.cursor = "pointer";
-  transcriptBtn.textContent = "Transcript";
+  transcriptBtn.textContent = t("Transcript");
   transcriptBtn.addEventListener("click", (e) => {
     e.preventDefault();
     openTranscriptDialog(cloudLogin, transcripts);

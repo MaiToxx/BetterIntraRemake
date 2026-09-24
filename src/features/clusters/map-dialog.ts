@@ -38,6 +38,7 @@ import {
   updateDefaultSelect,
 } from "./map-dialog/header.ts";
 import { findClusterForSeat } from "./map-dialog/helpers.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export {
   applyPseudoCluster,
@@ -154,7 +155,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
     id: "cluster-map-dialog",
     className: "bg-transparent backdrop:bg-black/60",
   });
-  dialog.setAttribute("aria-label", "Cluster map");
+  dialog.setAttribute("aria-label", t("Cluster map"));
   Object.assign(dialog.style, {
     margin: "1.5rem auto auto auto",
     width: "min(1200px, calc(100dvw - 2rem))",
@@ -226,8 +227,8 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
         const btn = shadow.getElementById("maximize-btn");
         if (btn) {
           applyMaximizeIcon(false);
-          btn.dataset.tip = "Maximize";
-          btn.setAttribute("aria-label", "Maximize");
+          btn.dataset.tip = t("Maximize");
+          btn.setAttribute("aria-label", t("Maximize"));
         }
       }
     },
@@ -353,7 +354,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
         mBtn.classList.toggle("btn-ghost", !state.showMarkers);
         mBtn.style.borderColor = state.showMarkers ? "var(--color-accent)" : "";
         const stateEl = mBtn.lastElementChild as HTMLElement | null;
-        if (stateEl) stateEl.textContent = state.showMarkers ? "ON" : "OFF";
+        if (stateEl) stateEl.textContent = t(state.showMarkers ? "ON" : "OFF");
       }
       const mapEl = shadow.getElementById("map-area");
       if (mapEl) {
@@ -425,7 +426,7 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
         dialog.style.height = dialog.dataset.prevHeight || "";
         dialog.style.margin = dialog.dataset.prevMargin || "";
       }
-      maximizeBtn.dataset.tip = isMaximized ? "Restore size" : "Maximize";
+      maximizeBtn.dataset.tip = t(isMaximized ? "Restore size" : "Maximize");
       maximizeBtn.setAttribute("aria-label", maximizeBtn.dataset.tip);
       applyMaximizeIcon(isMaximized);
       return;

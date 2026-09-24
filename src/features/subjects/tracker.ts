@@ -10,6 +10,7 @@ import { renderSubjectBadge } from "./ui.ts";
 import { waitForElement } from "../../core/dom/dom-wait.ts";
 
 import { workerFetch } from "../../core/worker.ts";
+import { t } from "../../core/i18n/i18n.ts";
 const CHECK_COOLDOWN_MS = 15 * 60 * 1000;
 
 interface LocalSubjectState {
@@ -261,5 +262,5 @@ export function maybeRenderBadge(
   const tone: "error" | "warning" | "ghost" =
     age <= 7 * DAY ? "error" : age <= 30 * DAY ? "warning" : "ghost";
   const when = recent ? formatRelativeTime(date) : formatShortDate(date);
-  renderSubjectBadge(button, "Subject updated", when, tone);
+  renderSubjectBadge(button, t("Subject updated"), when, tone);
 }

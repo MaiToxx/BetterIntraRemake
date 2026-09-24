@@ -24,6 +24,8 @@ import {
   type UpdateCheckMeta,
   type UpdateInfo,
 } from "./core/update-check";
+import { getConfig } from "./core/config.ts";
+import { resolveLang, setLang, t } from "./core/i18n/i18n.ts";
 
 // ---------------------------------------------------------------------------
 // Update check (GitHub Releases of __REPO_URL__)
@@ -61,6 +63,30 @@ function checkForUpdate(): Promise<void> {
     updateCheckInFlight = null;
   });
   return updateCheckInFlight;
+}
+
+/**
+ * The toolbar badge of a known update, in the language of the settings. Read
+ * at each use: the service worker can outlive a change of UI_LANGUAGE.
+ */
+async function updateBadgeText(): Promise<string> {
+  try {
+    setLang(resolveLang(await getConfig("UI_LANGUAGE")));
+  } catch {
+    // storage unavailable: the browser's language (the default) stays
+  }
+  return t("NEW");
+}
+
+/** The language changed: a badge already up follows it. */
+async function relabelUpdateBadge(): Promise<void> {
+  try {
+    const store = await chrome.storage.local.get(UPDATE_KEY);
+    if (!store[UPDATE_KEY]) return;
+    await chrome.action.setBadgeText({ text: await updateBadgeText() });
+  } catch {
+    /* best effort */
+  }
 }
 
 async function readCheckMeta(): Promise<UpdateCheckMeta | null> {
@@ -117,7 +143,7 @@ async function runUpdateCheck(meta: UpdateCheckMeta | null): Promise<void> {
         [UPDATE_CHECK_META_KEY]: nextMeta,
       });
       await chrome.action.setBadgeBackgroundColor({ color: "#00babc" });
-      await chrome.action.setBadgeText({ text: "NEW" });
+      await chrome.action.setBadgeText({ text: await updateBadgeText() });
     } else {
       await chrome.storage.local.remove(UPDATE_KEY);
       await chrome.storage.local.set({ [UPDATE_CHECK_META_KEY]: nextMeta });
@@ -195,6 +221,7 @@ chrome.storage.onChanged.addListener((changes) => {
     // the popup (FT_INTRA_LOGIN) before its tab is torn down by the reload.
     setTimeout(() => void reloadIntraTabs(), RELOAD_AFTER_LOGIN_DELAY_MS);
   }
+  if ("UI_LANGUAGE" in changes) void relabelUpdateBadge();
 });
 
 /**

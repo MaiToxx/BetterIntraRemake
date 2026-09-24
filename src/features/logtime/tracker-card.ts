@@ -18,6 +18,7 @@ import {
   type WeekProgress,
 } from "./tracker.ts";
 import { lastStats } from "./logtime.ts";
+import { msg, t } from "../../core/i18n/i18n.ts";
 import VALIDATED_SVG from "../../assets/svg/validated.svg?raw";
 import INVALIDE_SVG from "../../assets/svg/invalide.svg?raw";
 
@@ -71,7 +72,7 @@ function renderCard(
               }}"
             >
               <option value="off" ?selected="${!TRACKER_MODES.includes(trackerState.mode)}">
-                Off
+                ${t("Off")}
               </option>
               <optgroup label="Phoenix">
               ${["phoenix-1", "phoenix-2", "phoenix-3", "phoenix-4"].map(
@@ -80,7 +81,7 @@ function renderCard(
                   const selected = m === trackerState.mode;
                   return html`
                     <option value="${m}" ?selected="${selected}">
-                      ${s?.label}
+                      ${s ? t(s.label) : ""}
                     </option>
                   `;
                 },
@@ -98,7 +99,7 @@ function renderCard(
                 const selected = m === trackerState.mode;
                 return html`
                   <option value="${m}" ?selected="${selected}">
-                    ${s?.label}
+                    ${s ? t(s.label) : ""}
                   </option>
                 `;
               })}
@@ -116,7 +117,7 @@ function renderCard(
                   progress
                     ? html`
                         <tr>
-                          <td class="font-medium">Days</td>
+                          <td class="font-medium">${t("Days")}</td>
                           <td class="tabular-nums">
                             ${progress.daysDone} / ${thresholds.days}
                           </td>
@@ -125,7 +126,7 @@ function renderCard(
                           </td>
                         </tr>
                         <tr>
-                          <td class="font-medium">Hours</td>
+                          <td class="font-medium">${t("Hours")}</td>
                           <td class="tabular-nums">
                             ${formatHours(progress.hoursDone)} /
                             ${formatHours(thresholds.hours)}
@@ -143,7 +144,7 @@ function renderCard(
                             colspan="3"
                             class="text-center text-xs opacity-50 py-4"
                           >
-                            No logtime data yet (it comes from the Logtime feature).
+                            ${t("No logtime data yet (it comes from the Logtime feature).")}
                           </td>
                         </tr>
                       `
@@ -161,47 +162,47 @@ function getTrackerStateSync(mode: string): TrackerState | null {
   const map: Record<string, TrackerState> = {
     "phoenix-1": {
       mode: "phoenix-1",
-      label: "Phoenix - Phase 1",
+      label: msg("Phoenix - Phase 1"),
       thresholds: { days: 2, hours: 20, slots: null },
     },
     "phoenix-2": {
       mode: "phoenix-2",
-      label: "Phoenix - Phase 2",
+      label: msg("Phoenix - Phase 2"),
       thresholds: { days: 3, hours: 25, slots: null },
     },
     "phoenix-3": {
       mode: "phoenix-3",
-      label: "Phoenix - Phase 3",
+      label: msg("Phoenix - Phase 3"),
       thresholds: { days: 4, hours: 30, slots: null },
     },
     "phoenix-4": {
       mode: "phoenix-4",
-      label: "Phoenix - Phase 4",
+      label: msg("Phoenix - Phase 4"),
       thresholds: { days: 5, hours: 35, slots: null },
     },
     "pegasus-bronze": {
       mode: "pegasus-bronze",
-      label: "Pegasus - Bronze",
+      label: msg("Pegasus - Bronze"),
       thresholds: { days: 4, hours: 30, slots: null },
     },
     "pegasus-silver": {
       mode: "pegasus-silver",
-      label: "Pegasus - Silver",
+      label: msg("Pegasus - Silver"),
       thresholds: { days: 4, hours: 35, slots: null },
     },
     "pegasus-gold": {
       mode: "pegasus-gold",
-      label: "Pegasus - Gold",
+      label: msg("Pegasus - Gold"),
       thresholds: { days: 5, hours: 40, slots: null },
     },
     "pegasus-diamond": {
       mode: "pegasus-diamond",
-      label: "Pegasus - Diamond",
+      label: msg("Pegasus - Diamond"),
       thresholds: { days: 5, hours: 45, slots: null },
     },
     "pegasus-vibranium": {
       mode: "pegasus-vibranium",
-      label: "Pegasus - Vibranium",
+      label: msg("Pegasus - Vibranium"),
       thresholds: { days: 6, hours: 50, slots: null },
     },
   };
@@ -259,7 +260,7 @@ function renderPopover() {
   (async () => {
     const theme = await getEffectiveTheme();
     const daisyTheme = theme === "light" ? "light" : "dark";
-    const t = _state!.thresholds;
+    const th = _state!.thresholds;
     render(
       html`
         <div data-theme="${daisyTheme}">
@@ -279,7 +280,7 @@ function renderPopover() {
                       const selected = m === _state!.mode;
                       return html`
                         <option value="${m}" ?selected="${selected}">
-                          ${s?.label.replace(/^(Phoenix|Pegasus) - /, "")}
+                          ${s ? t(s.label).replace(/^(Phoenix|Pegasus) - /, "") : ""}
                         </option>
                       `;
                     },
@@ -291,28 +292,28 @@ function renderPopover() {
                   ? html`
                       <div
                         class="card card-compact"
-                        style="background:${progress.daysDone >= t.days
+                        style="background:${progress.daysDone >= th.days
                           ? "rgba(16,185,129,0.15)"
                           : "rgba(239,68,68,0.15)"}"
                       >
                         <div class="card-body p-2 items-center text-center">
-                          <span class="text-xs opacity-60">Days</span>
+                          <span class="text-xs opacity-60">${t("Days")}</span>
                           <span class="font-bold tabular-nums"
-                            >${progress.daysDone}/${t.days}</span
+                            >${progress.daysDone}/${th.days}</span
                           >
                         </div>
                       </div>
                       <div
                         class="card card-compact"
-                        style="background:${progress.hoursDone >= t.hours
+                        style="background:${progress.hoursDone >= th.hours
                           ? "rgba(16,185,129,0.15)"
                           : "rgba(239,68,68,0.15)"}"
                       >
                         <div class="card-body p-2 items-center text-center">
-                          <span class="text-xs opacity-60">Hours</span>
+                          <span class="text-xs opacity-60">${t("Hours")}</span>
                           <span class="font-bold tabular-nums"
                             >${formatHours(progress.hoursDone)}/${formatHours(
-                              t.hours,
+                              th.hours,
                             )}</span
                           >
                         </div>
@@ -322,7 +323,7 @@ function renderPopover() {
                       <div
                         class="col-span-2 text-center text-xs opacity-50 py-2"
                       >
-                        No logtime data yet (it comes from the Logtime feature).
+                        ${t("No logtime data yet (it comes from the Logtime feature).")}
                       </div>
                     `}
               </div>

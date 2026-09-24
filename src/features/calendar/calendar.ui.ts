@@ -8,10 +8,13 @@ import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
 import { WORKER_URL, workerFetch } from "../../core/worker.ts";
+import { msg, t } from "../../core/i18n/i18n.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
 
-export const REGENERATE_CONFIRM =
-  "Create a new calendar link? Calendars subscribed to the current link stop updating until you subscribe them to the new one.";
+/** msg(): shown with t(REGENERATE_CONFIRM) (module code runs before the language is known). */
+export const REGENERATE_CONFIRM = msg(
+  "Create a new calendar link? Calendars subscribed to the current link stop updating until you subscribe them to the new one.",
+);
 
 function calUrl(token: string): string {
   return `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`;
@@ -29,10 +32,10 @@ export function googleCalendarUrl(token: string): string {
 
 /** What a failed link request tells the student, by status (0: no answer). */
 export function generateError(status: number): string {
-  if (status === 401) return "Your Better Intra session has expired. Sign in again to create the link.";
-  if (status === 429) return "Too many requests in a row. Wait a minute and try again.";
-  if (status === 0) return "Could not reach the server. Try again.";
-  return `The server could not create the link (error ${status}). Try again later.`;
+  if (status === 401) return t("Your Better Intra session has expired. Sign in again to create the link.");
+  if (status === 429) return t("Too many requests in a row. Wait a minute and try again.");
+  if (status === 0) return t("Could not reach the server. Try again.");
+  return t("The server could not create the link (error {status}). Try again later.", { status });
 }
 
 export function renderCalendarPanel() {
@@ -80,11 +83,11 @@ function renderPanel(el: Element | undefined) {
           style="border: 2px solid var(--color-info)"
         >
           <div class="card-body p-4 sm:p-6 gap-4">
-            <h3 class="card-title text-lg">Calendar Sync</h3>
+            <h3 class="card-title text-lg">${t("Calendar Sync")}</h3>
             <p class="text-sm opacity-70">
-              Subscribe to the 42 events you are registered for in any
-              calendar app. The feed updates every time you visit your
-              profile.
+              ${t(
+                "Subscribe to the 42 events you are registered for in any calendar app. The feed updates every time you visit your profile.",
+              )}
             </p>
 
             ${error
@@ -96,20 +99,20 @@ function renderPanel(el: Element | undefined) {
                   class="btn btn-primary btn-sm self-start"
                   @click="${connect}"
                 >
-                  Sign in again
+                  ${t("Sign in again")}
                 </button>`
               : ""}
             ${!signedIn && !token
               ? html`
                   <p class="text-sm opacity-70">
-                    Sign in with your 42 account to generate a calendar link.
+                    ${t("Sign in with your 42 account to generate a calendar link.")}
                   </p>
                   <button
                     type="button"
                     class="btn btn-primary btn-sm self-start"
                     @click="${connect}"
                   >
-                    Sign in with 42
+                    ${t("Sign in with 42")}
                   </button>
                 `
               : token
@@ -125,8 +128,8 @@ function renderPanel(el: Element | undefined) {
                       type="button"
                       class="btn btn-sm btn-square"
                       @click="${() => copyLink(calUrl(token))}"
-                      data-tip="${copied ? "Copied!" : "Copy link"}"
-                      aria-label="${copied ? "Link copied" : "Copy link"}"
+                      data-tip="${t(copied ? "Copied!" : "Copy link")}"
+                      aria-label="${t(copied ? "Link copied" : "Copy link")}"
                     >
                       <span class="size-4 flex items-center justify-center"
                         >${unsafeHTML(COPY_SVG)}</span
@@ -134,12 +137,12 @@ function renderPanel(el: Element | undefined) {
                     </button>
                   </div>
                   <span class="sr-only" role="status"
-                    >${copied ? "Link copied" : ""}</span
+                    >${copied ? t("Link copied") : ""}</span
                   >
 
                   <div class="flex flex-wrap gap-2">
                     <a class="btn btn-sm btn-primary" href="${webcalUrl(token)}"
-                      >Open in my calendar app</a
+                      >${t("Open in my calendar app")}</a
                     >
                     <a
                       class="btn btn-sm"
@@ -147,7 +150,7 @@ function renderPanel(el: Element | undefined) {
                       href="${googleCalendarUrl(token)}"
                       target="_blank"
                       rel="noopener noreferrer"
-                      >Add to Google Calendar</a
+                      >${t("Add to Google Calendar")}</a
                     >
                   </div>
 
@@ -156,31 +159,31 @@ function renderPanel(el: Element | undefined) {
                       class="bg-base-100 rounded-lg p-2.5"
                       style="border: 2px solid var(--color-info)"
                     >
-                      <span class="font-semibold">Apple Calendar</span>
+                      <span class="font-semibold">${t("Apple Calendar")}</span>
                       <p class="opacity-60 mt-0.5">
-                        Scan the QR code or File → New
+                        ${t("Scan the QR code or File → New")}
                       </p>
                     </div>
                     <div
                       class="bg-base-100 rounded-lg p-2.5"
                       style="border: 2px solid var(--color-info)"
                     >
-                      <span class="font-semibold">Google Calendar</span>
-                      <p class="opacity-60 mt-0.5">Settings → Add → From URL</p>
+                      <span class="font-semibold">${t("Google Calendar")}</span>
+                      <p class="opacity-60 mt-0.5">${t("Settings → Add → From URL")}</p>
                     </div>
                     <div
                       class="bg-base-100 rounded-lg p-2.5"
                       style="border: 2px solid var(--color-info)"
                     >
                       <span class="font-semibold">Outlook</span>
-                      <p class="opacity-60 mt-0.5">Add calendar → Subscribe</p>
+                      <p class="opacity-60 mt-0.5">${t("Add calendar → Subscribe")}</p>
                     </div>
                   </div>
 
                   <div class="flex justify-center pt-1">
                     <img
                       src="${qrDataUrl}"
-                      alt="QR Code"
+                      alt="${t("QR Code")}"
                       class="rounded-lg"
                       width="200"
                       height="200"
@@ -197,10 +200,10 @@ function renderPanel(el: Element | undefined) {
                       <span class="size-4 flex items-center justify-center"
                         >${unsafeHTML(CALENDAR_PLUS_SVG)}</span
                       >
-                      Regenerate
+                      ${t("Regenerate")}
                     </button>
                     <span class="text-xs opacity-50 ml-1"
-                      >New link invalidates the old one</span
+                      >${t("New link invalidates the old one")}</span
                     >
                   </div>
                 `
@@ -212,7 +215,7 @@ function renderPanel(el: Element | undefined) {
                     <span class="size-4 flex items-center justify-center"
                       >${unsafeHTML(CALENDAR_PLUS_SVG)}</span
                     >
-                    Generate calendar link
+                    ${t("Generate calendar link")}
                   </button>
                 `}
           </div>
@@ -229,7 +232,7 @@ function renderPanel(el: Element | undefined) {
     try {
       await navigator.clipboard.writeText(url);
     } catch {
-      window.prompt("Copy your calendar link:", url);
+      window.prompt(t("Copy your calendar link:"), url);
       return;
     }
     copied = true;
@@ -244,7 +247,7 @@ function renderPanel(el: Element | undefined) {
   // One click used to revoke the link: every phone or Google calendar
   // subscribed to it stopped updating, without a word.
   const handleRegenerate = () => {
-    if (!window.confirm(REGENERATE_CONFIRM)) return;
+    if (!window.confirm(t(REGENERATE_CONFIRM))) return;
     void handleGenerate();
   };
 
@@ -256,7 +259,7 @@ function renderPanel(el: Element | undefined) {
     const sessionToken = String(store.CLOUD_TOKEN || "");
     const cloudLogin = String(store.CLOUD_LOGIN || "");
     if (!sessionToken || !cloudLogin) {
-      error = "Sign in to Better Intra first (Sign in with 42 in the footer).";
+      error = t("Sign in to Better Intra first (Sign in with 42 in the footer).");
       await update();
       return;
     }

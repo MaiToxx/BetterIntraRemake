@@ -7,6 +7,7 @@ import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import type { FriendData } from "./friends-types.ts";
 import { svgIcon } from "./friends-format.ts";
+import { msg, t } from "../../core/i18n/i18n.ts";
 import USER_SVG from "../../assets/svg/user-lucide.svg?raw";
 import STAR_SVG from "../../assets/svg/star-lucide.svg?raw";
 import WALLET_SVG from "../../assets/svg/wallet.svg?raw";
@@ -32,12 +33,22 @@ const SORT_ICONS: Record<SortMode, string> = {
   correction: EVAL_SVG,
 };
 
+/** Marked with msg(), translated with t() where shown. Wallet stays Wallet. */
 const SORT_LABELS: Record<SortMode, string> = {
-  name: "Name",
-  level: "Level",
+  name: msg("Name"),
+  level: msg("Level"),
   wallet: "Wallet",
-  correction: "Evaluation",
+  correction: msg("Evaluation"),
 };
+
+/** The tooltip of a sort button: its label, and the direction when active. */
+function sortTip(mode: SortMode, active: boolean, dir: SortDir): string {
+  const label = t(SORT_LABELS[mode]);
+  if (!active) return label;
+  return dir === "asc"
+    ? t("{label} (ascending)", { label })
+    : t("{label} (descending)", { label });
+}
 
 export function sortFriends(
   friends: FriendData[],
@@ -85,7 +96,7 @@ export function renderSortControl(
   onChange: (mode: SortMode, dir: SortDir) => void,
 ) {
   return html`
-    <div class="join join-horizontal" data-tip="Sort by">
+    <div class="join join-horizontal" data-tip="${t("Sort by")}">
       ${SORT_MODES.map(
         (m) => html`
           <button
@@ -94,9 +105,7 @@ export function renderSortControl(
             style="height:1.875rem;${current === m
               ? `background-color:${primaryColor};border-color:${primaryColor};color:${primaryContent};`
               : ""}"
-            data-tip="${SORT_LABELS[m]}${current === m
-              ? ` (${dir === "asc" ? "ascending" : "descending"})`
-              : ""}"
+            data-tip="${sortTip(m, current === m, dir)}"
             @click="${() =>
               onChange(
                 m,

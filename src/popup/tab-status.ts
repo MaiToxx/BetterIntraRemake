@@ -16,6 +16,7 @@
  * script that does not know FT_PING) shows nothing rather than a wrong hint.
  */
 import { html, render } from "lit-html";
+import { t } from "../core/i18n/i18n.ts";
 import {
   OPEN_HUB_MESSAGE,
   PING_MESSAGE,
@@ -105,8 +106,8 @@ export function renderTabStatus(
           class="flex items-center justify-between gap-3 px-4 py-2 bg-warning text-warning-content text-sm"
         >
           <span>
-            <strong>Better Intra is not running on this tab yet.</strong> It
-            was installed or updated after the tab was opened.
+            <strong>${t("Better Intra is not running on this tab yet.")}</strong>
+            ${t("It was installed or updated after the tab was opened.")}
           </span>
           <button
             type="button"
@@ -117,7 +118,7 @@ export function renderTabStatus(
               window.close();
             }}"
           >
-            Reload tab
+            ${t("Reload tab")}
           </button>
         </div>
       `,
@@ -136,7 +137,7 @@ export function renderTabStatus(
             @click="${(e: Event) =>
               void openSettings(tabId, e.currentTarget as HTMLButtonElement)}"
           >
-            Open settings
+            ${t("Open settings")}
           </button>
         </div>
       `,
@@ -150,7 +151,7 @@ export function renderTabStatus(
         class="flex items-center justify-between gap-3 px-4 pt-3 text-sm"
       >
         <span class="opacity-70"
-          >The settings are on the Intra v3 profile page.</span
+          >${t("The settings are on the Intra v3 profile page.")}</span
         >
         <button
           type="button"
@@ -161,7 +162,7 @@ export function renderTabStatus(
             window.close();
           }}"
         >
-          Open profile
+          ${t("Open profile")}
         </button>
       </div>
     `,

@@ -100,6 +100,7 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CALENDAR_EVENTS_HASH: "",
   ADVANCED_OPEN_LINKS_NEW_TAB: true,
   EASTER_EGGS_ENABLED: true,
+  UI_LANGUAGE: "auto",
   EGGS_FOUND: [],
 
   SUBJECT_TRACKER_STATE: {},

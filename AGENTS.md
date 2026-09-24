@@ -91,6 +91,14 @@ npm run deploy    # wrangler deploy --remote (only with explicit user consent)
 - **Release drafter** — on push/PR to `main`; auto-categorizes commits into draft release.
 - **Publish** — triggers on GitHub Release publish; builds Firefox (`.xpi`) and Chrome (`.zip`); signs Firefox via AMO for full releases.
 
+## Languages (English and French)
+
+- Every text a user sees or hears goes through `t()` from `src/core/i18n/i18n.ts`: the English text is the key, `src/core/i18n/fr/*.json` (one file per area) gives the French. `tp(n, one, other)` for counts, `msg()` for module-level constants (translated with `t()` where shown), `intlLocale()` for dates.
+- The first argument is a string literal: the build (`scripts/i18n-catalog.ts`) keeps in each bundle only the translations whose English text it contains.
+- `tests/i18n-catalog.test.ts` fails on a text without French, an unused entry or a lost `{placeholder}`. Tests run in English (`tests/setup.ts` stubs an en-US browser).
+- The language is `UI_LANGUAGE` (Advanced tab: Auto / Français / English), read by `initI18n()` before anything renders. Never translate text matched against the Intra's own page.
+- French style: tutoiement, U+00A0 before `: ; ! ?` and inside `« »`, apostrophe `’`.
+
 ## DOs and DON'Ts
 
 - **NEVER use `innerHTML`** — lit-html is always available. Use `render(unsafeHTML(...), container)` from `lit-html` and `lit-html/directives/unsafe-html.js` instead.

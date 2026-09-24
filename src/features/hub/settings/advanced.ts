@@ -3,9 +3,27 @@
  * maintenance, the "Lighten the Intra" switches, and Reset.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
+import { msg } from "../../../core/i18n/i18n.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 
 export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
+  {
+    feature: "advanced",
+    key: "UI_LANGUAGE",
+    label: "Language",
+    desc: "The language of Better Intra. Auto follows your browser.",
+    kind: "radio-group",
+    defaultValue: CONFIG_DEFAULT.UI_LANGUAGE,
+    // The two languages are written in their own language, whatever the
+    // current one (tests/i18n-catalog.test.ts leaves them untranslated;
+    // t() gives them back as written, having no entry for them).
+    options: [
+      { label: "Auto", value: "auto" },
+      { label: "Français", value: "fr" },
+      { label: "English", value: "en" },
+    ],
+    grid: false,
+  },
   {
     feature: "advanced",
     key: "ADVANCED_OPEN_LINKS_NEW_TAB",
@@ -51,7 +69,8 @@ export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
     desc: "Export or import your Better Intra settings as a JSON file.",
     kind: "action",
     actionType: "backup",
-    actionLabel: "Backup",
+    // the button labels are shown through t() (controls/actions.ts)
+    actionLabel: msg("Backup"),
     grid: true,
     colSpan: 1,
   },
@@ -61,7 +80,7 @@ export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
     desc: "Clears the cached campus/cluster configuration and re-fetches it.",
     kind: "action",
     actionType: "reload-campus",
-    actionLabel: "Reload",
+    actionLabel: msg("Reload"),
     grid: true,
     colSpan: 1,
   },
@@ -104,6 +123,6 @@ export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
     desc: "Clears every Better Intra setting on this browser and signs you out. This cannot be undone.",
     kind: "action",
     actionType: "reset",
-    actionLabel: "Reset",
+    actionLabel: msg("Reset"),
   },
 ];

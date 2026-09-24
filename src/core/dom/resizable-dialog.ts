@@ -1,3 +1,6 @@
+// via src/: the catalog test recognises the import by its "core/i18n/i18n" path
+import { t } from "../../core/i18n/i18n.ts";
+
 export interface ResizableDialogOptions {
   minWidth?: number;
   minHeight?: number;
@@ -26,7 +29,7 @@ export function makeResizable(
     "background:linear-gradient(135deg, transparent 0 50%, rgba(128,128,128,0.9) 50% 60%, transparent 60% 70%, rgba(128,128,128,0.9) 70% 80%, transparent 80%);",
     "opacity:0.4;",
   ].join("");
-  grip.dataset.tip = "Drag to resize";
+  grip.dataset.tip = t("Drag to resize");
   grip.dataset.tipSize = "13px";
   dialog.appendChild(grip);
 

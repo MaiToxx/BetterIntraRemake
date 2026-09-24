@@ -26,6 +26,7 @@ import {
 import GRIP_VERTICAL_SVG from "../../../assets/svg/grip-vertical.svg?raw";
 import EYE_SVG from "../../../assets/svg/eye.svg?raw";
 import EYE_SLASH_SVG from "../../../assets/svg/eye-slash.svg?raw";
+import { t } from "../../../core/i18n/i18n.ts";
 
 /** Index of the badge being dragged in the badges tab, if any. */
 let badgeDragIdx: number | null = null;
@@ -98,7 +99,7 @@ function renderAvatarPanel(
       <div class="flex flex-col gap-5 sm:flex-row sm:items-start" data-avatar-row>
         <div class="flex-1 min-w-0">
           ${renderUrlField(
-            "Image URL",
+            t("Image URL"),
             fieldValue(state, "avatar", uploads),
             (val) => onFormUpdate({ avatar: val }),
             history.avatar,
@@ -120,7 +121,7 @@ function renderAvatarPanel(
                 type="radio"
                 name="PROFILE_AVATAR_BG_MODE"
                 class="btn btn-sm join-item flex-1"
-                aria-label="Color"
+                aria-label="${t("Color")}"
                 value="custom"
                 ?checked="${!isTransparent}"
                 @change="${() => onFormUpdate({ avatarBg: "#00bcba" })}"
@@ -143,13 +144,13 @@ function renderAvatarPanel(
             </div>
           </div>
           <div class="pt-2">
-            <span class="text-xs opacity-60">Border</span>
+            <span class="text-xs opacity-60">${t("Border")}</span>
             <div class="join w-full mt-1">
               <input
                 type="radio"
                 name="PROFILE_DECORATION"
                 class="btn btn-sm join-item flex-1"
-                aria-label="None"
+                aria-label="${t("None")}"
                 value="none"
                 ?checked="${state.decoration === "none"}"
                 @change="${() => onFormUpdate({ decoration: "none" })}"
@@ -158,7 +159,7 @@ function renderAvatarPanel(
                 type="radio"
                 name="PROFILE_DECORATION"
                 class="btn btn-sm join-item flex-1"
-                aria-label="Solid"
+                aria-label="${t("Solid")}"
                 value="solid"
                 ?checked="${state.decoration === "solid"}"
                 @change="${() => onFormUpdate({ decoration: "solid" })}"
@@ -195,7 +196,7 @@ function renderAvatarPanel(
             : html`<div
                 class="w-52 h-52 rounded-full bg-base-300 flex items-center justify-center"
               >
-                <span class="text-xs opacity-50">No avatar URL set</span>
+                <span class="text-xs opacity-50">${t("No avatar URL set")}</span>
               </div>`}
         </div>
       </div>
@@ -215,12 +216,12 @@ function renderBannerPanel(
       <div
         class="text-xs font-semibold uppercase tracking-wider opacity-50 mb-3"
       >
-        Banner
+        ${t("Banner")}
       </div>
       ${state.bannerColor
         ? ""
         : html`${renderUrlField(
-            "Image URL",
+            t("Image URL"),
             fieldValue(state, "banner", uploads),
             (val) => onFormUpdate({ banner: val }),
             history.banner,
@@ -233,7 +234,7 @@ function renderBannerPanel(
       ${state.bannerColor
         ? html`<div class="form-control w-full">
             <label class="label py-1">
-              <span class="label-text opacity-80">Color</span>
+              <span class="label-text opacity-80">${t("Color")}</span>
             </label>
             <input
               type="color"
@@ -260,7 +261,7 @@ function renderBannerPanel(
           type="radio"
           name="PROFILE_BANNER_TYPE"
           class="btn btn-sm join-item flex-1"
-          aria-label="Color"
+          aria-label="${t("Color")}"
           value="color"
           ?checked="${state.bannerColor !== ""}"
           @change="${() =>
@@ -283,12 +284,12 @@ function renderBackgroundPanel(
       <div
         class="text-xs font-semibold uppercase tracking-wider opacity-50 mb-3"
       >
-        Background
+        ${t("Background")}
       </div>
       ${state.backgroundColor
         ? ""
         : html`${renderUrlField(
-            "Image URL",
+            t("Image URL"),
             fieldValue(state, "background", uploads),
             (val) => onFormUpdate({ background: val }),
             history.background,
@@ -303,7 +304,7 @@ function renderBackgroundPanel(
       ${state.backgroundColor
         ? html`<div class="form-control w-full">
             <label class="label py-1">
-              <span class="label-text opacity-80">Color</span>
+              <span class="label-text opacity-80">${t("Color")}</span>
             </label>
             <input
               type="color"
@@ -331,7 +332,7 @@ function renderBackgroundPanel(
           type="radio"
           name="PROFILE_BACKGROUND_TYPE"
           class="btn btn-sm join-item flex-1"
-          aria-label="Color"
+          aria-label="${t("Color")}"
           value="color"
           ?checked="${state.backgroundColor !== ""}"
           @change="${() =>
@@ -352,10 +353,10 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
   );
   const mergedTitles = [
     ...normalizedOrder,
-    ...liveBadges.filter((t) => !normalizedOrder.includes(t)),
+    ...liveBadges.filter((title) => !normalizedOrder.includes(title)),
   ];
   const badgeTitles = mergedTitles.filter(
-    (t, i) => mergedTitles.indexOf(t) === i,
+    (title, i) => mergedTitles.indexOf(title) === i,
   );
 
   const setBadgeHidden = (title: string, hidden: boolean) => {
@@ -376,8 +377,8 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
     const [removed] = list.splice(from, 1);
     list.splice(to, 0, removed);
     const hidden = badgeTitles
-      .filter((t) => knownHidden.has(t.toLowerCase()))
-      .map((t) => `-${t}`);
+      .filter((title) => knownHidden.has(title.toLowerCase()))
+      .map((title) => `-${title}`);
     onFormUpdate({ badgeOrder: [...list, ...hidden] });
   };
 
@@ -390,7 +391,7 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
           <div
             class="text-xs font-semibold uppercase tracking-wider opacity-50 mb-3"
           >
-            Background color
+            ${t("Background color")}
           </div>
           <div class="form-control">
             <div class="flex gap-2 items-center">
@@ -408,7 +409,7 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
                 class="btn btn-ghost btn-sm shrink-0"
                 @click="${() => onFormUpdate({ badgeBg: "" })}"
               >
-                Default
+                ${t("Default")}
               </button>
             </div>
           </div>
@@ -422,7 +423,7 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
               class="flex items-center justify-between cursor-pointer gap-2"
             >
               <span class="label-text opacity-80"
-                >Wrap onto multiple lines</span
+                >${t("Wrap onto multiple lines")}</span
               >
               <input
                 type="checkbox"
@@ -442,11 +443,11 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
         <div
           class="text-xs font-semibold uppercase tracking-wider opacity-50 mb-3"
         >
-          Order & visibility
+          ${t("Order & visibility")}
         </div>
         <div class="flex flex-wrap gap-3 items-center">
           <span class="text-xs opacity-50 w-full pb-1"
-            >Drag to reorder · click the eye to hide</span
+            >${t("Drag to reorder · click the eye to hide")}</span
           >
           ${badgeTitles.map((title, idx) => {
             const isHidden = knownHidden.has(title.toLowerCase());
@@ -481,7 +482,7 @@ function renderBadgesPanel(state: FormState, onFormUpdate: FormUpdate) {
                   type="button"
                   class="p-1 -ml-1 rounded hover:bg-black/10 transition-colors cursor-pointer flex items-center justify-center text-white"
                   @click="${() => setBadgeHidden(title, !isHidden)}"
-                  data-tip="${isHidden ? "Show badge" : "Hide badge"}"
+                  data-tip="${isHidden ? t("Show badge") : t("Hide badge")}"
                 >
                   ${isHidden
                     ? html`<span

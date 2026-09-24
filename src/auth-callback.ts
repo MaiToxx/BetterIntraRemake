@@ -23,6 +23,7 @@ import {
   peekAuthFlow,
   waitForAuthFlow,
 } from "./features/account/auth-callback.ts";
+import { initI18n, t } from "./core/i18n/i18n.ts";
 
 const VERSION = __APP_VERSION__;
 
@@ -65,6 +66,9 @@ function showStatus(title: string, lines: string[], ok: boolean) {
 
 (async () => {
   console.info(`Better Intra ${VERSION}: auth callback script running`);
+  // The status texts below in the language of the settings.
+  await initI18n();
+  const browser = navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium";
 
   let creds: { token: string; login: string } | null = null;
   for (const s of Array.from(document.scripts)) {
@@ -73,11 +77,14 @@ function showStatus(title: string, lines: string[], ok: boolean) {
   }
   if (!creds) {
     showStatus(
-      "Better Intra could not read the login result",
+      t("Better Intra could not read the login result"),
       [
-        "This page does not contain the expected credentials.",
-        "Close this window and try Connect with 42 again.",
-        `Diagnostic: ${document.scripts.length} script(s) on the page, ${navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium"}.`,
+        t("This page does not contain the expected credentials."),
+        t("Close this window and try Connect with 42 again."),
+        t("Diagnostic: {count} script(s) on the page, {browser}.", {
+          count: document.scripts.length,
+          browser,
+        }),
       ],
       false,
     );
@@ -95,11 +102,16 @@ function showStatus(title: string, lines: string[], ok: boolean) {
       `Better Intra: auth callback page reached without a login in progress; ignoring. ${diag}`,
     );
     showStatus(
-      "Login not started from Better Intra",
+      t("Login not started from Better Intra"),
       [
-        "For your safety this window is ignored: the extension did not start a login in the last 10 minutes.",
-        "Close this window, then click Connect with 42 in the extension popup or in the hub, and complete the login within 10 minutes.",
-        `Diagnostic: ${diag}, ${navigator.userAgent.includes("Firefox") ? "Firefox" : "Chromium"}.`,
+        t(
+          "For your safety this window is ignored: the extension did not start a login in the last 10 minutes.",
+        ),
+        t(
+          "Close this window, then click Connect with 42 in the extension popup or in the hub, and complete the login within 10 minutes.",
+        ),
+        // the diagnostic itself stays in English: it is for a bug report
+        t("Diagnostic: {diag}, {browser}.", { diag, browser }),
       ],
       false,
     );
@@ -114,8 +126,8 @@ function showStatus(title: string, lines: string[], ok: boolean) {
   await chrome.storage.local.remove("CLOUD_AUTH_FAILED");
 
   showStatus(
-    `Connected as ${creds.login}`,
-    ["You can close this window. Your Intra tabs will reload."],
+    t("Connected as {login}", { login: creds.login }),
+    [t("You can close this window. Your Intra tabs will reload.")],
     true,
   );
 

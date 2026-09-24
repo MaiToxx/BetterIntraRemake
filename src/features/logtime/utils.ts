@@ -1,4 +1,30 @@
+import { intlLocale, t, tp } from "../../core/i18n/i18n.ts";
+
 const rgbaCache = new Map<string, string>();
+
+/** French month and day names are lowercase: the calendar shows them as titles. */
+const capitalize = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The month's name in the UI language ("September", "Septembre"). */
+export function monthName(year: number, monthIndex: number): string {
+  return capitalize(
+    new Intl.DateTimeFormat(intlLocale("en-US"), { month: "long" }).format(
+      new Date(year, monthIndex),
+    ),
+  );
+}
+
+/**
+ * The days of the week, Monday first, in the UI language: "narrow" gives
+ * M T W T F S S (L M M J V S D), "short" Mon Tue… (Lun. Mar.…).
+ */
+export function weekdayNames(style: "narrow" | "short"): string[] {
+  const fmt = new Intl.DateTimeFormat(intlLocale("en-US"), { weekday: style });
+  // 1 January 2024 was a Monday
+  return Array.from({ length: 7 }, (_, i) =>
+    capitalize(fmt.format(new Date(2024, 0, 1 + i))),
+  );
+}
 
 export function limit(s: unknown): string {
   return Array.from(typeof s === "string" ? s : "🌮")
@@ -21,17 +47,21 @@ export const fmtHours = (secs: number): string => {
 export function goalTip(ym: string, total: number, goalSecs: number, now = new Date()): string {
   if (!(goalSecs > 0)) return "";
   const left = goalSecs - total;
-  if (left <= 0) return "Goal met";
+  if (left <= 0) return t("Goal met");
   const [year, mon] = ym.split("-").map(Number);
   const card = year * 12 + (mon - 1);
   const current = now.getFullYear() * 12 + now.getMonth();
-  if (card < current) return `Missed by ${fmtHours(left)}`;
+  if (card < current) return t("Missed by {h}", { h: fmtHours(left) });
   const lastDay = new Date(year, mon, 0).getDate();
   const daysLeft = card > current ? lastDay : lastDay - now.getDate() + 1;
   const perDay = fmtHours(Math.ceil(left / daysLeft / 60) * 60);
   return daysLeft === 1
-    ? `${fmtHours(left)} left today`
-    : `${fmtHours(left)} left · ${perDay}/day for ${daysLeft} days (today included)`;
+    ? t("{left} left today", { left: fmtHours(left) })
+    : t("{left} left · {perDay}/day for {n} days (today included)", {
+        left: fmtHours(left),
+        perDay,
+        n: daysLeft,
+      });
 }
 
 export function hexToRgba(hex: string, opacity: number): string {
@@ -105,10 +135,10 @@ export const getLastSeenFormatted = (
 
   const relative =
     diffDays === 0
-      ? "today"
+      ? t("today")
       : diffDays === 1
-        ? "yesterday"
-        : `${diffDays} days ago`;
+        ? t("yesterday")
+        : tp(diffDays, "{n} day ago", "{n} days ago");
   if (mode === "days") return relative;
 
   const [, m, d] = lastDateStr.split("-");

@@ -3,6 +3,10 @@ import { vi } from "vitest";
 const store = new Map<string, unknown>();
 
 (globalThis as any).chrome = {
+  // An English browser, whatever the machine running the tests speaks: the
+  // tests assert English text, and the node environment's navigator.language
+  // is the OS locale (src/core/i18n/i18n.ts falls back to it).
+  i18n: { getUILanguage: () => "en-US" },
   storage: {
     local: {
       get: vi.fn(async (keys: string | string[] | null) => {

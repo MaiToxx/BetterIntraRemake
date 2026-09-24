@@ -10,6 +10,7 @@
  */
 import { getConfigMany } from "../../../core/config.ts";
 import { WORKER_URL, hashedLogin, workerFetch } from "../../../core/worker.ts";
+import { msg, t } from "../../../core/i18n/i18n.ts";
 
 export type ImageSlot = "avatar" | "banner" | "background";
 
@@ -20,8 +21,8 @@ export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
 const ACCEPTED = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 
-const TYPE_ERROR = "Choose a PNG, JPEG, GIF or WebP image.";
-const SIZE_ERROR = "The image is over 2 MB. Resize it, or paste a link instead.";
+const TYPE_ERROR = msg("Choose a PNG, JPEG, GIF or WebP image.");
+const SIZE_ERROR = msg("The image is over 2 MB. Resize it, or paste a link instead.");
 
 export type UploadResult = { ok: true; url: string } | { ok: false; error: string };
 export type PreparedImage = { ok: true; blob: Blob } | { ok: false; error: string };
@@ -76,13 +77,13 @@ async function shrinkJpeg(file: Blob, maxSide: number): Promise<Blob | null> {
  * would drop a PNG's or WebP's transparency and a GIF's animation.
  */
 export async function prepareUpload(slot: ImageSlot, file: File): Promise<PreparedImage> {
-  if (!ACCEPTED.has(file.type)) return { ok: false, error: TYPE_ERROR };
+  if (!ACCEPTED.has(file.type)) return { ok: false, error: t(TYPE_ERROR) };
   if (file.size <= MAX_UPLOAD_BYTES) return { ok: true, blob: file };
   if (file.type === "image/jpeg" && file.size <= MAX_SOURCE_BYTES) {
     const smaller = await shrinkJpeg(file, SHRINK_MAX_SIDE[slot]);
     if (smaller) return { ok: true, blob: smaller };
   }
-  return { ok: false, error: SIZE_ERROR };
+  return { ok: false, error: t(SIZE_ERROR) };
 }
 
 export async function uploadProfileImage(
@@ -90,14 +91,14 @@ export async function uploadProfileImage(
   file: Blob,
 ): Promise<UploadResult> {
   if (!ACCEPTED.has(file.type)) {
-    return { ok: false, error: TYPE_ERROR };
+    return { ok: false, error: t(TYPE_ERROR) };
   }
   if (file.size > MAX_UPLOAD_BYTES) {
-    return { ok: false, error: SIZE_ERROR };
+    return { ok: false, error: t(SIZE_ERROR) };
   }
   const { CLOUD_LOGIN, CLOUD_TOKEN } = await getConfigMany(["CLOUD_LOGIN", "CLOUD_TOKEN"]);
   if (!CLOUD_LOGIN || !CLOUD_TOKEN) {
-    return { ok: false, error: "Sign in with 42 first (bottom of this editor) to upload images." };
+    return { ok: false, error: t("Sign in with 42 first (bottom of this editor) to upload images.") };
   }
   const res = await workerFetch(`/api/v1/private/images?slot=${slot}`, {
     method: "POST",
@@ -106,13 +107,13 @@ export async function uploadProfileImage(
     auth: { login: CLOUD_LOGIN, token: CLOUD_TOKEN },
     timeoutMs: 30_000,
   });
-  if (res.status === 0) return { ok: false, error: "Could not reach the Better Intra server." };
-  if (res.status === 401) return { ok: false, error: "Your session expired: reconnect, then retry." };
-  if (res.status === 413) return { ok: false, error: "The image is over 2 MB." };
-  if (res.status === 429) return { ok: false, error: "Too many uploads: wait a minute." };
+  if (res.status === 0) return { ok: false, error: t("Could not reach the Better Intra server.") };
+  if (res.status === 401) return { ok: false, error: t("Your session expired: reconnect, then retry.") };
+  if (res.status === 413) return { ok: false, error: t("The image is over 2 MB.") };
+  if (res.status === 429) return { ok: false, error: t("Too many uploads: wait a minute.") };
   const url = (res.json as { url?: unknown } | null)?.url;
   if (!res.ok || typeof url !== "string") {
-    return { ok: false, error: `Upload failed (${res.status}).` };
+    return { ok: false, error: t("Upload failed ({status}).", { status: res.status }) };
   }
   return { ok: true, url };
 }

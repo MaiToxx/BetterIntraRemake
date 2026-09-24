@@ -16,6 +16,7 @@ import {
   waitForIntrapyToken,
 } from "../../core/intra/intrapy.ts";
 import { WORKER_HOST, workerFetch } from "../../core/worker.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export const INTRA_LOGIN_MESSAGE = "FT_INTRA_LOGIN";
 /**
@@ -59,15 +60,21 @@ async function signIn(): Promise<IntraLoginResult> {
     if (onV3 && isJwtExpired(getStoredIntrapyToken())) {
       return {
         ok: false,
-        error:
+        error: t(
           "The Intra session token on this page has expired and the page did not issue a new one. Reload the page, wait a few seconds and try again.",
+        ),
       };
     }
     return {
       ok: false,
       error: onV3
-        ? "No Intra session token found on this page yet. Reload the page, wait a few seconds and try again."
-        : "Sign in from the Intra v3 profile page: open https://profile-v3.intra.42.fr/ and sign in from there.",
+        ? t(
+            "No Intra session token found on this page yet. Reload the page, wait a few seconds and try again.",
+          )
+        : t(
+            "Sign in from the Intra v3 profile page: open {url} and sign in from there.",
+            { url: "https://profile-v3.intra.42.fr/" },
+          ),
     };
   }
 
@@ -81,32 +88,42 @@ async function signIn(): Promise<IntraLoginResult> {
   if (res.status === 0) {
     return {
       ok: false,
-      error: `Could not reach the Better Intra server (${WORKER_HOST}). If the extension asked for access to that site, click Allow, then retry.\nBetter Intra ${__APP_VERSION__}`,
+      error: `${t(
+        "Could not reach the Better Intra server ({host}). If the extension asked for access to that site, click Allow, then retry.",
+        { host: WORKER_HOST },
+      )}\nBetter Intra ${__APP_VERSION__}`,
     };
   }
   if (res.status === 429) {
     // the worker limits sign-ins per login and per address
     return {
       ok: false,
-      error: "Too many sign-in attempts. Wait a minute, then try again.",
+      error: t("Too many sign-in attempts. Wait a minute, then try again."),
     };
   }
   if (!res.ok) {
     const text = res.message ?? res.text;
-    const details = `Server refused the login (${res.status}): ${text.slice(0, 200)}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`;
+    const details = `${t("Server refused the login ({status}): {text}", {
+      status: res.status,
+      text: text.slice(0, 200),
+    })}\nBetter Intra ${__APP_VERSION__} · ${location.hostname}`;
     // The client already skips an expired JWT, so a 401 means the signature,
     // a claim or the clock did not check out, and a fresh token usually does.
     // Say what to do first; the raw answer stays below it for bug reports.
     if (res.status === 401) {
       return {
         ok: false,
-        error: `Intra did not accept this page's session token. Reload the page, then try again.\n${details}`,
+        error: `${t(
+          "Intra did not accept this page's session token. Reload the page, then try again.",
+        )}\n${details}`,
       };
     }
     if (res.status === 503) {
       return {
         ok: false,
-        error: `42's key server did not answer the Better Intra server. Try again in a minute.\n${details}`,
+        error: `${t(
+          "42's key server did not answer the Better Intra server. Try again in a minute.",
+        )}\n${details}`,
       };
     }
     return { ok: false, error: details };
@@ -114,7 +131,7 @@ async function signIn(): Promise<IntraLoginResult> {
 
   const data = (res.json ?? {}) as { token?: string; login?: string };
   if (!data.token || !data.login) {
-    return { ok: false, error: "Unexpected server response." };
+    return { ok: false, error: t("Unexpected server response.") };
   }
 
   await chrome.storage.local.set({
@@ -142,8 +159,9 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
     }
     return {
       ok: false,
-      error:
+      error: t(
         "Sign in from the Intra v3 profile page (just opened in a new tab): click the Better Intra toolbar icon again there.",
+      ),
     };
   }
   // The content script stores the session before answering, and the
@@ -156,7 +174,7 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
     const result = (await chrome.tabs.sendMessage(tab.id, {
       type: INTRA_LOGIN_MESSAGE,
     })) as IntraLoginResult | undefined;
-    return result ?? { ok: false, error: "No answer from the Intra page." };
+    return result ?? { ok: false, error: t("No answer from the Intra page.") };
   } catch {
     const after = await readStoredSession();
     if (after.token && after.login && after.token !== before.token) {
@@ -164,8 +182,9 @@ export async function requestIntraLoginFromActiveTab(): Promise<IntraLoginResult
     }
     return {
       ok: false,
-      error:
+      error: t(
         "Better Intra is not running on this tab yet (it was installed or updated after the tab was opened). Reload the tab, then try again.",
+      ),
     };
   }
 }

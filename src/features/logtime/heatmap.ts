@@ -1,6 +1,6 @@
 import { html } from "lit-html";
 import { MAX_INTENSITY_SECS } from "./constants";
-import { fmtHours, hexToRgba } from "./utils";
+import { fmtHours, hexToRgba, monthName, weekdayNames } from "./utils";
 import type { LogtimeConfig } from "./types.ts";
 
 export function getMondayWeekStart(date: Date): Date {
@@ -115,9 +115,7 @@ export function renderHeatmapCard(
     if (colLatestMonth !== -1 && colLatestMonth !== lastLabelMonth) {
       const labelYm = `${colYear}-${String(colLatestMonth + 1).padStart(2, "0")}`;
       monthLabels.push({
-        label: new Intl.DateTimeFormat("en-US", { month: "long" }).format(
-          new Date(colYear, colLatestMonth),
-        ),
+        label: monthName(colYear, colLatestMonth),
         col: w,
         ym: labelYm,
       });
@@ -154,7 +152,7 @@ export function renderHeatmapCard(
 
   const displayYear = String(columns[columns.length - 1].year);
 
-  const dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const dayLabels = weekdayNames("short");
 
   return html`<div class="month-card heatmap-card">
     <div class="heatmap-months-row" style="display:flex; height:18px;">

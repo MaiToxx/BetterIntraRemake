@@ -32,6 +32,7 @@ import { publishDefaultLookOnce } from "./features/customize/publish.ts";
 import { initPerfStyles } from "./features/performance/perf.ts";
 import { initEasterEggs } from "./features/eggs/eggs.ts";
 import { maybeSyncCalendar } from "./features/calendar/calendar-sync.ts";
+import { initI18n, t } from "./core/i18n/i18n.ts";
 
 // The toolbar popup asks this page: sign in with its Intra token (the popup
 // cannot see it), "is Better Intra running here?", and open the hub.
@@ -39,6 +40,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) =>
   answerPopupMessage(message, sendResponse, { openHub }),
 );
 import { html, render } from "lit-html";
+
+// The language (UI_LANGUAGE, or the browser's) before any text is drawn:
+// everything that renders at start-up waits for it (one settings read).
+const i18nReady = initI18n();
 
 initThemeManager();
 // the Intra's transparent fixed column eats taps on phones, on every v3 app
@@ -50,7 +55,7 @@ void publishDefaultLookOnce();
 // place before the React app paints, so they go here with the other styles.
 void initPerfStyles();
 void initEasterEggs();
-void initAnnouncementBanner();
+void i18nReady.then(() => initAnnouncementBanner());
 initGlobalTooltips(getIsLight);
 
 // hook.js is declared in the manifests as a content script running in the
@@ -83,7 +88,7 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
   shortcuts: initShortcuts,
 };
 
-(function v2Warning() {
+void i18nReady.then(function v2Warning() {
   if (window.location.hostname !== "profile.intra.42.fr") return;
   if (window.location.pathname !== "/") return;
   if (sessionStorage.getItem("ft-v2-dismissed") === "1") return;
@@ -96,6 +101,10 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
 
   const banner = document.createElement("div");
   banner.id = "ft-v2-warning";
+  // One sentence for the word order; the bold "v3" goes where {v3} stands.
+  const [beforeV3, afterV3 = ""] = t(
+    "Better Intra is designed for the {v3} profile. You are on the old v2.",
+  ).split("{v3}");
 
   render(
     html`
@@ -141,10 +150,9 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
         }
       </style>
       <div class="ft-v2-bnr">
-        Better Intra is designed for the
-        <strong>v3</strong> profile. You are on the old v2.
-        <a href="https://profile.intra.42.fr/v3_early_access">Switch to v3</a>
-        <button class="ft-v2-dismiss" @click="${dismiss}" data-tip="Dismiss">
+        ${beforeV3}<strong>v3</strong>${afterV3}
+        <a href="https://profile.intra.42.fr/v3_early_access">${t("Switch to v3")}</a>
+        <button class="ft-v2-dismiss" @click="${dismiss}" data-tip="${t("Dismiss")}">
           &times;
         </button>
       </div>
@@ -160,7 +168,7 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
     }
   };
   tryInject();
-})();
+});
 
 (async function runBetterIntra() {
   // The worker currently returns the result in the query string. Also accept
@@ -203,6 +211,7 @@ const featureInitializers: { [key: string]: () => Promise<void> } = {
 
     if (target) {
       try {
+        await i18nReady;
         // The subject tracker always runs: badges/data are local. Sharing
         // with the collaborative registry is an opt-in setting instead.
         void initSubjectTracker();

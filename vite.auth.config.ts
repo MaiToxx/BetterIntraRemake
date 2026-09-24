@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { frCatalogPlugin } from "./scripts/i18n-catalog.ts";
 import { resolve } from "path";
 import pkg from "./package.json" with { type: "json" };
 import { readRepoInfo, readWorkerUrl, readAuthMode } from "./scripts/repo-info.js";
@@ -12,6 +13,7 @@ const authMode = readAuthMode();
 const storeBuild = process.env.CHROME_STORE === "1";
 
 export default defineConfig({
+  plugins: [frCatalogPlugin()],
   build: {
     outDir: outDir,
     emptyOutDir: false,

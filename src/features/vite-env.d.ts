@@ -34,3 +34,9 @@ declare const __STORE_BUILD__: boolean;
 
 /** The browser this build is for (background build only; "firefox" in tests). */
 declare const __TARGET__: "firefox" | "chrome";
+
+/** The French catalog, English text → French (scripts/i18n-catalog.ts). */
+declare module "virtual:bi-fr-catalog" {
+  const catalog: Readonly<Record<string, string>>;
+  export default catalog;
+}

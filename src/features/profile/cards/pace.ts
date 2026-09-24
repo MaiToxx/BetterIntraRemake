@@ -1,4 +1,5 @@
 import { getMondayWeekStart } from "../../logtime/heatmap.ts";
+import { t, tp } from "../../../core/i18n/i18n.ts";
 
 let paceData: Record<string, string> | null = null;
 let pacePollAttempts = 0;
@@ -26,7 +27,7 @@ function parseTimeToMin(timeStr: string): number {
 function formatDuration(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return m > 0 ? t("{h}h {m}m", { h, m }) : t("{h}h", { h });
 }
 
 function parseDays(el: SVGTextElement): number {
@@ -46,17 +47,17 @@ function applyDaysView(
 ) {
   if (timeLeft) {
     const remaining = Math.max(0, total - elapsed);
-    titleEl.textContent = "Time left";
-    countText.textContent = `${remaining} days`;
-    totalText.textContent = `Of ${total}`;
+    titleEl.textContent = t("Time left");
+    countText.textContent = tp(remaining, "{n} day", "{n} days");
+    totalText.textContent = t("Of {total}", { total });
     path?.setAttribute(
       "stroke-dashoffset",
       String(circumference * (remaining / total)),
     );
   } else {
-    titleEl.textContent = "Elapsed time";
-    countText.textContent = `${elapsed} days`;
-    totalText.textContent = `On ${total}`;
+    titleEl.textContent = t("Elapsed time");
+    countText.textContent = tp(elapsed, "{n} day", "{n} days");
+    totalText.textContent = t("On {total}", { total });
     path?.setAttribute(
       "stroke-dashoffset",
       String(circumference * (1 - elapsed / total)),
@@ -170,7 +171,10 @@ function updatePaceBars() {
     bars[i].style.backgroundColor = mainColor;
     bars[i].classList.add("bg-legacy-main");
     labelEls[i].textContent =
-      i === 3 ? "This week" : weeks[i].replace(/^\d+-/, "");
+      i === 3
+        ? t("This week")
+        : // "2026-W38" shows as W38 (S38 in French: semaine)
+          t("W{week}", { week: weeks[i].replace(/^\d+-W/, "") });
   }
 
   const tipTexts = weekMins.map((m) => formatDuration(m).toUpperCase());

@@ -6,9 +6,30 @@
  * (the page follows the theme's own mode, see theme-manager.ts).
  */
 import { html, nothing } from "lit-html";
+import { t } from "../../../core/i18n/i18n.ts";
 import { THEMES } from "../../../core/theme/theme-manager.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import { saveSetting, settingIds } from "./context.ts";
+
+/**
+ * The title of a group of swatches, translated. The theme names themselves
+ * stay as written in every language; so does a title this list does not know
+ * (theme-options.ts is generated).
+ */
+function groupTitle(label: string): string {
+  switch (label) {
+    case "Dark":
+      return t("Dark");
+    case "Light":
+      return t("Light");
+    case "Dark · Palettes":
+      return t("Dark · Palettes");
+    case "Light · Palettes":
+      return t("Light · Palettes");
+    default:
+      return label;
+  }
+}
 
 export function renderThemePreset(def: HubSettingDef, value: unknown) {
   const ids = settingIds(def);
@@ -31,7 +52,7 @@ export function renderThemePreset(def: HubSettingDef, value: unknown) {
         return html`<div
           class="w-full text-xs font-bold uppercase opacity-50 pt-1"
         >
-          ${o.label}
+          ${groupTitle(o.label ?? "")}
         </div>`;
       }
       const hsl = (o as { color?: string }).color ?? "199 89% 48%";

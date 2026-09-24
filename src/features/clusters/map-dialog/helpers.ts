@@ -1,5 +1,6 @@
 import { normalizeSeatId } from "./seats";
 import type { ClusterInfo } from "./context";
+import { intlLocale, t } from "../../../core/i18n/i18n.ts";
 
 /**
  * The campus shown in the header: its manifest name, else its id, else (no
@@ -12,14 +13,14 @@ export function campusDisplayName(
   campusId: string,
 ): string {
   return (
-    options.find((o) => o.id === campusId)?.name || campusId || "your campus"
+    options.find((o) => o.id === campusId)?.name || campusId || t("your campus")
   );
 }
 
 export function formatCampusClock(timezone?: string): string {
   if (!timezone) return "";
   try {
-    return new Intl.DateTimeFormat("en-GB", {
+    return new Intl.DateTimeFormat(intlLocale("en-GB"), {
       timeZone: timezone,
       hour: "2-digit",
       minute: "2-digit",

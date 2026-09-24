@@ -13,6 +13,7 @@ import MOON_SVG from "../../assets/svg/moon.svg?raw";
 import CLOUD_SVG from "../../assets/svg/cloud.svg?raw";
 import ICON_SVG from "../../assets/svg/icon.svg?raw";
 import { CLOUD_SYNC_KEYS, CONFIG_DEFAULT, getConfig } from "../../core/config.ts";
+import { getLang, t } from "../../core/i18n/i18n.ts";
 import { LOCAL_ONLY_KEYS } from "../../core/config/keys.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
@@ -106,7 +107,7 @@ function createDialog(): HTMLDialogElement {
   dialog.id = "hub-dialog";
   // Its visible title is inside the shadow root, where aria-labelledby on
   // this light-DOM element cannot reach: name it directly.
-  dialog.setAttribute("aria-label", `${HUB_INFO.name} settings`);
+  dialog.setAttribute("aria-label", t("Better Intra settings"));
   dialog.className =
     "modal-box hub-modal-box p-0 overflow-hidden bg-base-100 rounded-3xl shadow-2xl border-none outline-none";
 
@@ -161,23 +162,25 @@ async function getInitialTheme() {
 
 /**
  * "Never synced", or "Synced 12 Sep 14:03": a time alone read like today
- * whatever the day of the last push.
+ * whatever the day of the last push. In English the date is in the viewer's
+ * locale; in French it is French, like the sentence around it.
  */
 export function formatSyncStatus(lastSync: unknown, now = new Date()): string {
   if (typeof lastSync !== "number" && typeof lastSync !== "string") {
-    return "Never synced";
+    return t("Never synced");
   }
   const date = new Date(lastSync);
-  if (Number.isNaN(date.getTime())) return "Never synced";
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (Number.isNaN(date.getTime())) return t("Never synced");
+  const locales = getLang() === "fr" ? ["fr-FR"] : [];
+  const time = date.toLocaleTimeString(locales, { hour: "2-digit", minute: "2-digit" });
   const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) return `Synced at ${time}`;
-  const day = date.toLocaleDateString([], {
+  if (sameDay) return t("Synced at {time}", { time });
+  const day = date.toLocaleDateString(locales, {
     day: "numeric",
     month: "short",
     ...(date.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
   });
-  return `Synced ${day} ${time}`;
+  return t("Synced {day} {time}", { day, time });
 }
 
 /**
@@ -213,7 +216,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
     });
   };
   const signOut = async () => {
-    if (!window.confirm("Sign out of Better Intra on this browser?")) return;
+    if (!window.confirm(t("Sign out of Better Intra on this browser?"))) return;
     await logoutCloud();
     window.location.reload();
   };
@@ -301,8 +304,8 @@ async function createModal(active: FeatureId[]): Promise<void> {
             type="search"
             id="hub-search"
             class="input input-sm w-full"
-            placeholder="Search settings"
-            aria-label="Search settings"
+            placeholder="${t("Search settings")}"
+            aria-label="${t("Search settings")}"
             aria-describedby="hub-search-results"
             autocomplete="off"
           />
@@ -315,7 +318,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
         <button
           type="button"
           class="btn btn-circle btn-ghost"
-          aria-label="Close settings"
+          aria-label="${t("Close settings")}"
           @click="${() => dialog.close()}"
         >
           <span aria-hidden="true">✕</span>
@@ -328,22 +331,23 @@ async function createModal(active: FeatureId[]): Promise<void> {
             data-hub-auth-banner
           >
             <span class="text-sm font-semibold"
-              >Your Better Intra sign-in expired: cloud sync is paused until
-              you sign in again.</span
+              >${t(
+                "Your Better Intra sign-in expired: cloud sync is paused until you sign in again.",
+              )}</span
             >
             <button
               type="button"
               class="btn btn-warning btn-sm font-bold"
               @click="${connect}"
             >
-              Sign in again
+              ${t("Sign in again")}
             </button>
           </div>`
         : ""}
 
       <div
         role="tablist"
-        aria-label="Settings sections"
+        aria-label="${t("Settings sections")}"
         class="tabs tabs-lg tabs-border flex-1 overflow-hidden"
       >
         ${tabsContent}
@@ -363,7 +367,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
             <input
               type="checkbox"
               id="hub-theme-toggle"
-              aria-label="Dark theme"
+              aria-label="${t("Dark theme")}"
               ?checked="${currentTheme === "dark"}"
             />
             <span
@@ -371,14 +375,14 @@ async function createModal(active: FeatureId[]): Promise<void> {
               aria-hidden="true"
             >
               ${unsafeHTML(SUN_SVG)}
-              <span class="text-sm font-bold">Light</span>
+              <span class="text-sm font-bold">${t("Light")}</span>
             </span>
             <span
               class="swap-off flex items-center justify-center gap-1"
               aria-hidden="true"
             >
               ${unsafeHTML(MOON_SVG)}
-              <span class="text-sm font-bold">Dark</span>
+              <span class="text-sm font-bold">${t("Dark")}</span>
             </span>
           </label>
           <div class="flex items-center gap-2 text-xs flex-wrap min-w-0">
@@ -388,14 +392,14 @@ async function createModal(active: FeatureId[]): Promise<void> {
                     ><span class="size-4 inline-flex items-center" aria-hidden="true"
                       >${unsafeHTML(CLOUD_SVG)}</span
                     >
-                    ${login ? `Signed in as ${login}` : "Signed in"}</span
+                    ${login ? t("Signed in as {login}", { login }) : t("Signed in")}</span
                   >
                   <button
                     type="button"
                     class="btn btn-ghost btn-xs"
                     @click="${signOut}"
                   >
-                    Sign out
+                    ${t("Sign out")}
                   </button>
                   <span
                     id="hub-sync-status"
@@ -410,30 +414,32 @@ async function createModal(active: FeatureId[]): Promise<void> {
                       aria-describedby="hub-cloud-about"
                       @click="${connect}"
                     >
-                      Sign in with 42
+                      ${t("Sign in with 42")}
                     </button>
                     <span id="hub-cloud-about" class="opacity-70 max-w-sm">
-                      Optional: syncs your settings, friends and published
-                      look through the Better Intra server (${WORKER_HOST}).
+                      ${t(
+                        "Optional: syncs your settings, friends and published look through the Better Intra server ({host}).",
+                        { host: WORKER_HOST },
+                      )}
                       <a
                         class="underline"
                         href="${PRIVACY_URL}"
                         target="_blank"
                         rel="noopener noreferrer"
-                        >Privacy</a
+                        >${t("Privacy")}</a
                       >
                     </span>`}
             ${isConnected
               ? html`<div
                   class="join"
                   role="radiogroup"
-                  aria-label="Cloud push"
+                  aria-label="${t("Cloud push")}"
                 >
                   <input
                     type="radio"
                     name="hub-auto-push"
                     class="join-item btn btn-sm btn-outline border-base-content/20"
-                    aria-label="Manual push"
+                    aria-label="${t("Manual push")}"
                     value="manual"
                     @change="${() =>
                       chrome.storage.local.set({
@@ -444,7 +450,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
                     type="radio"
                     name="hub-auto-push"
                     class="join-item btn btn-sm btn-outline border-base-content/20"
-                    aria-label="Auto push"
+                    aria-label="${t("Auto push")}"
                     value="auto"
                     @change="${() =>
                       chrome.storage.local.set({
@@ -457,7 +463,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
                   id="hub-push-now"
                   class="btn btn-sm btn-outline border-base-content/20 hidden"
                 >
-                  Push now
+                  ${t("Push now")}
                 </button>`
               : ""}
             <span id="hub-push-status" class="hidden" role="status"></span>
@@ -467,7 +473,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
               class="btn btn-warning btn-xs font-bold hidden"
               @click="${connect}"
             >
-              Sign in again
+              ${t("Sign in again")}
             </button>
           </div>
         </div>
@@ -485,7 +491,7 @@ async function createModal(active: FeatureId[]): Promise<void> {
             <span class="size-5 flex items-center justify-center" aria-hidden="true">
               ${unsafeHTML(RELOAD_SVG)}
             </span>
-            Reload
+            ${t("Reload")}
           </button>
         </div>
       </div>
@@ -592,15 +598,15 @@ function isUserSetting(key: string): boolean {
 export function pushFailureText(reason: string): string {
   switch (reason) {
     case "auth":
-      return "Push failed: your sign-in expired";
+      return t("Push failed: your sign-in expired");
     case "network":
-      return "Push failed: the Better Intra server did not answer";
+      return t("Push failed: the Better Intra server did not answer");
     case "busy":
-      return "Push failed: too many pushes in a minute";
+      return t("Push failed: too many pushes in a minute");
     case "too-large":
-      return "Push failed: too large for the cloud (custom CSS, presets)";
+      return t("Push failed: too large for the cloud (custom CSS, presets)");
     default:
-      return "Push failed: the server refused it";
+      return t("Push failed: the server refused it");
   }
 }
 
@@ -697,7 +703,7 @@ async function bindCloudSync(
       if (changes === pushed) dirty = false;
       retries = 0;
       lastFailure = null;
-      showPushStatus("Pushed to the cloud", true);
+      showPushStatus(t("Pushed to the cloud"), true);
       if (syncStatus) {
         const last = (await chrome.storage.local.get("LAST_CLOUD_SYNC"))
           .LAST_CLOUD_SYNC;
@@ -707,7 +713,8 @@ async function bindCloudSync(
       return true;
     }
     lastFailure = result;
-    let text = `${pushFailureText(result)} - settings kept locally`;
+    const reason = pushFailureText(result);
+    let text = t("{reason} - settings kept locally", { reason });
     if (result === "auth") {
       // no retry: only a new sign-in can make this push go through
       if (!bannerUp) reconnect?.classList.remove("hidden");
@@ -723,7 +730,10 @@ async function bindCloudSync(
         timer = null;
         if (autoSelected()) void push();
       }, wait);
-      text += `, trying again in ${Math.round(wait / 60_000)} min`;
+      text = t("{reason} - settings kept locally, trying again in {n} min", {
+        reason,
+        n: Math.round(wait / 60_000),
+      });
     }
     showPushStatus(text, false);
     return false;
@@ -739,7 +749,7 @@ async function bindCloudSync(
 
   const markReloadNeeded = () => {
     if (!reloadHint || !reloadBtn) return;
-    reloadHint.textContent = "Reload to apply";
+    reloadHint.textContent = t("Reload to apply");
     reloadHint.classList.remove("hidden");
     reloadBtn.classList.remove("btn-success");
     reloadBtn.classList.add("btn-warning");
@@ -840,11 +850,11 @@ function bindSearch(shadow: ShadowRoot): void {
         results.textContent = "";
       } else {
         const names = FEATURE_DEFS.filter((f) => (counts.get(f.id) ?? 0) > 0).map(
-          (f) => `${f.name} (${counts.get(f.id)})`,
+          (f) => `${t(f.name)} (${counts.get(f.id)})`,
         );
         results.textContent = names.length
-          ? `Matches in ${names.join(", ")}`
-          : "No setting matches";
+          ? t("Matches in {tabs}", { tabs: names.join(", ") })
+          : t("No setting matches");
       }
     }
 

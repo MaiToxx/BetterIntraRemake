@@ -7,7 +7,15 @@ import {
   PAST_MONTHS_OPACITY,
   INTRA_FONT,
 } from "./constants";
-import { fmtHours, hexToRgba, safeLabelsColor, goalTip } from "./utils";
+import {
+  fmtHours,
+  hexToRgba,
+  safeLabelsColor,
+  goalTip,
+  monthName as monthLabel,
+  weekdayNames,
+} from "./utils";
+import { intlLocale, msg, t } from "../../core/i18n/i18n.ts";
 import type { LogtimeConfig, CalendarEvent, EventsByDate } from "./types.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { escapeHtml } from "../../core/dom/tooltip.ts";
@@ -27,10 +35,12 @@ export const CALENDAR_VIEWS: {
   label: string;
   icon: string;
 }[] = [
-  { id: "normal", label: "Normal", icon: VIEW_NORMAL_SVG },
-  { id: "compact", label: "Compact", icon: VIEW_COMPACT_SVG },
-  { id: "heatmap", label: "Heatmap", icon: VIEW_HEATMAP_SVG },
-  { id: "carousel", label: "Carousel", icon: VIEW_CAROUSEL_SVG },
+  // msg(): translated with t() where shown (module code runs before the
+  // language is known)
+  { id: "normal", label: msg("Normal"), icon: VIEW_NORMAL_SVG },
+  { id: "compact", label: msg("Compact"), icon: VIEW_COMPACT_SVG },
+  { id: "heatmap", label: msg("Heatmap"), icon: VIEW_HEATMAP_SVG },
+  { id: "carousel", label: msg("Carousel"), icon: VIEW_CAROUSEL_SVG },
 ];
 
 function buildDayTooltipHtml(
@@ -49,7 +59,7 @@ function buildDayTooltipHtml(
       const color = e.is_subscribed ? "rgb(34,197,94)" : "#ed8179";
       const time = new Date(
         e.begin_at.endsWith("Z") ? e.begin_at : e.begin_at + "Z",
-      ).toLocaleTimeString("en-US", {
+      ).toLocaleTimeString(intlLocale("en-US"), {
         hour: "2-digit",
         minute: "2-digit",
         hour12: false,
@@ -123,7 +133,7 @@ function renderCalendarGrid(
     today.getMonth() + 1,
   ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
-  const headerRow = ["M", "T", "W", "T", "F", "S", "S", "Total"].map(
+  const headerRow = [...weekdayNames("narrow"), t("Total")].map(
     (day, idx) =>
       html`<div
         class="text-[11px] font-extrabold text-center"
@@ -197,9 +207,7 @@ export function renderMonthCard(
       : lastDayDate;
   const avg = total / divisor;
 
-  const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(
-    new Date(year, mon - 1),
-  );
+  const monthName = monthLabel(year, mon - 1);
   // getConfigs() heals a stored 0 or "", but a config built elsewhere (the
   // published look, a test) must not print "Infinity%" or "NaN%" either.
   const goalSecs = config.goal_hours * 3600;
@@ -256,7 +264,7 @@ export function renderMonthCard(
           : ""}
       </div>
       ${config.show_average
-        ? html`<span>Avg: <b>${fmtHours(avg)}</b></span>`
+        ? html`<span>${t("Avg:")} <b>${fmtHours(avg)}</b></span>`
         : ""}
     </div>
 
@@ -293,7 +301,7 @@ export function renderCarouselView(
     <button
       type="button"
       class="lt-carousel-arrow"
-      aria-label="Previous month"
+      aria-label="${t("Previous month")}"
       ?disabled=${!opts.canPrev}
       data-tip="${opts.canPrev ? opts.prevLabel : ""}"
       @click=${opts.canPrev ? opts.onPrev : undefined}
@@ -308,7 +316,7 @@ export function renderCarouselView(
     <button
       type="button"
       class="lt-carousel-arrow"
-      aria-label="Next month"
+      aria-label="${t("Next month")}"
       ?disabled=${!opts.canNext}
       data-tip="${opts.canNext ? opts.nextLabel : ""}"
       @click=${opts.canNext ? opts.onNext : undefined}
@@ -332,10 +340,10 @@ export function renderLoadMoreCard(onClick: () => void, loading = false) {
       ${loading
         ? html`<span class="loading loading-spinner loading-lg"></span>`
         : html`<span class="text-base font-bold text-base-content"
-            >Load older months</span
+            >${t("Load older months")}</span
           >`}
       <span class="text-sm" style="color: var(--muted-foreground);">
-        ${loading ? "Fetching data..." : "Click to fetch full logtime history"}
+        ${t(loading ? "Fetching data..." : "Click to fetch full logtime history")}
       </span>
     </div>
   </div>`;
@@ -405,7 +413,7 @@ export function renderHeaderContent(
                 v.id
                   ? `background-color:${primaryColor};border-color:${primaryColor};color:${primaryContent};`
                   : "background-color:transparent;border-color:color-mix(in oklab, var(--color-base-content) 20%, transparent);color:var(--color-base-content);"}"
-                data-tip="${v.label}"
+                data-tip="${t(v.label)}"
                 @click="${() => onViewChange(v.id)}"
               >
                 ${unsafeHTML(
@@ -418,7 +426,7 @@ export function renderHeaderContent(
           <summary
             class="btn btn-sm list-none"
             style="height:1.5rem;min-width:2.25rem;padding-left:0.75rem;padding-right:0.75rem;background-color:${primaryColor};border-color:${primaryColor};color:${primaryContent};"
-            data-tip="${activeView.label}"
+            data-tip="${t(activeView.label)}"
           >
             ${unsafeHTML(
               activeView.icon.replace("<svg", '<svg width="16" height="16"'),
@@ -457,7 +465,7 @@ export function renderHeaderContent(
                         v.icon.replace("<svg", '<svg width="16" height="16"'),
                       )}</span
                     >
-                    <span>${v.label}</span>
+                    <span>${t(v.label)}</span>
                   </button>
                 </li>`,
             )}
@@ -467,7 +475,7 @@ export function renderHeaderContent(
       ${lastSeenValue !== "N/A"
         ? html`<span
             class="ml-auto badge badge-success font-bold tracking-tight lt-active-badge"
-            >Active ${lastSeenValue}</span
+            >${t("Active {when}", { when: lastSeenValue })}</span
           >`
         : ""}
     </div>

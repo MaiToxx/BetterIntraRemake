@@ -7,6 +7,7 @@
  * and passes them down to the few controls that read them.
  */
 import type { ConfigKey } from "../../../core/config.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 import { publishLookIfShared } from "../../customize/publish.ts";
 import {
   fetchCampusList,
@@ -68,6 +69,21 @@ export function settingIds(def: {
     settingIdCache.set(def, ids);
   }
   return ids;
+}
+
+/**
+ * An option label of a def as the hub shows it: translated, unless the def
+ * says its options are names (translateOptions: false, e.g. cluster names).
+ * A label with no catalog entry (the language names) comes back as written.
+ * Labels of the lists fetched at run time (campuses, clusters, event types)
+ * are data and never go through here.
+ */
+export function optionLabel(
+  def: { translateOptions?: false },
+  label: string | undefined,
+): string {
+  if (!label) return "";
+  return def.translateOptions === false ? label : t(label);
 }
 
 /** One entry of a list built at run time. */

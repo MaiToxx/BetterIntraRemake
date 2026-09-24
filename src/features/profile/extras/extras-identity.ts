@@ -22,6 +22,7 @@ import DISCORD_SVG from "../../../assets/svg/discord.svg?raw";
 import GLOBE_SVG from "../../../assets/svg/globe-lucide.svg?raw";
 import LINK_SVG from "../../../assets/svg/link.svg?raw";
 import { toast } from "../../eggs/eggs.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 import {
   EXTRAS_IDENTITY_ID,
   LIMITS,
@@ -206,13 +207,13 @@ function linkMeta(kind: string): {
     case "discord":
       return { kind: "discord", name: "Discord", svg: DISCORD_SVG, outlined: false };
     case "website":
-      return { kind: "website", name: "Website", svg: GLOBE_SVG, outlined: true };
+      return { kind: "website", name: t("Website"), svg: GLOBE_SVG, outlined: true };
     case "gitlab":
       return { kind: "gitlab", name: "GitLab", svg: LINK_SVG, outlined: false };
     case "linkedin":
       return { kind: "linkedin", name: "LinkedIn", svg: LINK_SVG, outlined: false };
     default:
-      return { kind: "link", name: "Link", svg: LINK_SVG, outlined: false };
+      return { kind: "link", name: t("Link"), svg: LINK_SVG, outlined: false };
   }
 }
 
@@ -253,10 +254,10 @@ function linkTemplate(link: ProfileLink): TemplateResult {
       type="button"
       class="ft-x-link"
       data-kind=${meta.kind}
-      title=${`Copy this ${meta.name} handle`}
+      title=${t("Copy this {name} handle", { name: meta.name })}
       @click=${() => void copyLabel(link.label)}
     >
-      ${icon}<span class="ft-x-label" aria-live="polite">${copied ? "Copied" : link.label}</span>
+      ${icon}<span class="ft-x-label" aria-live="polite">${copied ? t("Copied") : link.label}</span>
     </button>`;
   }
   return html`<a
@@ -266,7 +267,7 @@ function linkTemplate(link: ProfileLink): TemplateResult {
     target="_blank"
     rel="noopener noreferrer nofollow"
     title=${link.href}
-    aria-label=${`${meta.name}: ${link.label}`}
+    aria-label=${t("{name}: {label}", { name: meta.name, label: link.label })}
   >
     ${icon}<span class="ft-x-label">${link.label}</span>
   </a>`;
@@ -300,7 +301,7 @@ function template(view: IdentityView): TemplateResult {
     ${view.links.length
       ? html`<div class="ft-x-row ft-x-links">${view.links.map(linkTemplate)}</div>`
       : nothing}
-    <div class="ft-x-via">added by this student with Better Intra</div>`;
+    <div class="ft-x-via">${t("added by this student with Better Intra")}</div>`;
 }
 
 function renderBlock(): void {
@@ -323,7 +324,7 @@ function ensureHost(login: string): HTMLElement {
     host.setAttribute("role", "note");
   }
   // so that nobody mistakes the block for official Intra content
-  host.title = `Added by ${login} with Better Intra`;
+  host.title = t("Added by {login} with Better Intra", { login });
   return host;
 }
 
@@ -395,5 +396,8 @@ export function showGreeting(extras: ProfileExtras | null, opts: IdentityOptions
   }
   // The login comes first and the source is named: a greeting must not be
   // mistakable for a message from Better Intra or from the Intra itself.
-  toast(`${opts.login} wrote on their profile: “${greeting}”`, GREETING_MS);
+  toast(
+    t("{login} wrote on their profile: “{greeting}”", { login: opts.login, greeting }),
+    GREETING_MS,
+  );
 }

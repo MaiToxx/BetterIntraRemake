@@ -18,6 +18,7 @@ import {
 import ARROW_SHARE_SVG from "../../../assets/svg/arrow_share.svg?raw";
 import { initShortcutButtons, initFriendBadge } from "./personal-info.ts";
 import { injectCampusFlag } from "../../campus/campus-flags.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 const PROFILE_CARD_CLASS = "ft-profile-card";
 const SHADOW_HOST_ID = "profile-badges-shadow";
@@ -186,7 +187,7 @@ async function injectSeatBadge(profileCard: HTMLElement) {
     badge.style.border = "3px solid transparent";
     badge.style.borderRadius = "0.75rem";
     badge.style.cursor = "default";
-    badge.textContent = "unavailable";
+    badge.textContent = t("unavailable");
     wrapper.prepend(badge);
     hideIntraPill();
     applyBadgeLayout(wrapper);
@@ -235,10 +236,10 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   if (cluster) {
     const open = () => void openClusterDialog({ seatId: seatText });
     badge.style.cursor = "pointer";
-    badge.setAttribute("data-tip", "View on cluster map");
+    badge.setAttribute("data-tip", t("View on cluster map"));
     badge.tabIndex = 0;
     badge.setAttribute("role", "button");
-    badge.setAttribute("aria-label", `Show ${seatText} on the cluster map`);
+    badge.setAttribute("aria-label", t("Show {seat} on the cluster map", { seat: seatText }));
     badge.addEventListener("click", (e) => {
       e.stopPropagation();
       open();
@@ -291,7 +292,7 @@ function injectGivePointsButton(statsBar: HTMLElement, container: HTMLElement) {
   wrapper.setAttribute("data-ft-give-points", "");
   wrapper.setAttribute(
     "aria-label",
-    giveBtn.getAttribute("aria-label") || "Give evaluation points",
+    giveBtn.getAttribute("aria-label") || t("Give evaluation points"),
   );
   wrapper.style.cssText =
     "display:inline-flex;align-items:center;margin-left:auto;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;";

@@ -3,6 +3,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { clusterLabel, type DialogState } from "./context";
 import { renderTemplate } from "./template";
 import { normalizeSeatId } from "./seats";
+import { t } from "../../../core/i18n/i18n.ts";
 import CHEVRON_DOWN_SVG from "../../../assets/svg/chevron-down.svg?raw";
 
 const OVERFLOW_TOLERANCE = 1;
@@ -84,7 +85,7 @@ export function renderTabsRegion(state: DialogState) {
   const summary = document.createElement("summary");
   summary.className =
     "clusters-nav-summary btn btn-sm btn-ghost gap-1.5 list-none";
-  summary.dataset.tip = "Select cluster";
+  summary.dataset.tip = t("Select cluster");
   summary.dataset.tipSize = "14px";
   const label = document.createElement("span");
   label.className =

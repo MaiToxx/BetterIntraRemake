@@ -18,6 +18,7 @@ import {
   type ImageSlot,
 } from "./image-upload.ts";
 import { readLocalPreview } from "./local-preview.ts";
+import { msg, t } from "../../../core/i18n/i18n.ts";
 
 export interface PendingImage {
   name: string;
@@ -33,10 +34,11 @@ export interface SlotStatus {
   busy: boolean;
 }
 
+/** English, marked for translation: shown through t(). */
 export const SLOT_LABELS: Record<ImageSlot, string> = {
-  avatar: "Avatar",
-  banner: "Banner",
-  background: "Background",
+  avatar: msg("Avatar"),
+  banner: msg("Banner"),
+  background: msg("Background"),
 };
 
 export type UploadAllResult =
@@ -115,14 +117,14 @@ export function createPendingUploads(onChange: () => void): PendingUploads {
       if (closed) return;
       const seq = bump(slot);
       reading.add(slot);
-      statuses.set(slot, { text: `Reading ${file.name}…`, busy: true });
+      statuses.set(slot, { text: t("Reading {name}…", { name: file.name }), busy: true });
       onChange();
       const prepared = await prepareUpload(slot, file);
       const preview = prepared.ok ? await readLocalPreview(prepared.blob) : "";
       if (closed || picks.get(slot) !== seq) return;
       reading.delete(slot);
       if (!prepared.ok || !preview) {
-        const error = prepared.ok ? "Could not read this image." : prepared.error;
+        const error = prepared.ok ? t("Could not read this image.") : prepared.error;
         statuses.set(slot, { text: error, busy: false });
       } else {
         files.set(slot, { name: file.name, blob: prepared.blob, preview });
@@ -144,7 +146,7 @@ export function createPendingUploads(onChange: () => void): PendingUploads {
         const pending = files.get(slot);
         if (!pending) continue;
         if (!pending.uploadedUrl) {
-          statuses.set(slot, { text: `Uploading ${pending.name}…`, busy: true });
+          statuses.set(slot, { text: t("Uploading {name}…", { name: pending.name }), busy: true });
           onChange();
           const result = await uploadProfileImage(slot, pending.blob);
           if (result.ok) uploaded.add(slot);

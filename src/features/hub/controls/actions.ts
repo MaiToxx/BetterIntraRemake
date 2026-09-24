@@ -5,6 +5,7 @@
  */
 import { html, nothing } from "lit-html";
 import { getConfig } from "../../../core/config.ts";
+import { getLang, intlLocale, t, tp } from "../../../core/i18n/i18n.ts";
 import { logoutCloud } from "../../account/account.ts";
 import { fetchCampusList } from "../../clusters/clusters.data.ts";
 import { loadCampusData } from "../../campus/campus.ts";
@@ -39,14 +40,14 @@ export function renderAction(def: HubSettingDef) {
         class="btn btn-sm btn-primary font-bold"
         @click="${exportBackup}"
       >
-        Export
+        ${t("Export")}
       </button>
       <button
         type="button"
         class="btn btn-sm btn-primary font-bold"
         @click="${importBackup}"
       >
-        Import
+        ${t("Import")}
       </button>
     </div>`;
   }
@@ -65,7 +66,7 @@ export function renderAction(def: HubSettingDef) {
         aria-describedby="${desc}"
         @click="${(e: Event) => void reloadCampusConfig(e.currentTarget as HTMLButtonElement)}"
       >
-        ${actionLabel || "Reload"}
+        ${actionLabel ? t(actionLabel) : t("Reload")}
       </button>
       <p class="text-xs text-error hidden" role="status" data-campus-reload-status></p>
     </div>`;
@@ -78,7 +79,7 @@ export function renderAction(def: HubSettingDef) {
     aria-describedby="${desc}"
     @click="${() => void resetAllData()}"
   >
-    ${actionLabel || "Reset"}
+    ${actionLabel ? t(actionLabel) : t("Reset")}
   </button>`;
 }
 
@@ -87,7 +88,7 @@ export async function renderCampusInfo(live: LiveOptions) {
   const campusId = await getConfig("CLUSTERS_CAMPUS");
   const campusName = campusId
     ? live.campuses.find((c) => c.value === campusId)?.label || campusId
-    : "Not detected";
+    : t("Not detected");
   return html`<span class="badge badge-info badge-lg text-base"
     >${campusName}</span
   >`;
@@ -128,7 +129,7 @@ function importBackup(): void {
       data = sanitizeBackup(backup.settings);
       summary = describeBackup(Object.keys(data).length, backup);
     } catch {
-      alert("Invalid backup file.");
+      alert(t("Invalid backup file."));
       return;
     }
     if (!(await confirmBackupImport(data, summary))) return;
@@ -138,7 +139,10 @@ function importBackup(): void {
   input.click();
 }
 
-/** "12 settings exported on 3 Sep 2026 (v1.12.1)" for the confirmation. */
+/**
+ * "12 settings exported on 3 Sep 2026 (v1.12.1)" for the confirmation. The
+ * date is in the browser's format, or in French when Better Intra is.
+ */
 export function describeBackup(
   count: number,
   meta: { version?: string; exportedAt?: string },
@@ -146,10 +150,17 @@ export function describeBackup(
   const when = meta.exportedAt ? new Date(meta.exportedAt) : null;
   const date =
     when && !Number.isNaN(when.getTime())
-      ? ` exported on ${when.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}`
+      ? when.toLocaleDateString(getLang() === "fr" ? intlLocale() : [], {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        })
       : "";
   const version = meta.version ? ` (v${meta.version})` : "";
-  return `${count} setting${count === 1 ? "" : "s"}${date}${version}`;
+  const what = date
+    ? tp(count, "{n} setting exported on {date}", "{n} settings exported on {date}", { date })
+    : tp(count, "{n} setting", "{n} settings");
+  return `${what}${version}`;
 }
 
 /**
@@ -163,13 +174,15 @@ export async function confirmBackupImport(
   summary: string,
   ask: (message: string) => boolean = (m) => window.confirm(m),
 ): Promise<boolean> {
-  if (!ask(`Restore ${summary}? Your current settings will be overwritten.`)) {
+  if (!ask(t("Restore {summary}? Your current settings will be overwritten.", { summary }))) {
     return false;
   }
   const sensitive = backupSensitiveKeys(data);
   if (sensitive.length > 0) {
     const keep = ask(
-      "This backup also contains custom CSS or public profile fields (bio, status, links). Only restore them if you made this backup yourself. Restore them too?",
+      t(
+        "This backup also contains custom CSS or public profile fields (bio, status, links). Only restore them if you made this backup yourself. Restore them too?",
+      ),
     );
     if (!keep) for (const key of sensitive) delete data[key];
   }
@@ -200,8 +213,9 @@ export async function reloadCampusConfig(
   } catch (e) {
     console.warn("Campus configuration reload failed", e);
     if (status) {
-      status.textContent =
-        "Could not reach the campus configuration; kept the current one.";
+      status.textContent = t(
+        "Could not reach the campus configuration; kept the current one.",
+      );
       status.classList.remove("hidden");
     }
     if (button) {
@@ -225,8 +239,12 @@ export async function resetAllData(
 ): Promise<void> {
   const signedIn = !!(await chrome.storage.local.get("CLOUD_TOKEN")).CLOUD_TOKEN;
   const message = signedIn
-    ? "Reset all data? This clears every Better Intra setting on this browser and signs you out. What was never pushed to the cloud (shortcuts, friends list, calendar link) is lost; your cloud copy stays, and is offered back when you sign in again."
-    : "Reset all data? This clears every Better Intra setting on this browser, shortcuts, friends list and calendar link included. Export first to keep a copy.";
+    ? t(
+        "Reset all data? This clears every Better Intra setting on this browser and signs you out. What was never pushed to the cloud (shortcuts, friends list, calendar link) is lost; your cloud copy stays, and is offered back when you sign in again.",
+      )
+    : t(
+        "Reset all data? This clears every Better Intra setting on this browser, shortcuts, friends list and calendar link included. Export first to keep a copy.",
+      );
   if (!ask(message)) return;
   if (signedIn) {
     try {

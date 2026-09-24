@@ -8,6 +8,7 @@ import {
   waitForIntrapyToken,
 } from "../../../core/intra/intrapy.ts";
 import { getConfig } from "../../../core/config.ts";
+import { intlLocale, t } from "../../../core/i18n/i18n.ts";
 
 const INJECTED_ID = "ft-freeze-card";
 
@@ -33,7 +34,7 @@ async function fetchCursusData(login: string, token: string): Promise<any[]> {
 
 function formatDate(iso: string): string {
   const d = parseIntraDate(iso);
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString(intlLocale("en-US"), {
     month: "long",
     day: "numeric",
     year: "numeric",
@@ -198,7 +199,7 @@ function buildFreezeCard(profileCard: HTMLElement, freezeUntil: string) {
 
   const until = document.createElement("div");
   until.style.cssText = `font-size: 1rem; font-weight: 700; opacity: 0.7;`;
-  until.textContent = `Until ${formatDate(freezeUntil)}`;
+  until.textContent = t("Until {date}", { date: formatDate(freezeUntil) });
 
   const countdownContainer = document.createElement("div");
   startCountdown(countdownContainer, freezeUntil, color);

@@ -3,7 +3,8 @@
   "minimum_chrome_version": "111",
   "name": "Better Intra",
   "version": "1.0.8",
-  "description": "UI and UX improvements for 42 Intra: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.",
+  "description": "__MSG_extDescription__",
+  "default_locale": "en",
   "permissions": [
     "storage",
     "alarms"

@@ -111,6 +111,8 @@ export interface BetterIntraConfig {
   ADVANCED_OPEN_LINKS_NEW_TAB: boolean;
   /** Seven small secrets hidden in the Intra (see features/eggs). */
   EASTER_EGGS_ENABLED: boolean;
+  /** Language of Better Intra: "auto" follows the browser (core/i18n). */
+  UI_LANGUAGE: "auto" | "en" | "fr";
   EGGS_FOUND: string[];
 
   // Customize (look & feel of every Intra page)

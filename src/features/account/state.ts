@@ -1,4 +1,5 @@
 import type { PushFailure } from "./account.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export interface ButtonState {
   loading: boolean;
@@ -37,6 +38,7 @@ export interface AccountState {
   };
 }
 
+/** Called once the language is known (the popup awaits initI18n first). */
 export function createInitialState(): AccountState {
   return {
     login: null,
@@ -54,13 +56,13 @@ export function createInitialState(): AccountState {
         loading: false,
         success: false,
         error: false,
-        text: "Push Settings",
+        text: t("Push Settings"),
       },
       pull: {
         loading: false,
         success: false,
         error: false,
-        text: "Pull Settings",
+        text: t("Pull Settings"),
       },
     },
   };

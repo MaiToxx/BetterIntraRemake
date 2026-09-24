@@ -11,6 +11,7 @@ import { AVATAR_SELECTOR } from "../../../core/intra/selectors.ts";
 import { createSettingsModal } from "./profile.modal.ts";
 import { pageState } from "./visuals-apply.ts";
 import type { VisualUrls } from "./visuals-types.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 /**
  * The editor being built. createSettingsModal() reads several settings
@@ -70,7 +71,7 @@ export function attachEditorListener(
   avatarEl.dataset.modalListener = "true";
   avatarEl.style.cursor = "pointer";
   // The title helps mouse users find the feature, as the toggle's does.
-  avatarEl.title = "Edit my profile visuals";
+  avatarEl.title = t("Edit my profile visuals");
   const open = () => {
     pageState.showingOriginalAvatar = false;
     void openEditor(onSave);
@@ -79,7 +80,7 @@ export function attachEditorListener(
     e.stopPropagation();
     open();
   });
-  makeKeyboardButton(avatarEl, "Edit my profile visuals", open);
+  makeKeyboardButton(avatarEl, t("Edit my profile visuals"), open);
 }
 
 /**
@@ -95,7 +96,7 @@ export function attachToggleListener(
   if (avatarEl.dataset.toggleListener) return;
   avatarEl.dataset.toggleListener = "true";
   avatarEl.style.cursor = "pointer";
-  avatarEl.title = "Click to view original avatar";
+  avatarEl.title = t("Click to view original avatar");
   // A toggle button: the label stays, aria-pressed says which picture shows.
   // Synced on focus too, because visuals.ts resets the state for a new
   // profile without going through here.
@@ -164,5 +165,5 @@ export function attachToggleListener(
     e.stopPropagation();
     toggle();
   });
-  makeKeyboardButton(avatarEl, "Show original avatar", toggle);
+  makeKeyboardButton(avatarEl, t("Show original avatar"), toggle);
 }

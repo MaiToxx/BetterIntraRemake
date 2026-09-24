@@ -2,6 +2,7 @@ import { html } from "lit-html";
 import { until } from "lit-html/directives/until.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { HUB_INFO } from "./hubSettings.data.ts";
+import { intlLocale, msg, t } from "../../core/i18n/i18n.ts";
 import { UPDATE_KEY, type UpdateInfo } from "../../core/update-check.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import { EGG_IDS, listFoundEggs } from "../eggs/eggs.ts";
@@ -28,25 +29,25 @@ const QUICK_LINKS = [
   {
     href: HUB_INFO.github,
     svg: GITHUB_SVG,
-    label: "GitHub",
+    label: msg("GitHub"),
     color: "bg-primary text-primary-content",
   },
   {
     href: HUB_INFO.issues,
     svg: ISSUES_SVG,
-    label: "Issues",
+    label: msg("Issues"),
     color: "bg-secondary text-secondary-content",
   },
   {
     href: `${HUB_INFO.github}/pulls`,
     svg: PR_SVG,
-    label: "PRs",
+    label: msg("PRs"),
     color: "bg-accent text-accent-content",
   },
   {
     href: HUB_INFO.upstream,
     svg: GITHUB_SVG,
-    label: "Upstream",
+    label: msg("Upstream"),
     color: "bg-neutral text-neutral-content",
   },
 ];
@@ -97,18 +98,29 @@ function countryFlag(code: string): string {
   );
 }
 
-let countryNames: Intl.DisplayNames | null = null;
-try {
-  countryNames = new Intl.DisplayNames(["en"], { type: "region" });
-} catch {
-  countryNames = null;
+/**
+ * Country names in the current language. Made on first use, not at module
+ * level: module code runs before the language is known.
+ */
+let countryNames: Intl.DisplayNames | null | undefined;
+
+function getCountryNames(): Intl.DisplayNames | null {
+  if (countryNames === undefined) {
+    try {
+      countryNames = new Intl.DisplayNames([intlLocale("en")], { type: "region" });
+    } catch {
+      countryNames = null;
+    }
+  }
+  return countryNames;
 }
 
 function countryName(code: string): string {
-  if (!code || code.length !== 2) return "Unknown";
-  if (!countryNames) return code;
+  if (!code || code.length !== 2) return t("Unknown");
+  const names = getCountryNames();
+  if (!names) return code;
   try {
-    return countryNames.of(code.toUpperCase()) || code;
+    return names.of(code.toUpperCase()) || code;
   } catch {
     return code;
   }
@@ -145,7 +157,9 @@ export function renderAboutPanel(
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn btn-sm font-bold transition-all hover:scale-105 active:scale-95"
-                  aria-label="Release notes (installed: v${HUB_INFO.version})"
+                  aria-label="${t("Release notes (installed: v{version})", {
+                    version: HUB_INFO.version,
+                  })}"
                 >
                   <span>v${HUB_INFO.version}</span>
                 </a>
@@ -154,14 +168,16 @@ export function renderAboutPanel(
                   target="_blank"
                   rel="noopener noreferrer"
                   class="btn btn-sm btn-ghost"
-                  >Privacy</a
+                  >${t("Privacy")}</a
                 >
                 ${until(
                   listFoundEggs().then(
                     (found) =>
                       html`<span
                         class="badge badge-sm badge-ghost"
-                        title="Easter eggs found. Hints: a famous cheat code, a barrel, a spoon, a stubborn gear, a late night, a Thursday, the answer, a spinning cat, and the same cat again."
+                        title="${t(
+                          "Easter eggs found. Hints: a famous cheat code, a barrel, a spoon, a stubborn gear, a late night, a Thursday, the answer, a spinning cat, and the same cat again.",
+                        )}"
                         >🥚 ${found.length}/${EGG_IDS.length}</span
                       >`,
                   ),
@@ -178,14 +194,15 @@ export function renderAboutPanel(
                   >
                     ${unsafeHTML(STAR_SVG)}
                   </span>
-                  <span>Star</span>
+                  <span>${t("Star")}</span>
                 </a>
               </div>
             </div>
           </div>
           <p class="text-sm opacity-60 max-w-full">
-            UI and UX improvements for 42 Intra v3: logtime calendar, cluster
-            map tools, custom profiles, shortcuts, friends widget, and more.
+            ${t(
+              "UI and UX improvements for 42 Intra v3: logtime calendar, cluster map tools, custom profiles, shortcuts, friends widget, and more.",
+            )}
           </p>
           ${until(
             getUpdateInfo().then((info) =>
@@ -194,15 +211,18 @@ export function renderAboutPanel(
                     class="alert alert-info rounded-xl flex items-center justify-between gap-3 py-2"
                   >
                     <span class="text-sm">
-                      <strong>Version ${info.version}</strong> is available
-                      <span class="opacity-70">(installed: ${HUB_INFO.version})</span>
+                      <strong>${t("Version {version}", { version: info.version })}</strong>
+                      ${t("is available")}
+                      <span class="opacity-70"
+                        >${t("(installed: {version})", { version: HUB_INFO.version })}</span
+                      >
                     </span>
                     <a
                       href="${info.url}"
                       target="_blank"
                       rel="noopener noreferrer"
                       class="btn btn-sm btn-primary font-bold"
-                      >Download</a
+                      >${t("Download")}</a
                     >
                   </div>`
                 : "",
@@ -215,7 +235,7 @@ export function renderAboutPanel(
         <div class="flex flex-col gap-2 shrink-0">
           <div class="flex items-center gap-2">
             <h2 class="text-xs font-semibold uppercase tracking-widest">
-              Community
+              ${t("Community")}
             </h2>
             <div class="flex-1 h-px bg-base-300/40"></div>
           </div>
@@ -236,28 +256,28 @@ export function renderAboutPanel(
                             >${s.total}</span
                           >
                           <span class="text-sm opacity-60 font-semibold"
-                            >users</span
+                            >${t("users")}</span
                           >
                         </div>
                         <div class="flex items-start justify-end gap-6">
                           ${[
                             {
-                              label: "today",
+                              label: t("today"),
                               value: s.newToday ?? 0,
                               color: "#a78bfa",
                             },
                             {
-                              label: "in 7 days",
+                              label: t("in {n} days", { n: 7 }),
                               value: s.newLast7Days,
                               color: "#fb923c",
                             },
                             {
-                              label: "in 14 days",
+                              label: t("in {n} days", { n: 14 }),
                               value: s.newLast14Days,
                               color: "#4ade80",
                             },
                             {
-                              label: "in 30 days",
+                              label: t("in {n} days", { n: 30 }),
                               value: s.newLast30Days,
                               color: "#38bdf8",
                             },
@@ -314,7 +334,7 @@ export function renderAboutPanel(
         <div class="flex flex-col gap-2 shrink-0">
           <div class="flex items-center gap-2">
             <h2 class="text-xs font-semibold uppercase tracking-widest">
-              Quick Links
+              ${t("Quick Links")}
             </h2>
             <div class="flex-1 h-px bg-base-300/40"></div>
           </div>
@@ -332,7 +352,7 @@ export function renderAboutPanel(
                   >
                     ${unsafeHTML(link.svg)}
                   </span>
-                  <span class="text-sm font-semibold">${link.label}</span>
+                  <span class="text-sm font-semibold">${t(link.label)}</span>
                 </a>
               `,
             )}
@@ -345,10 +365,10 @@ export function renderAboutPanel(
         <!-- Footer -->
         <div class="text-center mt-auto shrink-0">
           <p class="text-sm opacity-50 font-medium">
-            Made for 42 Mulhouse · ${HUB_INFO.license} License
+            ${t("Made for 42 Mulhouse · {license} License", { license: HUB_INFO.license })}
           </p>
           <p class="text-xs opacity-40 mt-1">
-            An unofficial student project, not affiliated with or endorsed by 42.
+            ${t("An unofficial student project, not affiliated with or endorsed by 42.")}
           </p>
           <div class="flex justify-center gap-3 mt-2">
             <a
@@ -362,11 +382,11 @@ export function renderAboutPanel(
               >
                 ${unsafeHTML(PERSON_FOLLOW_SVG)}
               </span>
-              <span>Follow</span>
+              <span>${t("Follow")}</span>
             </a>
           </div>
           <p class="text-xs opacity-60 mt-2 flex items-center justify-center gap-1 flex-wrap">
-            Original project by
+            ${t("Original project by")}
             <a
               class="underline"
               href="${HUB_INFO.upstream}"
@@ -382,7 +402,7 @@ export function renderAboutPanel(
               rel="noopener noreferrer"
               ><span class="size-3 inline-flex fill-current" aria-hidden="true"
                 >${unsafeHTML(HEART_SVG)}</span
-              >Sponsor ${HUB_INFO.upstreamAuthor}</a
+              >${t("Sponsor {name}", { name: HUB_INFO.upstreamAuthor })}</a
             >
           </p>
         </div>

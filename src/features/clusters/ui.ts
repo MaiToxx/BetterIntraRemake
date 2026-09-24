@@ -3,6 +3,7 @@ import { CLUSTERS, hasMarkerDefinitions } from "./clusters.data.ts";
 import { adoptSharedStyles } from "../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { getIsLight } from "../../core/theme/theme-manager.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export function renderClusterPicker(
   currentId: string,
@@ -33,7 +34,7 @@ export function renderClusterPicker(
     >
       <div
         class="flex items-center gap-3 cursor-pointer select-none py-1"
-        data-tip="Choose a default cluster"
+        data-tip="${t("Choose a default cluster")}"
         data-tip-size="15px"
         @click="${openSelectDropdown}"
       >
@@ -66,7 +67,7 @@ export function renderClusterPicker(
               aria-pressed="${showMarkers ? "true" : "false"}"
               @click="${onMarkerToggle}"
             >
-              Show chair markers
+              ${t("Show chair markers")}
             </button>`
         : nothing}
     </div>

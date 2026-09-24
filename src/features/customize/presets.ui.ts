@@ -18,6 +18,7 @@ import {
   type CustomPreset,
 } from "./presets.ts";
 import { publishLookIfShared } from "./publish.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 /**
  * The hub renders each control once with the value read at open time. After
@@ -76,58 +77,61 @@ export function renderPresetsPanel() {
     const onSave = async () => {
       const input = container.querySelector<HTMLInputElement>("[data-preset-name]");
       const name = input?.value.trim() ?? "";
-      if (!name) return say("Give the preset a name first.", false);
+      if (!name) return say(t("Give the preset a name first."), false);
       presets = await savePreset(name, await snapshotCustomization());
       if (input) input.value = "";
-      say(`Saved "${name}".`);
+      say(t('Saved "{name}".', { name }));
     };
 
     const onApply = async (p: CustomPreset) => {
       await applyAndSync(p.values);
-      say(`Applied "${p.name}".`);
+      say(t('Applied "{name}".', { name: p.name }));
     };
 
     const onDelete = async (p: CustomPreset) => {
       presets = await deletePreset(p.name);
-      say(`Deleted "${p.name}".`);
+      say(t('Deleted "{name}".', { name: p.name }));
     };
 
     const onCopy = async () => {
       const code = encodePresetCode(await snapshotCustomization());
       try {
         await navigator.clipboard.writeText(code);
-        say("Theme code copied. Send it to a friend!");
+        say(t("Theme code copied. Send it to a friend!"));
       } catch {
-        window.prompt("Copy your theme code:", code);
+        window.prompt(t("Copy your theme code:"), code);
       }
     };
 
     const onPaste = async () => {
-      const code = window.prompt("Paste a Better Intra theme code:");
+      const code = window.prompt(t("Paste a Better Intra theme code:"));
       if (code === null) return;
       const values = decodePresetCode(code);
-      if (!values) return say("This is not a valid theme code.", false);
+      if (!values) return say(t("This is not a valid theme code."), false);
       const imageHost = presetImageHost(values);
       if (
         imageHost &&
         !window.confirm(
-          `This theme loads a background image from ${imageHost} on every Intra page. Apply it anyway?`,
+          t(
+            "This theme loads a background image from {host} on every Intra page. Apply it anyway?",
+            { host: imageHost },
+          ),
         )
       )
         return;
       await applyAndSync(values);
-      say("Theme applied from code.");
+      say(t("Theme applied from code."));
     };
 
     const onReset = async () => {
-      if (!window.confirm("Reset every Customize setting to the defaults?")) return;
+      if (!window.confirm(t("Reset every Customize setting to the defaults?"))) return;
       await resetCustomization();
       syncHubControls(hubRoot, await snapshotCustomization());
       container.dispatchEvent(
         new CustomEvent("bi-settings-synced", { bubbles: true, composed: true }),
       );
       publishLookIfShared("CUSTOM_ACCENT_COLOR");
-      say("Customization reset.");
+      say(t("Customization reset."));
     };
 
     const draw = () =>
@@ -138,8 +142,8 @@ export function renderPresetsPanel() {
               <input
                 type="text"
                 class="input input-accent input-sm w-48"
-                placeholder="Preset name"
-                aria-label="Preset name"
+                placeholder="${t("Preset name")}"
+                aria-label="${t("Preset name")}"
                 maxlength="40"
                 data-preset-name
                 @keydown="${(e: KeyboardEvent) => {
@@ -147,16 +151,18 @@ export function renderPresetsPanel() {
                 }}"
               />
               <button type="button" class="btn btn-sm btn-primary" @click="${onSave}">
-                Save current look
+                ${t("Save current look")}
               </button>
               <div class="flex-1"></div>
-              <button type="button" class="btn btn-sm" @click="${onCopy}">Copy theme code</button>
-              <button type="button" class="btn btn-sm" @click="${onPaste}">Paste theme code</button>
-              <button type="button" class="btn btn-sm btn-ghost" @click="${onReset}">Reset</button>
+              <button type="button" class="btn btn-sm" @click="${onCopy}">${t("Copy theme code")}</button>
+              <button type="button" class="btn btn-sm" @click="${onPaste}">${t("Paste theme code")}</button>
+              <button type="button" class="btn btn-sm btn-ghost" @click="${onReset}">${t("Reset")}</button>
             </div>
             ${presets.length === 0
               ? html`<p class="text-xs opacity-60">
-                  No preset yet. Adjust the settings below, then save them under a name to switch looks in one click.
+                  ${t(
+                    "No preset yet. Adjust the settings below, then save them under a name to switch looks in one click.",
+                  )}
                 </p>`
               : html`<ul class="flex flex-wrap gap-2">
                   ${presets.map(
@@ -164,7 +170,7 @@ export function renderPresetsPanel() {
                       <button
                         type="button"
                         class="btn btn-sm join-item"
-                        title="Apply this preset"
+                        title="${t("Apply this preset")}"
                         @click="${() => onApply(p)}"
                       >
                         ${p.name}
@@ -172,8 +178,8 @@ export function renderPresetsPanel() {
                       <button
                         type="button"
                         class="btn btn-sm btn-ghost join-item px-2"
-                        title="Delete this preset"
-                        aria-label="Delete ${p.name}"
+                        title="${t("Delete this preset")}"
+                        aria-label="${t("Delete {name}", { name: p.name })}"
                         @click="${() => onDelete(p)}"
                       >
                         ✕

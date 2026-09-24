@@ -8,6 +8,7 @@ import {
   refreshSessionCount,
 } from "./account.ts";
 import { getConfig } from "../../core/config.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import { WORKER_HOST } from "../../core/worker.ts";
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { AccountState, createInitialState } from "./state.ts";
@@ -27,13 +28,15 @@ type Handlers = ReturnType<typeof createHandlers>;
  */
 const privacyLine = () => html`
   <p class="text-xs opacity-70 text-center">
-    Your account lives on the Better Intra server (${WORKER_HOST}), not at 42.
+    ${t("Your account lives on the Better Intra server ({host}), not at 42.", {
+      host: WORKER_HOST,
+    })}
     <a
       class="underline font-semibold"
       href="${PRIVACY_POLICY_URL}"
       target="_blank"
       rel="noopener noreferrer"
-      >Privacy policy</a
+      >${t("Privacy policy")}</a
     >
   </p>
 `;
@@ -64,7 +67,7 @@ function renderDisclosure(
 ): ReturnType<typeof html> {
   return html`
     <div class="w-full flex flex-col gap-3 p-2 text-sm" data-disclosure>
-      <h2 class="text-lg font-bold">Before you sign in</h2>
+      <h2 class="text-lg font-bold">${t("Before you sign in")}</h2>
       <div class="flex flex-col gap-2 opacity-90">
         ${signInDisclosureText()}
       </div>
@@ -74,7 +77,7 @@ function renderDisclosure(
           class="btn btn-sm btn-ghost"
           @click="${handlers.cancelDisclosure}"
         >
-          Cancel
+          ${t("Cancel")}
         </button>
         <button
           type="button"
@@ -83,7 +86,7 @@ function renderDisclosure(
           ?disabled="${state.signingIn}"
           @click="${handlers.handleLogin42}"
         >
-          Sign in
+          ${t("Sign in")}
         </button>
       </div>
     </div>
@@ -105,10 +108,10 @@ function renderAccountTab(
         : "badge-warning";
   const statusText =
     state.cloud === "checking"
-      ? "Checking..."
+      ? t("Checking...")
       : isConnected
-        ? "Online"
-        : "Unreachable";
+        ? t("Online")
+        : t("Unreachable");
 
   if (!state.token) {
     return html`
@@ -117,15 +120,15 @@ function renderAccountTab(
       >
         <div class="text-center">
           ${state.needsReconnect
-            ? html`<h2 class="text-2xl font-bold">Session expired</h2>
+            ? html`<h2 class="text-2xl font-bold">${t("Session expired")}</h2>
                 <p class="opacity-70 mt-1">
-                  Sign in again to get the cloud features back.
+                  ${t("Sign in again to get the cloud features back.")}
                 </p>`
-            : html`<h2 class="text-2xl font-bold">Sign in with 42</h2>
+            : html`<h2 class="text-2xl font-bold">${t("Sign in with 42")}</h2>
                 <p class="opacity-70 mt-1">
-                  Optional: shows your profile look to other students, syncs
-                  your settings between browsers and enables the calendar feed.
-                  Everything else works without it.
+                  ${t(
+                    "Optional: shows your profile look to other students, syncs your settings between browsers and enables the calendar feed. Everything else works without it.",
+                  )}
                 </p>`}
         </div>
         <button
@@ -142,10 +145,10 @@ function renderAccountTab(
                   aria-hidden="true"
                 ></span>
                 <span class="font-bold tracking-wide text-base"
-                  >Signing in...</span
+                  >${t("Signing in...")}</span
                 >`
             : html`<span class="font-bold tracking-wide text-base"
-                  >Sign in with</span
+                  >${t("Sign in with")}</span
                 >
                 <span
                   class="size-10 flex items-center justify-center [&_polygon]:fill-current"
@@ -165,14 +168,14 @@ function renderAccountTab(
             class="alert alert-warning shadow-lg rounded-xl flex flex-col items-stretch gap-2"
           >
             <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-semibold">Session expired</span>
+              <span class="text-sm font-semibold">${t("Session expired")}</span>
               <button
                 class="btn btn-warning btn-sm font-bold"
                 type="button"
                 ?disabled="${state.signingIn}"
                 @click="${handlers.startLogin}"
               >
-                ${state.signingIn ? "Signing in..." : "Sign in again"}
+                ${state.signingIn ? t("Signing in...") : t("Sign in again")}
               </button>
             </div>
             ${loginErrorLine(state)}
@@ -183,7 +186,7 @@ function renderAccountTab(
           class="bg-base-200 shadow-md p-5 rounded-xl border border-base-300"
         >
           <h2 class="text-lg font-bold text-base-content mb-4">
-            Account Status
+            ${t("Account Status")}
           </h2>
           <div class="flex flex-col gap-3">
             <div
@@ -199,17 +202,21 @@ function renderAccountTab(
             <div
               class="flex items-center justify-between bg-base-100 p-3 rounded-lg border border-base-300"
             >
-              <span class="font-medium text-sm text-base-content">Server</span>
+              <span class="font-medium text-sm text-base-content"
+                >${t("Server")}</span
+              >
               <div class="badge ${statusClass} font-bold">
                 ${statusText}
               </div>
             </div>
             <div
               class="flex items-center justify-between bg-base-100 p-3 rounded-lg border border-base-300"
-              title="Each sign-in counts, on any browser. Past 10, the oldest one is signed out."
+              title="${t(
+                "Each sign-in counts, on any browser. Past 10, the oldest one is signed out.",
+              )}"
             >
               <span class="font-medium text-sm text-base-content"
-                >Sign-ins</span
+                >${t("Sign-ins")}</span
               >
               <div class="badge badge-success font-bold text-success-content">
                 ${state.activeSessions ?? "?"}/10
@@ -221,10 +228,14 @@ function renderAccountTab(
         <div
           class="bg-base-200 shadow-md p-5 rounded-xl border border-base-300"
         >
-          <h2 class="text-lg font-bold text-base-content">Cloud Sync</h2>
+          <h2 class="text-lg font-bold text-base-content">
+            ${t("Cloud Sync")}
+          </h2>
           <p class="text-xs opacity-70 mb-4">
-            Push copies this browser's settings to ${WORKER_HOST}; Pull
-            replaces them with that copy.
+            ${t(
+              "Push copies this browser's settings to {host}; Pull replaces them with that copy.",
+              { host: WORKER_HOST },
+            )}
           </p>
           <div class="grid grid-cols-2 gap-3">
             <button
@@ -242,7 +253,7 @@ function renderAccountTab(
               @click="${handlers.handlePull}"
             >
               ${state.buttons.pull.loading
-                ? "Pulling..."
+                ? t("Pulling...")
                 : state.buttons.pull.text}
             </button>
 
@@ -261,7 +272,7 @@ function renderAccountTab(
               @click="${handlers.handlePush}"
             >
               ${state.buttons.push.loading
-                ? "Pushing..."
+                ? t("Pushing...")
                 : state.buttons.push.text}
             </button>
           </div>
@@ -271,7 +282,7 @@ function renderAccountTab(
                 role="status"
                 class="text-xs text-error mt-3"
               >
-                <span class="font-semibold">Last push failed:</span>
+                <span class="font-semibold">${t("Last push failed:")}</span>
                 ${describeCloudFailure(
                   state.pushFailure.reason,
                   state.pushFailure.detail,
@@ -287,14 +298,14 @@ function renderAccountTab(
           type="button"
           @click="${handlers.handleDelete}"
         >
-          Sign out
+          ${t("Sign out")}
         </button>
         <button
           class="btn btn-error text-error-content font-bold transition-all text-base"
           type="button"
           @click="${handlers.handleWipe}"
         >
-          Wipe All Data
+          ${t("Wipe All Data")}
         </button>
       </div>
       ${privacyLine()}

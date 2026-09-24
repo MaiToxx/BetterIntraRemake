@@ -1,3 +1,5 @@
+import { t } from "../../core/i18n/i18n.ts";
+
 export interface SubjectLink {
   url: string;
   subjectId: string | null;
@@ -72,9 +74,9 @@ export function formatRelativeTime(
   const MINUTE = 60_000;
   const HOUR = 60 * MINUTE;
   const DAY = 24 * HOUR;
-  if (diff < MINUTE) return "just now";
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m ago`;
-  if (diff < DAY) return `${Math.floor(diff / HOUR)}h ago`;
-  if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d ago`;
+  if (diff < MINUTE) return t("just now");
+  if (diff < HOUR) return t("{n}m ago", { n: Math.floor(diff / MINUTE) });
+  if (diff < DAY) return t("{n}h ago", { n: Math.floor(diff / HOUR) });
+  if (diff < 7 * DAY) return t("{n}d ago", { n: Math.floor(diff / DAY) });
   return formatShortDate(ms);
 }

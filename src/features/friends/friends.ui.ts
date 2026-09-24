@@ -28,6 +28,7 @@ import { CLUSTERS, getClusterData } from "../clusters/clusters.data.ts";
 import type { SortDir, SortMode } from "./friends-sort.ts";
 import { followTheme, loadInitialData, type WidgetState } from "./friends-widget-state.ts";
 import { renderWidget } from "./friends-panel.ts";
+import { t, tp } from "../../core/i18n/i18n.ts";
 
 const HOST_ID = "friends-widget-host";
 
@@ -221,7 +222,7 @@ async function verifyAddedLogin(login: string) {
   if (check.status === "not-found") {
     await removeFriend(login);
     state.addPending = null;
-    state.addError = "User not found.";
+    state.addError = t("User not found.");
     renderWidgetUI();
     // A pending login was saved and synced: the cloud copy must lose it too.
     if (wasPending) syncToCloud();
@@ -230,7 +231,10 @@ async function verifyAddedLogin(login: string) {
 
   if (check.status === "error") {
     state.addPending = login;
-    state.addError = `Could not check ${login} (Intra session expired or network error). It is saved: retry, or reload the page.`;
+    state.addError = t(
+      "Could not check {login} (Intra session expired or network error). It is saved: retry, or reload the page.",
+      { login },
+    );
     state.addInput = "";
     renderWidgetUI();
     _shadow?.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
@@ -328,7 +332,11 @@ export async function injectFriendsWidget() {
       const n = _state.selected.length;
       if (
         !confirm(
-          `Remove ${n} friend${n === 1 ? "" : "s"} from your friends list?`,
+          tp(
+            n,
+            "Remove {n} friend from your friends list?",
+            "Remove {n} friends from your friends list?",
+          ),
         )
       )
         return;
@@ -365,7 +373,7 @@ export async function injectFriendsWidget() {
       renderWidgetUI();
 
       if (await isFriend(login)) {
-        _state.addError = "Already in your list.";
+        _state.addError = t("Already in your list.");
         _state.addLoading = false;
         renderWidgetUI();
         return;
@@ -416,10 +424,11 @@ export async function injectFriendsWidget() {
       }
       renderWidgetUI();
       // Focus follows the form: into the input when it opens, back to the
-      // "+" button when it closes (the control that had it is gone).
+      // "+" button when it closes (the control that had it is gone). Found
+      // by its data attribute: its aria-label is translated.
       _shadow
         ?.querySelector<HTMLElement>(
-          _state.addOpen ? 'input[type="text"]' : 'button[aria-label="Add friend"]',
+          _state.addOpen ? 'input[type="text"]' : "button[data-ft-add-toggle]",
         )
         ?.focus();
     },

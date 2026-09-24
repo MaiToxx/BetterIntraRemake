@@ -1,6 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { frCatalogPlugin } from "./scripts/i18n-catalog.ts";
 
 export default defineConfig({
+  // the whole French catalog (no per-bundle cut in tests)
+  plugins: [frCatalogPlugin({ filter: false })],
   // Build-time constants injected by vite.config.ts; needed so that modules
   // importing hubSettings.data.ts can be loaded in tests.
   define: {

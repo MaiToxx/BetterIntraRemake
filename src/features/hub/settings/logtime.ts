@@ -149,6 +149,10 @@ export const LOGTIME_SETTINGS: readonly HubSettingDef[] = [
     desc: "Gradient shown when you reach your monthly goal.",
     kind: "rainbow-palette",
     defaultValue: CONFIG_DEFAULT.LOGTIME_RAINBOW_PALETTE,
+    // Translated by the hub (optionLabel): the names are plain words, and
+    // Sunset / Ocean / Forest / Candy read the same as the page background
+    // presets of the Customize tab. The literals live in rainbow-presets.ts,
+    // which the content bundle includes, so the build keeps their French.
     options: Object.entries(RAINBOW_PALETTES).map(([id, p]) => ({
       value: id,
       label: p.label,

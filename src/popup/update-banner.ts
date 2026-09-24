@@ -8,6 +8,7 @@
  * only side-load, as a second copy with another extension id.
  */
 import { html, render } from "lit-html";
+import { t } from "../core/i18n/i18n.ts";
 import { UPDATE_KEY, type UpdateInfo } from "../core/update-check";
 
 /** Compiled in by every Vite config (and vitest's) from CHROME_STORE. */
@@ -41,15 +42,17 @@ export async function renderUpdateBanner(
         class="flex items-center justify-between gap-3 px-4 py-2 bg-[#00babc] text-white text-sm"
       >
         <span>
-          <strong>Better Intra ${info.version}</strong> is available
-          <span class="opacity-80">(you have ${current})</span>
+          <strong>Better Intra ${info.version}</strong> ${t("is available")}
+          <span class="opacity-80"
+            >${t("(you have {version})", { version: current })}</span
+          >
         </span>
         <a
           class="btn btn-xs bg-white text-[#00babc] border-none hover:bg-gray-100 font-bold"
           href="${info.url}"
           target="_blank"
           rel="noopener noreferrer"
-          >Download</a
+          >${t("Download")}</a
         >
       </div>
     `,

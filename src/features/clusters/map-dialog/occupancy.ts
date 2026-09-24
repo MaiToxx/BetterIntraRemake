@@ -18,6 +18,7 @@ import { applySeatGlow } from "./glow";
 import { rebuildHeader } from "./header";
 import { updateTabsOverflow } from "./tabs";
 import { tickWhileVisible } from "../../../core/dom/dom-wait.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 type ClusterLoader = (state: DialogState, cluster: ClusterInfo) => void;
 
@@ -131,7 +132,11 @@ export function applyOccupancy(
     if (total > 0) {
       const free = total - taken;
       badge.textContent = `${taken} / ${total}`;
-      badge.title = `${taken} taken, ${free} free · ${total} total`;
+      badge.title = t("{taken} taken, {free} free · {total} total", {
+        taken,
+        free,
+        total,
+      });
     } else {
       badge.textContent = `- / -`;
     }
@@ -188,12 +193,14 @@ export function applyOccupancy(
   const totalsBadge = shadow.getElementById("totals-badge");
   if (totalsBadge) {
     if (activeCluster.id === "active") {
-      totalsBadge.textContent = `${state.activeUsers.length} active`;
-      totalsBadge.title = "Users currently connected";
+      totalsBadge.textContent = t("{n} active", {
+        n: state.activeUsers.length,
+      });
+      totalsBadge.title = t("Users currently connected");
       totalsBadge.style.display = state.activeUsers.length > 0 ? "" : "none";
     } else {
       totalsBadge.textContent = `${sumTaken} / ${sumTotal}`;
-      totalsBadge.title = "Total taken / Total seats";
+      totalsBadge.title = t("Total taken / Total seats");
       if (sumTotal > 0 || sumTaken > 0) {
         totalsBadge.style.display = "";
       } else {

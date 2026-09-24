@@ -12,6 +12,7 @@ import {
 import { getIsLight } from "../../../core/theme/theme-manager.ts";
 import { createSkeleton, createSkeletonLines } from "../../../core/dom/skeleton.ts";
 import { tickWhileVisible } from "../../../core/dom/dom-wait.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 import { WORKER_URL, AUTH_MODE } from "../../../core/worker.ts";
 import {
@@ -247,7 +248,7 @@ function buildRouletteSection(
   const winLabel = document.createElement("span");
   winLabel.className =
     "text-sm font-semibold opacity-70 uppercase tracking-wide";
-  winLabel.textContent = "Wins";
+  winLabel.textContent = t("Wins");
   winCol.appendChild(winLabel);
   const winValue = document.createElement("span");
   winValue.style.cssText =
@@ -285,7 +286,7 @@ function buildRouletteSection(
   const nextLabel = document.createElement("span");
   nextLabel.className =
     "text-sm font-semibold opacity-70 uppercase tracking-wide";
-  nextLabel.textContent = "Next";
+  nextLabel.textContent = t("Next");
   nextCol.appendChild(nextLabel);
   const parts = getCountdownParts();
   const countdown = createCountdown(
@@ -303,7 +304,7 @@ function buildRouletteSection(
   if (!loading && entries === null) {
     const note = document.createElement("div");
     note.style.cssText = "font-size: 13px; opacity: 0.6; text-align: center;";
-    note.textContent = "Couldn't load roulette history";
+    note.textContent = t("Couldn't load roulette history");
     section.appendChild(note);
   }
 
@@ -374,12 +375,13 @@ function buildEvalStatsSection(data: EvalStatsData): HTMLElement {
   titleWrap.className = "inline-flex";
   const title = document.createElement("span");
   title.className = "font-bold uppercase text-sm cursor-help";
-  title.textContent = "Evaluations as Corrector";
+  title.textContent = t("Evaluations as Corrector");
   titleWrap.appendChild(title);
   titleRow.appendChild(titleWrap);
 
-  const tooltipText =
-    "Shows how many times you acted as a corrector (evaluator) per month, and how many of those evaluations you marked as failed (below 50%) — with the success percentage";
+  const tooltipText = t(
+    "Shows how many times you acted as a corrector (evaluator) per month, and how many of those evaluations you marked as failed (below 50%) — with the success percentage",
+  );
   let hovered = false;
   let tooltipTimer: number | null = null;
   title.addEventListener("mouseenter", () => {
@@ -446,7 +448,7 @@ function buildEvalStatsSection(data: EvalStatsData): HTMLElement {
   badgesWrap.appendChild(
     makeBadge(
       "display: inline-flex; align-items: center; padding: 10px 20px; border-radius: 10px; color: rgb(239,68,68); background: rgba(239,68,68,0.1);",
-      "failed",
+      t("failed"),
       String(data.global.failed),
     ),
   );
@@ -465,7 +467,7 @@ function buildEvalStatsSection(data: EvalStatsData): HTMLElement {
   const headerRow = document.createElement("tr");
   headerRow.style.cssText =
     "border-bottom: 1px solid hsl(var(--primary) / 0.2) !important;";
-  const headers = ["Month", "Total", "Failed", "Success %"];
+  const headers = [t("Month"), "Total", t("Failed"), t("Success %")];
   for (const h of headers) {
     const th = document.createElement("th");
     th.style.cssText =
@@ -543,7 +545,7 @@ function buildEvalStatsSkeleton(): HTMLElement {
 
   const title = document.createElement("span");
   title.className = "font-bold uppercase text-sm";
-  title.textContent = "Evaluations as Corrector";
+  title.textContent = t("Evaluations as Corrector");
   titleRow.appendChild(title);
 
   const badgesWrap = document.createElement("div");
@@ -580,6 +582,9 @@ function ensureCard(force: boolean): HTMLElement | null {
 
   const card = document.createElement("div");
   card.id = CARD_ID;
+  // Tagged here, not from its title (customize/cards.ts): the title is
+  // translated, and the Customize styles address the card by this id.
+  card.dataset.ftCard = "roulette";
   card.className = "bg-white md:h-96 md:drop-shadow-md md:rounded-lg";
   card.style.cssText =
     "overflow: hidden; display: flex; flex-direction: column; height: 384px;";
@@ -609,14 +614,14 @@ function renderCard(
   topSection.style.cssText =
     "flex: 1; min-height: 0; overflow-y: scroll; padding: 24px 24px 12px 24px;";
 
-  // The layout manager reads the card title from the first element carrying an
-  // "uppercase" class, so the title has to be one — otherwise the card cannot
-  // be matched against the user's dashboard card order.
+  // The title is the first element carrying an "uppercase" class, as on the
+  // Intra's own cards. It is translated, so the layout manager recognises this
+  // card by its id (layout.ts), not by the title's text.
   const rouletteTitle = document.createElement("div");
   rouletteTitle.className = "font-bold uppercase text-sm";
   rouletteTitle.style.cssText =
     "font-weight: 700; text-transform: uppercase; font-size: 14px; margin-bottom: 8px;";
-  rouletteTitle.textContent = "Thursday Roulette";
+  rouletteTitle.textContent = t("Thursday Roulette");
   topSection.appendChild(rouletteTitle);
 
   topSection.appendChild(

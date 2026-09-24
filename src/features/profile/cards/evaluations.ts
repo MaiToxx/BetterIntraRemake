@@ -1,5 +1,6 @@
 import { getConfig } from "../../../core/config.ts";
 import { DASHBOARD_CARD_SELECTOR } from "../../../core/intra/selectors.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 const CARD_TITLE = "PENDING EVALUATIONS";
 
@@ -68,7 +69,7 @@ function sortRows(nativeCard: HTMLElement) {
     fdbLabel.className = "ft-ev-label";
     fdbLabel.style.cssText =
       "font-weight:600;font-size:1rem;color:hsl(var(--foreground));margin:0 0 4px 4px;flex-shrink:0";
-    fdbLabel.textContent = `To Feedback (${feedbackRows.length})`;
+    fdbLabel.textContent = t("To Feedback ({n})", { n: feedbackRows.length });
     fdbWrap.insertBefore(fdbLabel, fdbWrap.firstChild);
 
     for (const row of feedbackRows) fdbWrap.appendChild(row);
@@ -95,14 +96,14 @@ function sortRows(nativeCard: HTMLElement) {
   evLabel.className = "ft-ev-label";
   evLabel.style.cssText =
     "font-weight:600;font-size:1rem;color:hsl(var(--foreground));margin:0 0 4px 4px;flex-shrink:0";
-  evLabel.textContent = `Evaluator (${evaluatorRows.length})`;
+  evLabel.textContent = t("Evaluator ({n})", { n: evaluatorRows.length });
   topWrap.insertBefore(evLabel, topWrap.firstChild);
 
   const edLabel = document.createElement("div");
   edLabel.className = "ft-ev-label";
   edLabel.style.cssText =
     "font-weight:600;font-size:1rem;color:hsl(var(--foreground));margin:4px 0 4px 4px;flex-shrink:0";
-  edLabel.textContent = `Evaluated (${evaluatedRows.length})`;
+  edLabel.textContent = t("Evaluated ({n})", { n: evaluatedRows.length });
   botWrap.insertBefore(edLabel, botWrap.firstChild);
 
   sorted = true;
@@ -163,8 +164,8 @@ function unsortRows(nativeCard: HTMLElement) {
 function findHideBtn(nativeCard: HTMLElement): HTMLElement | null {
   const btns = nativeCard.querySelectorAll<HTMLElement>("[class*='uppercase']");
   for (const btn of btns) {
-    const t = btn.textContent?.trim().toLowerCase() || "";
-    if (t === "hide" || t === "show") return btn;
+    const text = btn.textContent?.trim().toLowerCase() || "";
+    if (text === "hide" || text === "show") return btn;
   }
   return null;
 }
@@ -182,8 +183,8 @@ function toggleSort(nativeCard: HTMLElement) {
 function hookToggleButton(nativeCard: HTMLElement) {
   nativeCard.addEventListener("click", (e) => {
     const target = e.target as HTMLElement;
-    const t = target.textContent?.trim().toLowerCase() || "";
-    if (t === "hide" || t === "show") {
+    const text = target.textContent?.trim().toLowerCase() || "";
+    if (text === "hide" || text === "show") {
       e.preventDefault();
       e.stopPropagation();
       toggleSort(nativeCard);

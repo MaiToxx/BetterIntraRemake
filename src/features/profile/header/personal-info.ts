@@ -9,6 +9,7 @@ import CLUSTERS_SVG from "../../../assets/svg/clusters.svg?raw";
 import USER_COG_SVG from "../../../assets/svg/user-cog.svg?raw";
 import CHECK_SVG from "../../../assets/svg/check.svg?raw";
 import PLUS_SVG from "../../../assets/svg/plus.svg?raw";
+import { t } from "../../../core/i18n/i18n.ts";
 
 function getProfileLogin(): string {
   return getLoginFromPage() ?? "";
@@ -43,7 +44,7 @@ export async function initFriendBadge() {
   textDiv.style.whiteSpace = "nowrap";
 
   const render = () => {
-    const label = friendState ? "Remove friend" : "Add friend";
+    const label = friendState ? t("Remove friend") : t("Add friend");
     const svg = friendState ? CHECK_SVG : PLUS_SVG;
     row.replaceChildren();
     appendSvg(row, svg);
@@ -173,7 +174,7 @@ export async function initShortcutButtons() {
   makeButton(
     "https://profile.intra.42.fr/users/me/edit",
     USER_COG_SVG,
-    "Settings",
+    t("Settings"),
     openNewTab,
   );
 }

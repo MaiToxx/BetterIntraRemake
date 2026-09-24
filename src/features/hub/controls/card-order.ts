@@ -11,8 +11,22 @@ import EYE_SLASH_SVG from "../../../assets/svg/eye-slash.svg?raw";
 import GRIP_VERTICAL_SVG from "../../../assets/svg/grip-vertical.svg?raw";
 import RESET_SVG from "../../../assets/svg/reset.svg?raw";
 import { getConfig } from "../../../core/config.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import { saveSetting, settingIds } from "./context.ts";
+
+/**
+ * The name a chip shows for a stored card name. The Intra's own cards keep
+ * their headings as the Intra writes them (in English, whatever the hub's
+ * language), but the roulette card is Better Intra's: roulette-stats.ts
+ * titles it in the hub's language, and its chip follows. The stored value
+ * itself never changes.
+ */
+function chipName(stored: string): string {
+  return stored === "THURSDAY ROULETTE"
+    ? t("Thursday Roulette").toUpperCase()
+    : stored;
+}
 
 export function renderCardOrder(
   def: HubSettingDef,
@@ -55,7 +69,7 @@ export function renderCardOrder(
         <button
           type="button"
           class="btn btn-xs btn-outline btn-error gap-1 absolute -top-11 right-0 md:right-2 z-30"
-          aria-label="Reset ${def.label}"
+          aria-label="${t("Reset {label}", { label: t(def.label) })}"
           ?disabled="${!enabled}"
           @click="${() => {
             if (enabled) resetToDefault();
@@ -64,18 +78,21 @@ export function renderCardOrder(
           <span class="size-3 flex items-center justify-center" aria-hidden="true"
             >${unsafeHTML(RESET_SVG)}</span
           >
-          Reset
+          ${t("Reset")}
         </button>
 
         <div
           class="flex flex-wrap gap-3 items-center p-4 bg-base-300/30 rounded-xl border border-base-300 w-full"
         >
           <span class="text-xs opacity-50 w-full pb-1"
-            >Drag to reorder, or use the arrows</span
+            >${t("Drag to reorder, or use the arrows")}</span
           >
           ${currentOrder.map((rawName, idx) => {
             const isDisabled = rawName.startsWith("-");
+            // the card's heading as the Intra writes it (a stored value)
             const displayName = isDisabled ? rawName.substring(1) : rawName;
+            // what the chip and its buttons say (chipName above)
+            const shownName = chipName(displayName);
 
             const toggleVisibility = (e: Event) => {
               e.stopPropagation();
@@ -128,10 +145,10 @@ export function renderCardOrder(
                         type="button"
                         class="p-1 -ml-1 rounded hover:bg-black/10 transition-colors pointer-events-auto cursor-pointer flex items-center justify-center text-white"
                         @click="${toggleVisibility}"
-                        data-tip="${isDisabled ? "Show card" : "Hide card"}"
+                        data-tip="${isDisabled ? t("Show card") : t("Hide card")}"
                         aria-label="${isDisabled
-                          ? "Show"
-                          : "Hide"} ${displayName} card"
+                          ? t("Show {name} card", { name: shownName })
+                          : t("Hide {name} card", { name: shownName })}"
                       >
                         ${isDisabled
                           ? html`<span
@@ -148,13 +165,13 @@ export function renderCardOrder(
                     `
                   : ""}
 
-                <span class="pointer-events-none">${displayName}</span>
+                <span class="pointer-events-none">${shownName}</span>
                 ${enabled && !isDisabled
                   ? html`<button
                         type="button"
                         class="p-1 rounded hover:bg-black/10 disabled:opacity-30 cursor-pointer"
                         data-card-move="earlier"
-                        aria-label="Move ${displayName} card earlier"
+                        aria-label="${t("Move {name} card earlier", { name: shownName })}"
                         ?disabled="${idx === 0}"
                         @click="${(e: Event) => moveCard(e, currentOrder, idx, idx - 1)}"
                       >
@@ -164,7 +181,7 @@ export function renderCardOrder(
                         type="button"
                         class="p-1 -mr-2 rounded hover:bg-black/10 disabled:opacity-30 cursor-pointer"
                         data-card-move="later"
-                        aria-label="Move ${displayName} card later"
+                        aria-label="${t("Move {name} card later", { name: shownName })}"
                         ?disabled="${idx === currentOrder.length - 1}"
                         @click="${(e: Event) => moveCard(e, currentOrder, idx, idx + 1)}"
                       >

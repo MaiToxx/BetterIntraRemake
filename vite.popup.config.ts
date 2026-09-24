@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { collapseLitTemplatesPlugin } from "./scripts/collapse-lit-templates.ts";
+import { frCatalogPlugin } from "./scripts/i18n-catalog.ts";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import fs from "fs";
@@ -22,6 +23,7 @@ const storeBuild = process.env.CHROME_STORE === "1";
 export default defineConfig({
   plugins: [
     collapseLitTemplatesPlugin(),
+    frCatalogPlugin(),
     tailwindcss(),
     // This build writes shared-styles.css into the same folder as the content
     // build: it has to cut the same themes out, or it would put them back.

@@ -18,6 +18,7 @@ import ADVANCED_SVG from "../../assets/svg/advanced.svg?raw";
 import GRID_SVG from "../../assets/svg/grid.svg?raw";
 import CUSTOMIZE_SVG from "../../assets/svg/sun.svg?raw";
 import type { ConfigKey } from "../../core/config.ts";
+import { msg } from "../../core/i18n/i18n.ts";
 import { LOGTIME_SETTINGS } from "./settings/logtime.ts";
 import { CLUSTERS_SETTINGS } from "./settings/clusters.ts";
 import { PROFILE_SETTINGS } from "./settings/profile.ts";
@@ -42,80 +43,82 @@ export const HUB_INFO = {
 } as const;
 
 /**
- * The tabs. `toggleable` is the one place that says whether a feature has an
- * on/off switch: the tab header draws it, ACTIVE_SCRIPTS falls back to those
- * ids, and main.ts has an initializer for exactly those features (a tab that
- * is not toggleable is always on and needs none).
+ * The tabs. `name` and `desc` are marked with msg() (this runs before the
+ * language is known) and translated with t() where they are shown.
+ * `toggleable` is the one place that says whether a feature has an on/off
+ * switch: the tab header draws it, ACTIVE_SCRIPTS falls back to those ids,
+ * and main.ts has an initializer for exactly those features (a tab that is
+ * not toggleable is always on and needs none).
  */
 export const FEATURE_DEFS = [
   {
     id: "profile",
-    name: "Profile",
+    name: msg("Profile"),
     icon: USER,
-    desc: "Improves readability; custom avatar, banner and background images once signed in.",
+    desc: msg("Improves readability; custom avatar, banner and background images once signed in."),
     cols: 2,
     toggleable: true,
   },
   {
     id: "extras",
-    name: "Extras",
+    name: msg("Extras"),
     icon: GRID_SVG,
-    desc: "Enable or disable optional add-ons. More can be added later.",
+    desc: msg("Enable or disable optional add-ons. More can be added later."),
     cols: 3,
     toggleable: false,
   },
   {
     id: "clusters",
-    name: "Clusters",
+    name: msg("Clusters"),
     icon: CLUSTERS,
-    desc: "Cluster map dialog, default cluster picker and profiles opening in a new tab; chair direction markers where the campus provides them.",
+    desc: msg("Cluster map dialog, default cluster picker and profiles opening in a new tab; chair direction markers where the campus provides them."),
     cols: 2,
     toggleable: true,
   },
   {
     id: "logtime",
-    name: "Logtime",
+    name: msg("Logtime"),
     icon: CLOCK,
-    desc: "Redesign the logtime to show weekly and total hours.",
+    desc: msg("Redesign the logtime to show weekly and total hours."),
     cols: 3,
     toggleable: true,
   },
   {
     id: "shortcuts",
-    name: "Shortcuts",
+    name: msg("Shortcuts"),
     icon: SHORTCUT,
-    desc: "Manage custom navigation links.",
+    desc: msg("Manage custom navigation links."),
     cols: 3,
     toggleable: true,
   },
   {
     id: "calendar",
-    name: "Calendar",
+    name: msg("Calendar"),
     icon: CALENDAR,
-    desc: "Subscribe to your 42 events in Google Calendar, Apple Calendar, or any calendar app.",
+    desc: msg("Subscribe to your 42 events in Google Calendar, Apple Calendar, or any calendar app."),
     toggleable: false,
   },
   {
     id: "customize",
-    name: "Customize",
+    name: msg("Customize"),
     icon: CUSTOMIZE_SVG,
-    desc: "Accent colour, fonts, size, corners and your own CSS on every Intra page.",
+    desc: msg("Accent colour, fonts, size, corners and your own CSS on every Intra page."),
     cols: 2,
     toggleable: false,
   },
   {
     id: "advanced",
-    name: "Advanced",
+    name: msg("Advanced"),
     icon: ADVANCED_SVG,
-    desc: "General behavior settings.",
+    desc: msg("General behavior settings."),
     cols: 2,
     toggleable: false,
   },
   {
     id: "about",
-    name: "About",
+    name: msg("About"),
     icon: ABOUT,
-    desc: "Information about Better Intra and its technical stack.",
+    desc: msg("Information about Better Intra and its technical stack."),
     toggleable: false,
   },
 ] as const;
@@ -185,6 +188,11 @@ export type HubSettingDef = {
   nullable?: boolean;
   defaultValue?: unknown;
   options?: readonly FeatureCardOption[];
+  /**
+   * false: the option labels are names (themes, palettes, languages) and are
+   * shown as written in every language. Otherwise the hub translates them.
+   */
+  translateOptions?: false;
   grid?: boolean;
   colSpan?: number;
   fullWidth?: boolean;

@@ -26,6 +26,7 @@ import { getConfigMany } from "../../core/config.ts";
 import { tickWhileVisible, waitForElement, watchDom } from "../../core/dom/dom-wait.ts";
 import { savePreset } from "../customize/presets.ts";
 import { defaultCustomization } from "../customize/customize.ts";
+import { initI18n, t } from "../../core/i18n/i18n.ts";
 
 export const EGG_IDS = [
   "konami",
@@ -391,6 +392,7 @@ export function maxwellInvasion(seconds = 12, count = 48, still = false): void {
 
 const TOTAL = EGG_IDS.length;
 
+/** `message` is already translated (a t() at the call site). */
 async function found(id: EggId, message: string): Promise<void> {
   let first = false;
   let n = 0;
@@ -401,7 +403,7 @@ async function found(id: EggId, message: string): Promise<void> {
     // Storage gone: Chrome keeps an updated extension's old script running in
     // the open tabs, without its APIs. The secret still shows.
   }
-  toast(first ? `${message} · secret ${n}/${TOTAL} found` : message);
+  toast(first ? t("{message} · secret {n}/{total} found", { message, n, total: TOTAL }) : message);
 }
 
 /** Longest pause between two gear clicks that still counts as "in a row". */
@@ -441,7 +443,7 @@ export async function gearClicked(): Promise<void> {
     CUSTOM_PAGE_BG_PRESET: "mono",
   });
   if (!prefersStill()) matrixRain(4);
-  await found("hacker", "Wake up, Neo… the 🐇 Hacker preset is in Customize > Presets");
+  await found("hacker", t("Wake up, Neo… the 🐇 Hacker preset is in Customize > Presets"));
 }
 
 /** Inputs that take no text: a key pressed on one of them is not typing. */
@@ -484,7 +486,7 @@ function checkTimeAndDay(): void {
   const dayKey = localDayKey(now);
   if (h >= 2 && h < 5 && localStorage.getItem("ft-egg-night") !== dayKey) {
     localStorage.setItem("ft-egg-night", dayKey);
-    void found("night", `${h}h. The cluster never closes, but you could 😴`);
+    void found("night", t("{h}h. The cluster never closes, but you could 😴", { h }));
   }
   if (now.getDay() === 4 && location.pathname === "/") {
     // Found on the mutation that adds the card instead of by a 500 ms poll.
@@ -496,7 +498,7 @@ function checkTimeAndDay(): void {
       title.textContent = `🎰 ${title.textContent ?? ""}`;
       if (localStorage.getItem("ft-egg-thursday") !== dayKey) {
         localStorage.setItem("ft-egg-thursday", dayKey);
-        void found("thursday", "It's roulette day. May the odds be ever in your favour 🎰");
+        void found("thursday", t("It's roulette day. May the odds be ever in your favour 🎰"));
       }
     });
   }
@@ -522,7 +524,7 @@ function checkFortyTwoHours(): void {
     if (localStorage.getItem("ft-egg-42") !== monthKey) {
       localStorage.setItem("ft-egg-42", monthKey);
       if (!prefersStill()) confetti();
-      void found("fortytwo", "42h00 this month. The answer to everything ✨");
+      void found("fortytwo", t("42h00 this month. The answer to everything ✨"));
     }
     return true;
   };
@@ -576,24 +578,24 @@ export async function initEasterEggs(): Promise<void> {
     const still = prefersStill();
     if (id === "konami") {
       if (!still) partyMode();
-      void found("konami", "Party mode 🎉");
+      void found("konami", t("Party mode 🎉"));
     } else if (id === "barrel") {
       if (!still) barrelRoll();
-      void found("barrel", "Do a barrel roll! 🛩️");
+      void found("barrel", t("Do a barrel roll! 🛩️"));
     } else if (id === "matrix") {
       if (!still) matrixRain();
-      void found("matrix", "There is no spoon 🥄");
+      void found("matrix", t("There is no spoon 🥄"));
     } else if (id === "maxwell") {
       if (document.getElementById("ft-egg-maxwell")) {
         maxwellInvasion(undefined, undefined, still);
-        void found("invasion", "FULL MAXWELL 🐈‍⬛🐈‍⬛🐈‍⬛");
+        void found("invasion", t("FULL MAXWELL 🐈‍⬛🐈‍⬛🐈‍⬛"));
       } else {
         maxwell(undefined, still);
         void found(
           "maxwell",
           still
-            ? "Maxwell 🐈‍⬛ (type his name again for more)"
-            : "Maxwell 🐈‍⬛ (click him to spin faster, type his name again for more)",
+            ? t("Maxwell 🐈‍⬛ (type his name again for more)")
+            : t("Maxwell 🐈‍⬛ (click him to spin faster, type his name again for more)"),
         );
       }
     }
@@ -627,6 +629,8 @@ export async function initEasterEggs(): Promise<void> {
   animationsDisabled = DISABLE_ANIMATIONS === true;
   // The page-load secrets (night, Thursday, 42h) look once, on this load.
   if (!enabled) return;
+  // Their toasts are worded at once: in the language of the settings.
+  await initI18n();
 
   const start = () => {
     checkTimeAndDay();

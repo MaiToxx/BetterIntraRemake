@@ -17,6 +17,7 @@ import { CONFIG_DEFAULT, getConfigMany, type BetterIntraConfig } from "../../cor
 import { requestVisitorPreset } from "../../core/theme/theme-events.ts";
 import { sanitizeCssUrl, sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import { AVATAR_SELECTOR, DASHBOARD_CARD_SELECTOR } from "../../core/intra/selectors.ts";
+import { msg } from "../../core/i18n/i18n.ts";
 
 /** Elements the Intra v3 theme paints with the page background colour. */
 const PAGE_SURFACES =
@@ -85,13 +86,14 @@ export const CARD_IDS = [
   "logtime",
 ] as const;
 export type CardId = (typeof CARD_IDS)[number];
+/** English keys (msg): translate with t() where they are shown. */
 export const CARD_LABELS: Record<CardId, string> = {
-  agenda: "Agenda",
-  evaluations: "Pending evaluations",
-  achievements: "Last achievements",
-  projects: "Projects",
-  roulette: "Thursday roulette",
-  logtime: "Logtime",
+  agenda: msg("Agenda"),
+  evaluations: msg("Pending evaluations"),
+  achievements: msg("Last achievements"),
+  projects: msg("Projects"),
+  roulette: msg("Thursday roulette"),
+  logtime: msg("Logtime"),
 };
 /** Intra card titles (upper-cased) -> card id, used to tag the cards. */
 export const CARD_TITLES: Record<string, CardId> = {

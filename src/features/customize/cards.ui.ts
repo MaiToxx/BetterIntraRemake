@@ -15,12 +15,45 @@ import {
   type CardLookMap,
 } from "./customize.ts";
 import { publishLookIfShared } from "./publish.ts";
+import { msg, t } from "../../core/i18n/i18n.ts";
 
 const KEY = "CUSTOM_CARDS";
-const FIELDS: { field: "bg" | "border" | "title"; label: string; fallback: string }[] = [
-  { field: "bg", label: "Background", fallback: "#151a24" },
-  { field: "border", label: "Border", fallback: "#00babc" },
-  { field: "title", label: "Title", fallback: "#00babc" },
+/**
+ * The texts are English keys (msg), translated with t() when drawn: one whole
+ * sentence per field, so each language can agree the colour with its noun.
+ */
+const FIELDS: {
+  field: "bg" | "border" | "title";
+  label: string;
+  tip: string;
+  custom: string;
+  colour: string;
+  fallback: string;
+}[] = [
+  {
+    field: "bg",
+    label: msg("Background"),
+    tip: msg("Use a custom background colour"),
+    custom: msg("Custom background colour for {card}"),
+    colour: msg("Background colour for {card}"),
+    fallback: "#151a24",
+  },
+  {
+    field: "border",
+    label: msg("Border"),
+    tip: msg("Use a custom border colour"),
+    custom: msg("Custom border colour for {card}"),
+    colour: msg("Border colour for {card}"),
+    fallback: "#00babc",
+  },
+  {
+    field: "title",
+    label: msg("Title"),
+    tip: msg("Use a custom title colour"),
+    custom: msg("Custom title colour for {card}"),
+    colour: msg("Title colour for {card}"),
+    fallback: "#00babc",
+  },
 ];
 
 async function load(): Promise<CardLookMap> {
@@ -60,16 +93,17 @@ export function renderCardsPanel() {
 
     const row = (id: CardId) => {
       const look = map[id] ?? {};
+      const card = t(CARD_LABELS[id]);
       return html`<div class="flex flex-wrap items-center gap-3 py-2 border-b border-base-300 last:border-b-0">
-        <span class="w-40 font-medium">${CARD_LABELS[id]}</span>
-        ${FIELDS.map(({ field, label, fallback }) => {
+        <span class="w-40 font-medium">${card}</span>
+        ${FIELDS.map(({ field, label, tip, custom, colour, fallback }) => {
           const value = look[field];
           return html`<label class="flex items-center gap-1 text-xs">
             <input
               type="checkbox"
               class="checkbox checkbox-xs checkbox-accent"
-              title="Use a custom ${label.toLowerCase()} colour"
-              aria-label="Custom ${label.toLowerCase()} colour for ${CARD_LABELS[id]}"
+              title="${t(tip)}"
+              aria-label="${t(custom, { card })}"
               .checked="${!!value}"
               @change="${(e: Event) => {
                 const on = (e.target as HTMLInputElement).checked;
@@ -78,11 +112,11 @@ export function renderCardsPanel() {
                 });
               }}"
             />
-            ${label}
+            ${t(label)}
             <input
               type="color"
               class="input input-accent p-0.5 w-9 h-7"
-              aria-label="${label} colour for ${CARD_LABELS[id]}"
+              aria-label="${t(colour, { card })}"
               .value="${value ?? fallback}"
               ?disabled="${!value}"
               @change="${(e: Event) => {
@@ -98,7 +132,7 @@ export function renderCardsPanel() {
           <input
             type="checkbox"
             class="toggle toggle-xs toggle-accent"
-            aria-label="Glow on ${CARD_LABELS[id]}"
+            aria-label="${t("Glow on {card}", { card })}"
             .checked="${!!look.glow}"
             @change="${(e: Event) => {
               const on = (e.target as HTMLInputElement).checked;
@@ -107,13 +141,13 @@ export function renderCardsPanel() {
               });
             }}"
           />
-          Glow
+          ${t("Glow")}
         </label>
         <button
           type="button"
           class="btn btn-ghost btn-xs"
-          title="Back to the default look for this card"
-          aria-label="Clear the ${CARD_LABELS[id]} look"
+          title="${t("Back to the default look for this card")}"
+          aria-label="${t("Clear the {card} look", { card })}"
           ?disabled="${!map[id]}"
           @click="${() => update(id, (l) => {
             delete l.bg;
@@ -122,7 +156,7 @@ export function renderCardsPanel() {
             delete l.glow;
           })}"
         >
-          Clear
+          ${t("Clear")}
         </button>
       </div>`;
     };
@@ -132,9 +166,9 @@ export function renderCardsPanel() {
         html`<div class="flex flex-col">
           ${CARD_IDS.map(row)}
           <p class="text-xs opacity-60 pt-2">
-            Tick a colour to override it for that card only. The border width comes from the
-            setting above; Logtime only takes a border and glow (its content has its own colours
-            in the Logtime tab).
+            ${t(
+              "Tick a colour to override it for that card only. The border width comes from the setting above; Logtime only takes a border and glow (its content has its own colours in the Logtime tab).",
+            )}
           </p>
         </div>`,
         container,

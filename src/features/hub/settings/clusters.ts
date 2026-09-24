@@ -37,6 +37,8 @@ export const CLUSTERS_SETTINGS: readonly HubSettingDef[] = [
     desc: "Prefills a cluster page when the page opens.",
     kind: "select",
     defaultValue: String(CONFIG_DEFAULT.CLUSTERS_DEFAULT_ID),
+    // cluster names from the campus data, shown as written in every language
+    translateOptions: false,
     options: CLUSTER_OPTIONS.map((c) => ({
       label: c.name.toUpperCase(),
       value: c.id,

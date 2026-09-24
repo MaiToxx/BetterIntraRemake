@@ -19,6 +19,7 @@ import { clearSeatGlow } from "./glow";
 import { rebuildHeader, updateCampusTime, updateDefaultSelect } from "./header";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
 import { campusDisplayName } from "./helpers";
+import { t } from "../../../core/i18n/i18n.ts";
 
 // occupancy.ts switches to another tab when the Active one disappears: it
 // gets loadCluster() from here instead of importing it (no import cycle).
@@ -31,7 +32,9 @@ export function renderNoClusterData(state: DialogState, campusId: string) {
   div.className =
     "flex items-center justify-center p-12 text-center text-base-content/50";
   div.id = "no-cluster-data";
-  div.textContent = `No cluster map for ${campusDisplayName(state.campusOptions, campusId)}`;
+  div.textContent = t("No cluster map for {campus}", {
+    campus: campusDisplayName(state.campusOptions, campusId),
+  });
   mapArea.replaceChildren(div);
 }
 
@@ -148,12 +151,12 @@ export function renderMapError(
     "flex flex-col items-center justify-center gap-3 p-12 text-base-content/50";
   errorDiv.id = "map-error";
   const text = document.createElement("span");
-  text.textContent = "Failed to load map";
+  text.textContent = t("Failed to load map");
   const retry = document.createElement("button");
   retry.type = "button";
   retry.className = "btn btn-sm";
   retry.id = "map-retry";
-  retry.textContent = "Retry";
+  retry.textContent = t("Retry");
   retry.addEventListener("click", () => {
     void loadCluster(state, cluster, signal);
   });
@@ -365,6 +368,8 @@ export async function loadCampus(
     if (flagEl) flagEl.textContent = getCampusFlag(name);
     const nameEl = shadow.getElementById("campus-trigger-name");
     if (nameEl) nameEl.textContent = name.toUpperCase();
+    // the name screen readers hear followed the first campus only
+    trigger.setAttribute("aria-label", t("Campus: {name}", { name }));
   }
   if (!state.clusters.some((c) => c.svg)) {
     renderNoClusterData(state, campusId);

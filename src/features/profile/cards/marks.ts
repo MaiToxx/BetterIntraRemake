@@ -16,6 +16,7 @@ import CHECK_SVG from "../../../assets/svg/check.svg?raw";
 import X_SVG from "../../../assets/svg/x.svg?raw";
 import CHEVRON_DOWN_SVG from "../../../assets/svg/chevron-down.svg?raw";
 import { createSkeleton } from "../../../core/dom/skeleton.ts";
+import { intlLocale, t, tp } from "../../../core/i18n/i18n.ts";
 
 const DATE_COLUMN_WIDTH = "150px";
 const SCORE_COLUMN_WIDTH = "24px";
@@ -91,8 +92,8 @@ function formatDate(dateStr: string): string {
   // round, not floor: two local midnights are 23 or 25 h apart across DST
   const days = Math.round((todayMidnight - eventMidnight) / 86400000);
   const relative =
-    days < 1 ? "today" : days === 1 ? "1 day ago" : `${days} days ago`;
-  const real = d.toLocaleDateString("en-US", {
+    days < 1 ? t("today") : tp(days, "{n} day ago", "{n} days ago");
+  const real = d.toLocaleDateString(intlLocale("en-US"), {
     month: "short",
     day: "numeric",
     year: "numeric",

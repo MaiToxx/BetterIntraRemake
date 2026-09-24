@@ -2,6 +2,7 @@ import type { OccupancyEntry, ActiveSortMode } from "./render";
 import type { SeatPos } from "./crop";
 import { getSvgSlug } from "./cache";
 import type { ExitConfig } from "../../campus/campus.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 export type {
   ExitConfig,
@@ -81,6 +82,8 @@ export const keyOf = (campusId: string, clusterId: string) =>
   `${campusId}:${clusterId}`;
 
 export function clusterLabel(c: ClusterInfo): string {
+  // The Active tab is not a cluster of the Intra: its name is a word.
+  if (c.id === "active") return t("Active").toUpperCase();
   return (
     c.name.trim() ||
     (c.svg ? getSvgSlug(c.svg) : "") ||

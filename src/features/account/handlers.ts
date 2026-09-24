@@ -12,6 +12,7 @@ import {
 import { AccountState, resetButtonState } from "./state";
 import { WORKER_ORIGIN_PATTERN } from "../../core/worker.ts";
 import { acceptSignInDisclosure } from "./signin-disclosure.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 /** Hosts the extension must be allowed on for the login flow to complete. */
 const REQUIRED_ORIGINS = [
@@ -39,11 +40,11 @@ async function ensureHostPermissions(): Promise<void> {
  * (describeCloudFailure) and the sign-in banner say the rest.
  */
 function failureLabel(reason: CloudFailure): string {
-  if (reason === "auth") return "Session expired";
-  if (reason === "network") return "Connection Failed";
-  if (reason === "busy") return "Too many requests";
-  if (reason === "too-large") return "Too large";
-  return "Sync Failed";
+  if (reason === "auth") return t("Session expired");
+  if (reason === "network") return t("Connection Failed");
+  if (reason === "busy") return t("Too many requests");
+  if (reason === "too-large") return t("Too large");
+  return t("Sync Failed");
 }
 
 /**
@@ -127,7 +128,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     // ?all=true keeps the pushed settings.
     if (
       confirm(
-        "Sign out on this browser? Your settings stay here and in the cloud.",
+        t("Sign out on this browser? Your settings stay here and in the cloud."),
       )
     ) {
       await logoutCloud();
@@ -138,17 +139,19 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
   const handleWipe = async () => {
     if (
       !confirm(
-        "This permanently deletes everything the Better Intra server holds for you: your pushed settings, every signed-in session, your calendar link and your entry in the community counter. Your local settings stay. Continue?",
+        t(
+          "This permanently deletes everything the Better Intra server holds for you: your pushed settings, every signed-in session, your calendar link and your entry in the community counter. Your local settings stay. Continue?",
+        ),
       )
     )
       return;
 
     const success = await wipeAllCloudData();
     if (success) {
-      alert("All cloud data successfully wiped.");
+      alert(t("All cloud data successfully wiped."));
       await reloadActiveTab();
     } else {
-      alert("Failed to delete cloud data. Please try again.");
+      alert(t("Failed to delete cloud data. Please try again."));
     }
   };
 
@@ -157,7 +160,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
 
     // One POST, no probe first: the request's own outcome tells network from
     // session from worker error, and the button reacts on the click itself.
-    state.buttons.push = { loading: true, text: "Connecting..." } as any;
+    state.buttons.push = { loading: true, text: t("Connecting...") } as any;
     updateUI();
 
     const result = await pushSettings();
@@ -167,7 +170,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
       state.buttons.push = {
         loading: false,
         success: true,
-        text: "Synced!",
+        text: t("Synced!"),
       } as any;
     } else {
       if (result === "network") state.cloud = "offline";
@@ -179,16 +182,18 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     }
     updateUI();
     setTimeout(() => {
-      resetButtonState(state, "push", "Push Settings");
+      resetButtonState(state, "push", t("Push Settings"));
       updateUI();
     }, 2500);
   };
 
   const handlePull = async () => {
     if (state.buttons.pull.loading) return;
-    if (!confirm("Overwrite current local settings with cloud backup?")) return;
+    if (!confirm(t("Overwrite current local settings with cloud backup?"))) {
+      return;
+    }
 
-    state.buttons.pull = { loading: true, text: "Connecting..." } as any;
+    state.buttons.pull = { loading: true, text: t("Connecting...") } as any;
     updateUI();
 
     // The one GET serves the restore and the session count alike.
@@ -207,7 +212,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
       state.buttons.pull = {
         loading: false,
         success: true,
-        text: "Restored!",
+        text: t("Restored!"),
       } as any;
       updateUI();
       setTimeout(() => reloadActiveTab(), 1500);
@@ -219,11 +224,11 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     state.buttons.pull = {
       loading: false,
       error: true,
-      text: result.ok ? "No backup yet" : failureLabel(result.reason),
+      text: result.ok ? t("No backup yet") : failureLabel(result.reason),
     } as any;
     updateUI();
     setTimeout(() => {
-      resetButtonState(state, "pull", "Pull Settings");
+      resetButtonState(state, "pull", t("Pull Settings"));
       updateUI();
     }, 2000);
   };

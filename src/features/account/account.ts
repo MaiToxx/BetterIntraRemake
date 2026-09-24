@@ -5,6 +5,7 @@ import { showConfirmDialog } from "../../core/dom/confirm-dialog.ts";
 import { AUTH_FLOW_TTL_MS, markAuthFlowPending } from "./auth-callback.ts";
 import { sanitizeVisualUrls } from "../profile/header/visuals-sanitize.ts";
 import { isValidStoredValue } from "../../core/config/access.ts";
+import { t } from "../../core/i18n/i18n.ts";
 
 export { hashLogin };
 
@@ -91,9 +92,9 @@ async function runIntraLogin(
     ? await requestIntraLoginFromActiveTab()
     : await loginWithIntraSession();
   if (!result.ok) {
-    const message = result.error || "Unknown error.";
+    const message = result.error || t("Unknown error.");
     if (options.onFailure) options.onFailure(message);
-    else alert(`Better Intra sign-in failed.\n${message}`);
+    else alert(`${t("Better Intra sign-in failed.")}\n${message}`);
     return result;
   }
   if (onSuccess) await onSuccess();
@@ -173,7 +174,7 @@ export async function loginWith42(
 
   await marked;
   if (!popup) {
-    alert("Popup blocked! Please allow popups for this site.");
+    alert(t("Popup blocked! Please allow popups for this site."));
     return;
   }
 
@@ -435,15 +436,27 @@ export function describeCloudFailure(
   const said = detail.trim();
   switch (reason) {
     case "auth":
-      return "Your session expired: sign in again.";
+      return t("Your session expired: sign in again.");
     case "network":
-      return `The Better Intra server (${WORKER_HOST}) did not answer. Your settings are kept on this browser.`;
+      return t(
+        "The Better Intra server ({host}) did not answer. Your settings are kept on this browser.",
+        { host: WORKER_HOST },
+      );
     case "busy":
-      return "Too many pushes in a short time. Wait a minute, then push again.";
+      return t("Too many pushes in a short time. Wait a minute, then push again.");
     case "too-large":
-      return `Too large for the cloud${said ? ` (${said})` : ""}. Shorten your custom CSS or delete saved presets, then push again.`;
+      return said
+        ? t(
+            "Too large for the cloud ({detail}). Shorten your custom CSS or delete saved presets, then push again.",
+            { detail: said },
+          )
+        : t(
+            "Too large for the cloud. Shorten your custom CSS or delete saved presets, then push again.",
+          );
     default:
-      return `The server refused the push${said ? `: ${said}` : "."}`;
+      return said
+        ? t("The server refused the push: {detail}", { detail: said })
+        : t("The server refused the push.");
   }
 }
 
@@ -723,9 +736,9 @@ export async function maybePromptRestore(): Promise<void> {
     return;
   }
   const restore = await showConfirmDialog({
-    message: "Cloud backup found. Restore your settings?",
-    confirmLabel: "Restore",
-    cancelLabel: "Cancel",
+    message: t("Cloud backup found. Restore your settings?"),
+    confirmLabel: t("Restore"),
+    cancelLabel: t("Cancel"),
   });
   await chrome.storage.local.remove(RESTORE_PENDING_KEY);
   if (restore) {

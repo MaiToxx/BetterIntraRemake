@@ -12,6 +12,7 @@ import { sanitizeCssColor } from "../profile/header/visuals-sanitize.ts";
 import { cssUrl } from "../../core/security/css-sanitize.ts";
 import { CLUSTERS } from "../clusters/clusters.data.ts";
 import { findClusterForSeat } from "../clusters/map-dialog/helpers.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import WALLET_SVG from "../../assets/svg/wallet.svg?raw";
 import EVAL_SVG from "../../assets/svg/eval.svg?raw";
 import ARROW_SHARE_SVG from "../../assets/svg/arrow_share.svg?raw";
@@ -60,7 +61,7 @@ function renderLevelBar(level: number) {
         value="${pct}"
         max="100"
         style="height:1rem"
-        aria-label="Level progress to level ${whole + 1}"
+        aria-label="${t("Level progress to level {n}", { n: whole + 1 })}"
       ></progress>
       <span class="text-lg font-bold opacity-60 w-8 shrink-0"
         >${whole + 1}</span
@@ -105,9 +106,11 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
   const avatarBg =
     sanitizeCssColor(friend.avatarBg, AVATAR_BG_KEYWORDS) || "transparent";
   const toggleTitle = hasCustom
-    ? showingOriginal
-      ? "Click to view custom avatar"
-      : "Click to view original avatar"
+    ? t(
+        showingOriginal
+          ? "Click to view custom avatar"
+          : "Click to view original avatar",
+      )
     : "";
 
   const toggleCustom = hasCustom
@@ -262,7 +265,9 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
                     rel="noopener noreferrer"
                     class="badge badge-success badge-md gap-1 px-2 hover:brightness-110 transition-all cursor-pointer no-underline"
                     style="border:3px solid color-mix(in oklab, var(--color-success) 55%, transparent);border-radius:0.75rem;height:auto;padding-block:0.15rem;font-weight:600;"
-                    data-tip="View ${friend.lastSeen} on cluster map"
+                    data-tip="${t("View {seat} on cluster map", {
+                      seat: friend.lastSeen,
+                    })}"
                   >
                     <span class="text-sm font-semibold"
                       >${friend.lastSeen}</span
@@ -314,7 +319,10 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
           >${friend.wallet}</span
         >
       </div>
-      <div class="flex items-center gap-1.5" data-tip="Evaluation points">
+      <div
+        class="flex items-center gap-1.5"
+        data-tip="${t("Evaluation points")}"
+      >
         <span
           class="w-5 h-5 shrink-0 opacity-40 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full"
           >${unsafeHTML(svgIcon(EVAL_SVG))}</span
@@ -336,7 +344,9 @@ export function renderFriendRow(friend: FriendData, opts: FriendRowOptions) {
             class="checkbox checkbox-error checkbox-sm"
             .checked="${selected}"
             @change="${() => onToggleSelect?.(friend.login)}"
-            aria-label="Select ${friend.login} for deletion"
+            aria-label="${t("Select {login} for deletion", {
+              login: friend.login,
+            })}"
           />
         </label>`
       : ""}

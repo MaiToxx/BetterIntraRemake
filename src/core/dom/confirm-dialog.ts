@@ -1,5 +1,7 @@
 import { html, render } from "lit-html";
 import { sharedStylesLink } from "../styles/shared-styles.ts";
+// via src/: the catalog test recognises the import by its "core/i18n/i18n" path
+import { t } from "../../core/i18n/i18n.ts";
 
 const DIALOG_ID = "ft-confirm-dialog";
 
@@ -12,7 +14,7 @@ interface ConfirmDialogOptions {
 export async function showConfirmDialog(
   options: ConfirmDialogOptions,
 ): Promise<boolean> {
-  const { message, confirmLabel = "Confirm", cancelLabel = "Cancel" } = options;
+  const { message, confirmLabel = t("Confirm"), cancelLabel = t("Cancel") } = options;
 
   document.getElementById(DIALOG_ID)?.remove();
 
@@ -62,7 +64,7 @@ export async function showConfirmDialog(
           />
         </svg>
         <div class="flex flex-col gap-1 text-left">
-          <h3 class="font-bold text-base">Restore cloud settings</h3>
+          <h3 class="font-bold text-base">${t("Restore cloud settings")}</h3>
           <p class="text-sm opacity-80">${message}</p>
         </div>
         <div class="flex gap-2 mt-2">

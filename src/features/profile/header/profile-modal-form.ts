@@ -12,6 +12,7 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { sanitizeCssUrl } from "../../../core/security/css-sanitize.ts";
 import { localPreviewUrl } from "./local-preview.ts";
 import LINK_SVG from "../../../assets/svg/link.svg?raw";
+import { t } from "../../../core/i18n/i18n.ts";
 
 export interface FormState {
   avatar: string;
@@ -74,7 +75,7 @@ function renderUrlHistory(
             type="button"
             class="rounded-lg border border-base-300 text-xs font-bold opacity-50 hover:opacity-100 hover:border-error"
             style="width: 2rem; height: 2rem; flex-shrink: 0; cursor: pointer; background: none;"
-            data-tip="Clear history"
+            data-tip="${t("Clear history")}"
             @click=${onClear}
           >
             ✕
@@ -107,12 +108,14 @@ function renderPendingFile(upload: UploadUi) {
       class="rounded border border-base-300 shrink-0"
       style="${thumb}background-size: cover; background-position: center; width: 2rem; height: 2rem;"
     ></span>
-    <span class="min-w-0 truncate opacity-80">${pending.name}: uploads when you save</span>
+    <span class="min-w-0 truncate opacity-80"
+      >${t("{name}: uploads when you save", { name: pending.name })}</span
+    >
     ${upload.onDiscard
       ? html`<button
           type="button"
           class="btn btn-ghost btn-xs shrink-0"
-          aria-label="Discard ${pending.name}"
+          aria-label="${t("Discard {name}", { name: pending.name })}"
           ?disabled="${!!upload.busy}"
           @click="${upload.onDiscard}"
         >
@@ -156,9 +159,11 @@ export function renderUrlField(
         ${upload
           ? html`<label
               class="btn btn-sm btn-outline btn-accent self-center ${upload.busy ? "btn-disabled" : ""}"
-              title="Choose an image on this computer (2 MB at most; bigger JPEG photos are shrunk). It is uploaded when you save."
+              title="${t(
+                "Choose an image on this computer (2 MB at most; bigger JPEG photos are shrunk). It is uploaded when you save.",
+              )}"
             >
-              Upload
+              ${t("Upload")}
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/gif,image/webp"
@@ -191,16 +196,22 @@ export function renderModeRadios(
   currentValue: string,
   onChange: (val: string) => void,
 ) {
-  const modes = ["fill", "fit", "stretch", "center", "tile"];
+  const modes: [string, string][] = [
+    ["fill", t("Fill")],
+    ["fit", t("Fit")],
+    ["stretch", t("Stretch")],
+    ["center", t("Center")],
+    ["tile", t("Tile")],
+  ];
   return html`
     <div class="join w-full mt-4">
       ${modes.map(
-        (m) =>
+        ([m, label]) =>
           html`<input
             type="radio"
             name="${name}"
             class="btn btn-sm join-item flex-1"
-            aria-label="${m.charAt(0).toUpperCase() + m.slice(1)}"
+            aria-label="${label}"
             value="${m}"
             ?checked="${currentValue === m}"
             @change="${(e: Event) =>

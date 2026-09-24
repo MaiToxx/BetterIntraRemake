@@ -58,6 +58,9 @@ beforeAll(async () => {
     alarms,
     action,
     tabs,
+    // an English browser, whatever the machine running the tests speaks (the
+    // node environment's navigator.language is the OS locale)
+    i18n: { getUILanguage: () => "en-US" },
     storage: { ...(globalThis as any).chrome.storage, onChanged: event("onChanged") },
   };
   await import("../src/background.ts");
@@ -89,6 +92,32 @@ describe("update check", () => {
     expect(store[UPDATE_CHECK_META_KEY]).toMatchObject({ etag: 'W/"abc"' });
     expect(typeof store[UPDATE_CHECK_META_KEY].checkedAt).toBe("number");
     expect(action.setBadgeText).toHaveBeenCalledWith({ text: "NEW" });
+  });
+
+  it("labels the badge in the language of the settings", async () => {
+    await chrome.storage.local.set({ UI_LANGUAGE: "fr" });
+    vi.stubGlobal("fetch", vi.fn(async () => release("v2.0.0")));
+    listeners.onStartup();
+    await flush();
+    expect(action.setBadgeText).toHaveBeenCalledWith({ text: "MAJ" });
+  });
+
+  it("relabels a badge already up when the language changes, and only then", async () => {
+    await chrome.storage.local.set({ UI_LANGUAGE: "fr" });
+    listeners.onChanged({ UI_LANGUAGE: { newValue: "fr" } });
+    await flush();
+    expect(action.setBadgeText).not.toHaveBeenCalled();
+
+    const info = { version: "2.0.0", url: "https://github.com/o/r/releases/tag/v2.0.0", checkedAt: 1 };
+    await chrome.storage.local.set({ [UPDATE_KEY]: info });
+    listeners.onChanged({ UI_LANGUAGE: { newValue: "fr" } });
+    await flush();
+    expect(action.setBadgeText).toHaveBeenLastCalledWith({ text: "MAJ" });
+
+    await chrome.storage.local.set({ UI_LANGUAGE: "en" });
+    listeners.onChanged({ UI_LANGUAGE: { oldValue: "fr", newValue: "en" } });
+    await flush();
+    expect(action.setBadgeText).toHaveBeenLastCalledWith({ text: "NEW" });
   });
 
   it("makes no request when the last check is younger than six hours", async () => {

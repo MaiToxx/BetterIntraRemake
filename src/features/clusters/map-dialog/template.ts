@@ -3,8 +3,9 @@ import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { sharedStylesLink } from "../../../core/styles/shared-styles.ts";
 import { getCampusFlag } from "../../campus/campus-flags.ts";
 import { hasMarkerDefinitions } from "../clusters.data.ts";
-import { type DialogState } from "./context";
+import { clusterLabel, type DialogState } from "./context";
 import { campusDisplayName } from "./helpers";
+import { t } from "../../../core/i18n/i18n.ts";
 import RELOAD_SVG from "../../../assets/svg/reload.svg?raw";
 import CLOCK_SVG from "../../../assets/svg/clock.svg?raw";
 import MAXIMIZE_SVG from "../../../assets/svg/maximize.svg?raw";
@@ -276,7 +277,7 @@ export function renderTemplate(state: DialogState): TemplateResult {
               type="button"
               id="campus-trigger"
               class="btn btn-sm btn-ghost gap-1.5 px-2"
-              aria-label="Campus: ${campusName}"
+              aria-label="${t("Campus: {name}", { name: campusName })}"
               aria-haspopup="menu"
               data-tip="Campus"
               data-tip-size="14px"
@@ -293,7 +294,7 @@ export function renderTemplate(state: DialogState): TemplateResult {
                 id="totals-badge"
                 class="text-xs font-medium opacity-70 whitespace-nowrap tabular-nums"
                 style="display:none"
-                data-tip="Total taken / Total seats"
+                data-tip="${t("Total taken / Total seats")}"
                 data-tip-size="14px"
               ></span>
             </button>
@@ -331,9 +332,9 @@ export function renderTemplate(state: DialogState): TemplateResult {
               type="button"
               id="settings-btn"
               class="btn btn-circle btn-ghost btn-sm"
-              aria-label="Settings"
+              aria-label="${t("Settings")}"
               aria-haspopup="menu"
-              data-tip="Settings"
+              data-tip="${t("Settings")}"
               data-tip-size="14px"
             >
               ${unsafeHTML(
@@ -350,13 +351,13 @@ export function renderTemplate(state: DialogState): TemplateResult {
               <div id="default-cluster-row">
                 <span
                   class="text-xs font-semibold uppercase tracking-wide opacity-60 block mb-1"
-                  >Default cluster</span
+                  >${t("Default cluster")}</span
                 >
                 <select
                   class="select select-accent select-sm w-full"
                   id="default-cluster-select"
-                  aria-label="Default cluster"
-                  data-tip="Default cluster"
+                  aria-label="${t("Default cluster")}"
+                  data-tip="${t("Default cluster")}"
                   data-tip-size="14px"
                 >
                   ${[...clusters, { id: "active", name: "Active" }]
@@ -369,7 +370,9 @@ export function renderTemplate(state: DialogState): TemplateResult {
                           value="${c.id}"
                           ?selected="${c.id === defaultId}"
                         >
-                          ${c.name.toUpperCase()}
+                          ${c.id === "active"
+                            ? clusterLabel(c)
+                            : c.name.toUpperCase()}
                         </option>`,
                     )}
                 </select>
@@ -385,12 +388,12 @@ export function renderTemplate(state: DialogState): TemplateResult {
                       : ""}"
                     id="markers-btn"
                     aria-pressed="${showMarkers ? "true" : "false"}"
-                    data-tip="Toggle chair markers"
+                    data-tip="${t("Toggle chair markers")}"
                     data-tip-size="14px"
                   >
-                    <span>Show chair markers</span>
+                    <span>${t("Show chair markers")}</span>
                     <span class="text-xs opacity-50"
-                      >${showMarkers ? "ON" : "OFF"}</span
+                      >${t(showMarkers ? "ON" : "OFF")}</span
                     >
                   </button>`
                 : nothing}
@@ -400,8 +403,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
             type="button"
             class="btn btn-circle btn-ghost btn-sm"
             id="maximize-btn"
-            aria-label="Maximize"
-            data-tip="Maximize"
+            aria-label="${t("Maximize")}"
+            data-tip="${t("Maximize")}"
             data-tip-size="14px"
           >
             <span class="maximize-icon" aria-hidden="true">
@@ -419,8 +422,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
             type="button"
             class="btn btn-circle btn-ghost btn-sm text-xl"
             id="close-btn"
-            aria-label="Close"
-            data-tip="Close"
+            aria-label="${t("Close")}"
+            data-tip="${t("Close")}"
             data-tip-size="14px"
           >
             <span aria-hidden="true">✕</span>
@@ -436,8 +439,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
           id="updated-badge"
           class="btn btn-accent btn-sm border border-base-content/20 absolute bottom-3 right-3 z-20"
           style="display:none;width:80px;justify-content:flex-start"
-          aria-label="Reload occupancy"
-          data-tip="Reload occupancy"
+          aria-label="${t("Reload occupancy")}"
+          data-tip="${t("Reload occupancy")}"
           data-tip-size="14px"
         >
           <span
@@ -479,38 +482,38 @@ export function renderTemplate(state: DialogState): TemplateResult {
               type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="sort-name"
-              aria-label="Sort by login"
-              data-tip="Sort by login"
+              aria-label="${t("Sort by login")}"
+              data-tip="${t("Sort by login")}"
               data-tip-size="14px"
             >
               <span
                 class="sort-icon size-3 flex items-center justify-center"
                 aria-hidden="true"
               ></span>
-              <span class="sort-label">Name</span>
+              <span class="sort-label">${t("Name")}</span>
             </button>
             <button
               type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="sort-since"
-              aria-label="Sort by connection time"
-              data-tip="Sort by connection time"
+              aria-label="${t("Sort by connection time")}"
+              data-tip="${t("Sort by connection time")}"
               data-tip-size="14px"
             >
               <span
                 class="sort-icon size-3 flex items-center justify-center"
                 aria-hidden="true"
               ></span>
-              <span class="sort-label">Time</span>
+              <span class="sort-label">${t("Time")}</span>
             </button>
             <div class="w-px h-4 bg-accent-content/40"></div>
             <button
               type="button"
               class="btn btn-ghost btn-xs text-accent-content gap-1"
               id="active-wifi-toggle"
-              aria-label="Show only Wi-Fi users"
+              aria-label="${t("Show only Wi-Fi users")}"
               aria-pressed="false"
-              data-tip="Show only Wi-Fi users"
+              data-tip="${t("Show only Wi-Fi users")}"
               data-tip-size="14px"
             >
               <span class="sort-label">Wi-Fi</span>
@@ -525,8 +528,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
             type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-reset"
-            aria-label="Reset zoom"
-            data-tip="Reset zoom"
+            aria-label="${t("Reset zoom")}"
+            data-tip="${t("Reset zoom")}"
             data-tip-size="14px"
           >
             <span class="size-3 flex items-center justify-center" aria-hidden="true"
@@ -537,8 +540,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
             type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-out"
-            aria-label="Zoom out"
-            data-tip="Zoom out"
+            aria-label="${t("Zoom out")}"
+            data-tip="${t("Zoom out")}"
             data-tip-size="14px"
           >
             <span aria-hidden="true">−</span>
@@ -552,8 +555,8 @@ export function renderTemplate(state: DialogState): TemplateResult {
             type="button"
             class="btn btn-ghost btn-xs text-xs text-accent-content"
             id="zoom-in"
-            aria-label="Zoom in"
-            data-tip="Zoom in"
+            aria-label="${t("Zoom in")}"
+            data-tip="${t("Zoom in")}"
             data-tip-size="14px"
           >
             <span aria-hidden="true">+</span>

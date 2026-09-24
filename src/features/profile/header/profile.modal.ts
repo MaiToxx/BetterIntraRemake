@@ -38,6 +38,7 @@ import {
 import { deleteUnusedUploads } from "./upload-cleanup.ts";
 import { clearLocalPreview, paintLocalPreview } from "./local-preview.ts";
 import FORTY_TWO_SVG from "../../../assets/svg/42_Logo.svg?raw";
+import { t } from "../../../core/i18n/i18n.ts";
 
 let activeTab: ProfileTab = "avatar";
 
@@ -61,10 +62,10 @@ function renderPanelContent(
   ui: SaveUi,
 ) {
   const tabItems: { id: ProfileTab; label: string }[] = [
-    { id: "avatar", label: "Avatar" },
-    { id: "banner", label: "Banner" },
-    { id: "background", label: "Background" },
-    { id: "badges", label: "Badges" },
+    { id: "avatar", label: t("Avatar") },
+    { id: "banner", label: t("Banner") },
+    { id: "background", label: t("Background") },
+    { id: "badges", label: t("Badges") },
   ];
 
   const panels = renderTabPanels(
@@ -91,7 +92,7 @@ function renderPanelContent(
           class="btn btn-outline btn-error btn-sm"
           ?disabled="${ui.saving}"
         >
-          Reset
+          ${t("Reset")}
         </button>
         <button
           class="btn btn-circle btn-ghost btn-sm"
@@ -109,8 +110,8 @@ function renderPanelContent(
             >
               <p class="opacity-50 max-w-72 text-sm">
                 ${needsReconnect
-                  ? "Session expired. Reconnect to customize your profile pictures."
-                  : "Connect your 42 account to customize your profile pictures."}
+                  ? t("Session expired. Reconnect to customize your profile pictures.")
+                  : t("Connect your 42 account to customize your profile pictures.")}
               </p>
               <button
                 type="button"
@@ -119,7 +120,7 @@ function renderPanelContent(
                 @click="${onConnect}"
               >
                 <span class="font-bold tracking-wide"
-                  >${needsReconnect ? "Reconnect" : "Connect with"}</span
+                  >${needsReconnect ? t("Reconnect") : t("Connect with")}</span
                 >
                 <span
                   class="size-8 flex items-center justify-center [&_polygon]:fill-current"
@@ -165,7 +166,7 @@ function renderPanelContent(
               class="btn btn-success font-bold shrink-0"
               ?disabled="${ui.saving || uploads.reading}"
             >
-              ${ui.saving ? "Saving…" : "Save Changes"}
+              ${ui.saving ? t("Saving…") : t("Save Changes")}
             </button>
           `}
     </div>
@@ -355,7 +356,7 @@ export const createSettingsModal = async (
   };
 
   const reset = async () => {
-    if (saving || !confirm("Reset visuals?")) return;
+    if (saving || !confirm(t("Reset visuals?"))) return;
     await chrome.storage.local.remove([
       "PROFILE_IMAGE_URL",
       "PROFILE_BANNER_URL",
@@ -468,7 +469,10 @@ export const createSettingsModal = async (
             return;
           }
           saving = false;
-          saveError = `${SLOT_LABELS[upload.slot]}: ${upload.error}`;
+          saveError = t("{slot}: {error}", {
+            slot: t(SLOT_LABELS[upload.slot]),
+            error: upload.error,
+          });
           rerender();
           return;
         }

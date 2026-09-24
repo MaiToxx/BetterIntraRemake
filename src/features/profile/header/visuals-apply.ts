@@ -30,6 +30,7 @@ import {
   extrasAreVisible,
 } from "../extras/extras-apply.ts";
 import type { VisualUrls } from "./visuals-types.ts";
+import { t } from "../../../core/i18n/i18n.ts";
 
 /**
  * What the apply step needs to know about the page it paints. visuals.ts
@@ -270,7 +271,7 @@ export const injectCustomStyles = () => {
       position: relative !important;
     }
     ${AVATAR_SELECTOR}[data-modal-listener]::after {
-      content: "Edit";
+      content: ${JSON.stringify(t("Edit"))};
       position: absolute;
       inset: 0;
       display: flex;
@@ -343,7 +344,7 @@ let lookOnScreen: PublicLook | null = null;
  * custom CSS) stays mine. It used to take a theme code sent by the owner.
  */
 export async function saveVisitorLook(login: string, look: PublicLook): Promise<string> {
-  const name = `${login}'s style`;
+  const name = t("{login}'s style", { login });
   await savePreset(name, { ...(await snapshotCustomization()), ...look });
   return name;
 }
@@ -398,11 +399,11 @@ export function showVisitorLook(
     if (!lookOnScreen || !login) return;
     try {
       const name = await saveVisitorLook(login, lookOnScreen);
-      button.textContent = "✓ Saved";
-      button.title = `Saved as "${name}" in Customize > Presets`;
+      button.textContent = t("✓ Saved");
+      button.title = t('Saved as "{name}" in Customize > Presets', { name });
       button.disabled = true;
     } catch {
-      button.textContent = "Not saved";
+      button.textContent = t("Not saved");
     }
   };
   render(
@@ -421,11 +422,23 @@ export function showVisitorLook(
         }
         #${LOOK_BADGE_ID} button:hover { opacity: 1; background: hsl(var(--muted, 220 20% 15%)); }
       </style>
-      <span title="This profile is shown with the look and extras its owner published with Better Intra">🎨 ${login}'s style</span>
+      <span
+        title="${t("This profile is shown with the look and extras its owner published with Better Intra")}"
+        >🎨 ${t("{login}'s style", { login: login! })}</span
+      >
       ${look
-        ? html`<button type="button" title="Keep this style in my presets (Customize > Presets)" @click=${save}>Save</button>`
+        ? html`<button
+            type="button"
+            title="${t("Keep this style in my presets (Customize > Presets)")}"
+            @click=${save}
+          >${t("Save")}</button>`
         : ""}
-      <button type="button" title="Show my own style instead (this visit only)" aria-label="Show my own style instead" @click=${hide}>✕</button>`,
+      <button
+        type="button"
+        title="${t("Show my own style instead (this visit only)")}"
+        aria-label="${t("Show my own style instead")}"
+        @click=${hide}
+      >✕</button>`,
     host,
   );
   if (!existing) (document.body || document.documentElement).appendChild(host);

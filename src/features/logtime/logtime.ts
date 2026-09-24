@@ -26,6 +26,7 @@ import {
 } from "../../core/theme/theme-manager.ts";
 import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { fetchOwnEvents } from "../calendar/own-events.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import type { CalendarEvent, EventsByDate, LogtimeConfig } from "./types.ts";
 
 // Declared in types.ts so the renderers need not import this module back.
@@ -419,8 +420,8 @@ function renderLogtime(
         {
           canPrev: index > 0 || (!!loadOlder && !loadMoreLoading),
           canNext: index < monthKeys.length - 1,
-          prevLabel: index > 0 ? "Previous month" : "Load older months",
-          nextLabel: "Next month",
+          prevLabel: t(index > 0 ? "Previous month" : "Load older months"),
+          nextLabel: t("Next month"),
           loading: loadMoreLoading && index === 0,
           onPrev: () =>
             index > 0 ? goTo(monthKeys[index - 1]) : loadOlder?.(),

@@ -10,11 +10,31 @@
  * to display.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
+import { msg } from "../../../core/i18n/i18n.ts";
 // Only the limits: an input of the public profile section stops where the
 // sanitizer of the extras would cut, so nothing typed is silently lost.
 import { LIMITS } from "../../profile/extras/extras.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import { BG_PRESET_OPTIONS } from "./options.ts";
+
+/**
+ * The limits the descriptions below write out. A description is the English
+ * key of its French translation, and the build keeps a translation only when
+ * the bundle holds that exact text as one literal (scripts/i18n-catalog.ts),
+ * which `Up to ${LIMITS.bio} characters.` is not. The numbers are written in
+ * the texts; this type fails to check when LIMITS no longer says the same.
+ */
+type LimitsInTexts = {
+  bio: 160;
+  statusText: 60;
+  pronouns: 24;
+  greeting: 80;
+  flairItems: 6;
+  bannerDimMax: 80;
+  bannerBlurMax: 12;
+};
+type TextsFollow<L extends LimitsInTexts> = L;
+type _LimitsChecked = TextsFollow<typeof LIMITS>;
 
 export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
   {
@@ -51,10 +71,10 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_STATUS_TEXT",
     label: "Status",
-    desc: `What you are up to right now. Up to ${LIMITS.statusText} characters.`,
+    desc: "What you are up to right now. Up to 60 characters.",
     kind: "text",
     maxLength: LIMITS.statusText,
-    placeholder: "Grinding C09",
+    placeholder: msg("Grinding C09"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_STATUS_TEXT,
     grid: true,
     colSpan: 1,
@@ -63,10 +83,10 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_PRONOUNS",
     label: "Pronouns",
-    desc: `Up to ${LIMITS.pronouns} characters.`,
+    desc: "Up to 24 characters.",
     kind: "text",
     maxLength: LIMITS.pronouns,
-    placeholder: "she/her",
+    placeholder: msg("she/her"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_PRONOUNS,
     grid: true,
     colSpan: 1,
@@ -75,7 +95,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_FLAIR",
     label: "Flair",
-    desc: `Up to ${LIMITS.flairItems} emoji separated by spaces.`,
+    desc: "Up to 6 emoji separated by spaces.",
     kind: "text",
     maxLength: 60,
     placeholder: "🎯 🚀 ☕",
@@ -87,22 +107,22 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_BIO",
     label: "Bio",
-    desc: `A few words about you, shown under your name. Plain text, up to ${LIMITS.bio} characters.`,
+    desc: "A few words about you, shown under your name. Plain text, up to 160 characters.",
     kind: "text",
     fullWidth: true,
     maxLength: LIMITS.bio,
-    placeholder: "42 student, C enjoyer, powered by coffee.",
+    placeholder: msg("42 student, C enjoyer, powered by coffee."),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_BIO,
   },
   {
     feature: "profile",
     key: "PROFILE_PUB_GREETING",
     label: "Visitor greeting",
-    desc: `Shown once to people who visit your profile. Up to ${LIMITS.greeting} characters.`,
+    desc: "Shown once to people who visit your profile. Up to 80 characters.",
     kind: "text",
     fullWidth: true,
     maxLength: LIMITS.greeting,
-    placeholder: "Welcome to my profile!",
+    placeholder: msg("Welcome to my profile!"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_GREETING,
   },
 
@@ -126,7 +146,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     label: "GitLab",
     desc: "User name or profile URL.",
     kind: "text",
-    placeholder: "user name",
+    placeholder: msg("user name"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_LINK_GITLAB,
     grid: true,
     colSpan: 1,
@@ -138,7 +158,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     label: "LinkedIn",
     desc: "User name or profile URL.",
     kind: "text",
-    placeholder: "your-name",
+    placeholder: msg("your-name"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_LINK_LINKEDIN,
     grid: true,
     colSpan: 1,
@@ -162,7 +182,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     label: "Discord",
     desc: "Your handle. Visitors copy it with a click.",
     kind: "text",
-    placeholder: "handle",
+    placeholder: msg("handle"),
     defaultValue: CONFIG_DEFAULT.PROFILE_PUB_LINK_DISCORD,
     grid: true,
     colSpan: 1,
@@ -342,7 +362,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_BANNER_DIM",
     label: "Darken header (%)",
-    desc: `Dark overlay on your header to keep the text readable. 0–${LIMITS.bannerDimMax}.`,
+    desc: "Dark overlay on your header to keep the text readable. 0–80.",
     kind: "number",
     min: 0,
     max: LIMITS.bannerDimMax,
@@ -355,7 +375,7 @@ export const PUBLIC_PROFILE_SETTINGS: readonly HubSettingDef[] = [
     feature: "profile",
     key: "PROFILE_PUB_BANNER_BLUR",
     label: "Card blur (px)",
-    desc: `Blurs what is behind the profile card. 0–${LIMITS.bannerBlurMax}.`,
+    desc: "Blurs what is behind the profile card. 0–12.",
     kind: "number",
     min: 0,
     max: LIMITS.bannerBlurMax,

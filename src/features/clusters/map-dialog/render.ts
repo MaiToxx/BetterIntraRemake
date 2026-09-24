@@ -1,7 +1,16 @@
 import { SeatPos } from "./crop";
 import { normalizeSeatId } from "./seats";
+import { getLang, t } from "../../../core/i18n/i18n.ts";
 
 const PROFILE_BASE = "https://profile.intra.42.fr/users";
+
+/** A clock time ("14:05"): French in French, else the browser's own format. */
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(getLang() === "fr" ? "fr-FR" : [], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export interface OccupancyEntry {
   host: string;
@@ -173,11 +182,7 @@ export function renderSeatOverlays(
     rotationDeg,
     round,
   } of entries) {
-    const since = new Date(seat.begin_at);
-    const timeStr = since.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const timeStr = clockTime(seat.begin_at);
 
     const a = Object.assign(document.createElement("a"), {
       href: `${PROFILE_BASE}/${seat.login}`,
@@ -196,7 +201,10 @@ export function renderSeatOverlays(
     a.dataset.host = host;
     const friend = isMapFriend(seat.login);
     if (friend) a.classList.add("is-friend");
-    a.setAttribute("data-tip", `${friend ? "★ " : ""}${seat.login} - since ${timeStr}`);
+    a.setAttribute(
+      "data-tip",
+      `${friend ? "★ " : ""}${t("{login} - since {time}", { login: seat.login, time: timeStr })}`,
+    );
     a.setAttribute("data-tip-size", "15px");
 
     const avatar = Object.assign(document.createElement("img"), {
@@ -225,7 +233,9 @@ export function renderActiveList(
     const emptyDiv = document.createElement("div");
     emptyDiv.className =
       "flex items-center justify-center p-12 text-base-content/50";
-    emptyDiv.textContent = wifiOnly ? "No one on Wi-Fi right now" : "No one connected";
+    emptyDiv.textContent = t(
+      wifiOnly ? "No one on Wi-Fi right now" : "No one connected",
+    );
     mapArea.replaceChildren(emptyDiv);
     return;
   }
@@ -291,10 +301,7 @@ export function renderActiveList(
     ].join("");
     since.setAttribute(
       "data-tip",
-      `since ${new Date(user.begin_at).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`,
+      t("since {time}", { time: clockTime(user.begin_at) }),
     );
 
     card.appendChild(avatar);
@@ -307,8 +314,8 @@ export function renderActiveList(
 
 export function formatTimeAgo(ts: number): string {
   const secs = (Date.now() - ts) / 1000;
-  if (secs < 3) return "now";
+  if (secs < 3) return t("now");
   const mins = Math.round(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  return `${Math.round(mins / 60)}h`;
+  if (mins < 60) return t("{m}m", { m: mins });
+  return t("{h}h", { h: Math.round(mins / 60) });
 }

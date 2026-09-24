@@ -5,6 +5,7 @@
  * or a move.
  */
 import { render } from "lit-html";
+import { t } from "../../../core/i18n/i18n.ts";
 import {
   getStoredLinks,
   extractLinksFromForm,
@@ -69,12 +70,16 @@ export function renderShortcutsPanel(): HTMLElement {
         async (idx) => {
           syncFromForm();
           const row = links[idx];
-          const label = row?.name.trim() ? `"${row.name.trim()}"` : `${idx + 1}`;
+          const name = row?.name.trim();
           // an empty row goes without a question: nothing is lost
           if (
             row &&
-            (row.name.trim() || row.url.trim()) &&
-            !window.confirm(`Delete shortcut ${label}?`)
+            (name || row.url.trim()) &&
+            !window.confirm(
+              name
+                ? t('Delete shortcut "{name}"?', { name })
+                : t("Delete shortcut {n}?", { n: idx + 1 }),
+            )
           ) {
             return;
           }

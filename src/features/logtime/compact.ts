@@ -1,6 +1,7 @@
 import { html } from "lit-html";
 import { AVG_ONLY_ACTIVE_DAYS, PAST_MONTHS_OPACITY } from "./constants";
-import { fmtHours, goalTip } from "./utils";
+import { fmtHours, goalTip, monthName as monthLabel } from "./utils";
+import { t } from "../../core/i18n/i18n.ts";
 import type { LogtimeConfig } from "./types.ts";
 
 export type MonthEntry = { ym: string; data: Record<string, number> };
@@ -35,9 +36,7 @@ function renderCompactMonthCard(
     : lastDayDate;
   const avg = total / divisor;
 
-  const monthName = new Intl.DateTimeFormat("en-US", { month: "long" }).format(
-    new Date(year, mon - 1),
-  );
+  const monthName = monthLabel(year, mon - 1);
   const goalSecs = config.goal_hours * 3600;
   const goalPercent = goalSecs > 0 ? Math.round((total / goalSecs) * 100) : 0;
   const isGoalMet = goalPercent >= 100;
@@ -93,7 +92,7 @@ function renderCompactMonthCard(
             : ""}
         </div>
         ${config.show_average
-          ? html`<span>Avg: <b>${fmtHours(avg)}</b></span>`
+          ? html`<span>${t("Avg:")} <b>${fmtHours(avg)}</b></span>`
           : ""}
       </div>
 

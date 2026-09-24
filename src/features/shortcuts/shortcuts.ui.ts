@@ -3,6 +3,7 @@ import { live } from "lit-html/directives/live.js";
 import { getConfig } from "../../core/config.ts";
 import { sanitizeHexColor } from "../../core/security/css-sanitize.ts";
 import GLOBE from "../../assets/svg/globe.svg";
+import { t } from "../../core/i18n/i18n.ts";
 
 export interface ShortcutLink {
   name: string;
@@ -81,7 +82,27 @@ export function renderShortcutRow(
   moves?: RowMoves,
 ): ReturnType<typeof html> {
   // The placeholders are not names: each field says which shortcut it edits.
-  const which = position ? `Shortcut ${position}` : "Shortcut";
+  // Whole sentences, so a language can put the number where it belongs.
+  const n = position;
+  const labels = n
+    ? {
+        emoji: t("Shortcut {n} emoji", { n }),
+        name: t("Shortcut {n} name", { n }),
+        address: t("Shortcut {n} address", { n }),
+        colour: t("Shortcut {n} colour", { n }),
+        up: t("Move shortcut {n} up", { n }),
+        down: t("Move shortcut {n} down", { n }),
+        remove: t("Remove shortcut {n}", { n }),
+      }
+    : {
+        emoji: t("Shortcut emoji"),
+        name: t("Shortcut name"),
+        address: t("Shortcut address"),
+        colour: t("Shortcut colour"),
+        up: t("Move shortcut up"),
+        down: t("Move shortcut down"),
+        remove: t("Remove shortcut"),
+      };
   // A name without a usable address cannot be stored: say so on the row
   // instead of dropping it without a word.
   const unsaved = !!link.name.trim() && !sanitizeUrl(link.url);
@@ -99,7 +120,7 @@ export function renderShortcutRow(
         type="text"
         class="input w-16 shrink-0 text-center text-xl"
         data-shortcuts-emoji
-        aria-label="${which} emoji"
+        aria-label="${labels.emoji}"
         .value="${live(link.emoji || "")}"
         placeholder="🐝"
         maxlength="2"
@@ -108,9 +129,9 @@ export function renderShortcutRow(
         type="text"
         class="input flex-1 min-w-0"
         data-shortcuts-name
-        aria-label="${which} name"
+        aria-label="${labels.name}"
         .value="${live(link.name)}"
-        placeholder="${defaultShortcutName(link.url) || "Name"}"
+        placeholder="${defaultShortcutName(link.url) || t("Name")}"
         maxlength="20"
       />
     </div>
@@ -121,7 +142,7 @@ export function renderShortcutRow(
         placeholder="https://example.com"
         .value="${live(link.url)}"
         data-shortcuts-url
-        aria-label="${which} address"
+        aria-label="${labels.address}"
         pattern="^(https?://)?.*"
       />
     </div>
@@ -130,7 +151,7 @@ export function renderShortcutRow(
         type="color"
         class="input w-12 p-1 cursor-pointer"
         data-shortcuts-color
-        aria-label="${which} colour"
+        aria-label="${labels.colour}"
         .value="${live(link.color)}"
       />
       ${moves
@@ -138,7 +159,7 @@ export function renderShortcutRow(
               type="button"
               class="btn btn-square btn-ghost"
               data-move-up
-              aria-label="Move ${which.toLowerCase()} up"
+              aria-label="${labels.up}"
               ?disabled="${!moves.up}"
               @click="${() => moves.up?.()}"
             >
@@ -148,7 +169,7 @@ export function renderShortcutRow(
               type="button"
               class="btn btn-square btn-ghost"
               data-move-down
-              aria-label="Move ${which.toLowerCase()} down"
+              aria-label="${labels.down}"
               ?disabled="${!moves.down}"
               @click="${() => moves.down?.()}"
             >
@@ -158,7 +179,7 @@ export function renderShortcutRow(
       <button
         type="button"
         class="btn btn-outline btn-error"
-        aria-label="Remove ${which.toLowerCase()}"
+        aria-label="${labels.remove}"
         @click="${onDelete}"
       >
         <span aria-hidden="true">✕</span>
@@ -166,7 +187,7 @@ export function renderShortcutRow(
     </div>
     ${unsaved
       ? html`<p class="w-full text-xs text-warning" role="status">
-          Not saved: add the address this shortcut opens.
+          ${t("Not saved: add the address this shortcut opens.")}
         </p>`
       : nothing}
   </div>`;
@@ -209,8 +230,8 @@ export function renderShortcutsSettings(
           ?disabled="${isFull}"
         >
           ${isFull
-            ? "Limit Reached"
-            : html`Add Link (${links.length}/${maxLinks})`}
+            ? t("Limit Reached")
+            : t("Add Link ({count}/{max})", { count: links.length, max: maxLinks })}
         </button>
       </div>
 
@@ -334,7 +355,7 @@ function renderLinkContent(
             />
           `}
     </div>
-    <span class="text-sm"> ${link.name || "Empty"} </span>
+    <span class="text-sm"> ${link.name || t("Empty")} </span>
   `;
 }
 

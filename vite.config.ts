@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import { collapseLitTemplatesPlugin } from "./scripts/collapse-lit-templates.ts";
+import { frCatalogPlugin } from "./scripts/i18n-catalog.ts";
 import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "path";
 import fs from "fs";
@@ -309,6 +310,7 @@ export function copyLicenseFiles(rootDir: string, outDirPath: string): string[] 
 export default defineConfig({
   plugins: [
     collapseLitTemplatesPlugin(),
+    frCatalogPlugin(),
     tailwindcss(),
     splitDaisyThemesPlugin(),
     {

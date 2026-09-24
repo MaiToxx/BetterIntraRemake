@@ -1,4 +1,5 @@
 import { html, render } from "lit-html";
+import { getLang, initI18n, t } from "../core/i18n/i18n.ts";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import { initAccountSettings } from "../features/account/account.ui.ts";
 // Side-effect import: emits the compiled Tailwind sheet as shared-styles.css,
@@ -24,7 +25,7 @@ function renderPlaceholder(container: HTMLElement) {
             ${unsafeHTML(ICON_SVG)}
           </span>
           <h2 class="text-2xl font-bold mt-2">Better Intra</h2>
-          <p class="opacity-70 mt-1">Works on Intra pages only.</p>
+          <p class="opacity-70 mt-1">${t("Works on Intra pages only.")}</p>
         </div>
         <button
           class="btn bg-[#00babc] text-white border-none hover:bg-[#1fd2d4] w-full max-w-sm h-14 text-base flex items-center justify-center gap-2 transition-colors duration-200 mt-4 font-bold"
@@ -32,7 +33,7 @@ function renderPlaceholder(container: HTMLElement) {
           @click="${() =>
             window.open("https://profile-v3.intra.42.fr/", "_blank")}"
         >
-          Open Intra
+          ${t("Open Intra")}
         </button>
       </div>
     `,
@@ -73,8 +74,10 @@ async function renderPermissionBanner(root: HTMLElement) {
         class="flex items-center justify-between gap-3 px-4 py-2 bg-warning text-warning-content text-sm"
       >
         <span>
-          <strong>Site access required.</strong> Better Intra needs access to
-          intra.42.fr and ${WORKER_HOST}.
+          <strong>${t("Site access required.")}</strong>
+          ${t("Better Intra needs access to intra.42.fr and {host}.", {
+            host: WORKER_HOST,
+          })}
         </span>
         <button
           type="button"
@@ -93,7 +96,7 @@ async function renderPermissionBanner(root: HTMLElement) {
             }
           }}"
         >
-          Allow
+          ${t("Allow")}
         </button>
       </div>
     `,
@@ -104,6 +107,9 @@ async function renderPermissionBanner(root: HTMLElement) {
 async function main() {
   const root = document.getElementById("account-root");
   if (!root) return;
+  // before any text is drawn
+  await initI18n();
+  document.documentElement.lang = getLang();
 
   // The popup follows the extension theme (dark / light / system) instead of
   // being hard-wired to light; daisyUI picks the theme up from #popup-root.

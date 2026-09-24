@@ -1,5 +1,6 @@
 import { html, render } from "lit-html";
 import { sanitizeHttpUrl } from "../../core/security/safe-url.ts";
+import { msg, t } from "../../core/i18n/i18n.ts";
 
 import { WORKER_URL } from "../../core/worker.ts";
 const CACHE_TTL = 5 * 60 * 1000;
@@ -27,13 +28,14 @@ interface Announcement {
   links?: AnnouncementLink[];
 }
 
+/** `label` is an English key (msg), translated with t() when drawn. */
 const LEVEL_STYLES: Record<
   AnnouncementLevel,
   { bg: string; fg: string; label: string }
 > = {
-  info: { bg: "#2563eb", fg: "#fff", label: "Notice" },
-  warning: { bg: "#f59e0b", fg: "#1f2937", label: "Warning" },
-  critical: { bg: "#ef4444", fg: "#fff", label: "Critical" },
+  info: { bg: "#2563eb", fg: "#fff", label: msg("Notice") },
+  warning: { bg: "#f59e0b", fg: "#1f2937", label: msg("Warning") },
+  critical: { bg: "#ef4444", fg: "#fff", label: msg("Critical") },
 };
 
 const isProfileHost = () =>
@@ -160,7 +162,7 @@ function renderBanner(
         }
       </style>
       <div class="ft-announcement-bnr">
-        <strong class="ft-announcement-level">[${style.label}]</strong>
+        <strong class="ft-announcement-level">[${t(style.label)}]</strong>
         ${message}
         ${links.length > 0
           ? html`<span class="ft-announcement-links">
@@ -182,8 +184,8 @@ function renderBanner(
         <button
           class="ft-announcement-dismiss"
           @click="${dismiss}"
-          title="Dismiss"
-          aria-label="Dismiss"
+          title="${t("Dismiss")}"
+          aria-label="${t("Dismiss")}"
         >
           &times;
         </button>

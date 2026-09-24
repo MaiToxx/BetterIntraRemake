@@ -69,8 +69,15 @@ function getCards(): HTMLElement[] {
   return cachedCards;
 }
 
+/**
+ * The roulette card is ours (roulette-stats.ts) and its title is translated:
+ * it is known by its id, under the English name the card order stores.
+ */
+const ROULETTE_CARD_ID = "ft-roulette-card";
+
 function getCardTitle(card: HTMLElement): string {
   if (card.id === "logtime-shadow-wrapper") return "LOGTIME";
+  if (card.id === ROULETTE_CARD_ID) return "THURSDAY ROULETTE";
   const heading = dashboardCardTitle(card);
   if (heading) return heading;
 
@@ -132,7 +139,10 @@ export async function optimizeLayout() {
     document
       .querySelectorAll<HTMLElement>(DASHBOARD_CARD_SELECTOR)
       .forEach((c) => {
-        if ((c.textContent || "").toUpperCase().includes(cleanSearch)) {
+        if (
+          getCardTitle(c) === cleanSearch ||
+          (c.textContent || "").toUpperCase().includes(cleanSearch)
+        ) {
           c.style.display = shouldHide ? "none" : "";
         }
       });

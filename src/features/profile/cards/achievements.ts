@@ -13,6 +13,7 @@ import {
 } from "../../../core/intra/intrapy.ts";
 import { INTRA_FONT } from "../../logtime/constants.ts";
 import CHECK_CIRCLE_SVG from "../../../assets/svg/check-circle.svg?raw";
+import { intlLocale, t } from "../../../core/i18n/i18n.ts";
 
 interface Achievement {
   name: string;
@@ -53,7 +54,7 @@ async function fetchAchievements(
 }
 
 function formatDate(dateStr: string): string {
-  return parseIntraDate(dateStr).toLocaleDateString("en-US", {
+  return parseIntraDate(dateStr).toLocaleDateString(intlLocale("en-US"), {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -94,7 +95,7 @@ function renderList(
                 >
               </div>
               <div>
-                <p class="font-bold text-legacy-main">Achieved</p>
+                <p class="font-bold text-legacy-main">${t("Achieved")}</p>
                 <p>${formatDate(a.achieved_at)}</p>
               </div>
             </div>
@@ -148,8 +149,8 @@ function inject(achievements: Achievement[]) {
     }
     fetch(a.svg)
       .then((r) => (r.ok ? r.text() : null))
-      .then((t) => {
-        if (t) svgCache.set(a.svg, t);
+      .then((svg) => {
+        if (svg) svgCache.set(a.svg, svg);
         curried();
       })
       .catch(() => {});

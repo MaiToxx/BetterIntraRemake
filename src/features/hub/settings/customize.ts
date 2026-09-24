@@ -4,6 +4,7 @@
  * Intra page by src/features/customize/.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
+import { msg } from "../../../core/i18n/i18n.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
 import { BG_PRESET_OPTIONS } from "./options.ts";
 
@@ -453,7 +454,8 @@ export const CUSTOMIZE_SETTINGS: readonly HubSettingDef[] = [
     label: "Custom CSS",
     desc: "Applied last on every Intra page, on top of the theme and the settings above. Reload the page to undo a broken rule.",
     kind: "textarea",
-    placeholder: "/* example */\n.dash-main { gap: 2rem; }",
+    // the comment is a word: translated where shown (controls/basic.ts)
+    placeholder: msg("/* example */\n.dash-main { gap: 2rem; }"),
     defaultValue: CONFIG_DEFAULT.CUSTOM_CSS,
     fullWidth: true,
   },

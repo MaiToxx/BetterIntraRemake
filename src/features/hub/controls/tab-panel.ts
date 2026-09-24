@@ -7,6 +7,7 @@ import { html } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import RESET_SVG from "../../../assets/svg/reset.svg?raw";
 import { getConfig, type ConfigKey } from "../../../core/config.ts";
+import { t, tp } from "../../../core/i18n/i18n.ts";
 import { EXTRAS_KEYS } from "../../profile/extras/extras.ts";
 import { CLOUD_GATE, type SettingGates } from "../dependents.ts";
 import {
@@ -86,6 +87,8 @@ export function renderTabsContent(
     const tabId = `hub-tab-${f.id}`;
     const panelId = `hub-panel-${f.id}`;
     const selected = f.id === initialTab;
+    // FEATURE_DEFS names and descriptions are keys (msg() in hubSettings.data.ts)
+    const name = t(f.name);
     // On a phone the tab names are for screen readers only (nine named tabs
     // took four rows there), and the header drops its description (wrapped,
     // it made the sticky header 119 px tall; the switch keeps it as its
@@ -104,7 +107,7 @@ export function renderTabsContent(
         <span class="size-4 flex items-center justify-center" aria-hidden="true">
           ${unsafeHTML(f.icon)}
         </span>
-        <span id="${tabId}" class="max-sm:sr-only">${f.name}</span>
+        <span id="${tabId}" class="max-sm:sr-only">${name}</span>
         <!-- how many settings of this tab match the search, empty otherwise -->
         <span class="badge badge-xs badge-primary hidden" data-tab-count></span>
       </label>
@@ -126,31 +129,31 @@ export function renderTabsContent(
                   class="sticky top-0 z-20 flex items-center justify-between gap-2 bg-base-200 px-4 py-2 sm:px-6 sm:py-4 border-b border-base-300 shadow-sm"
                 >
                   <div class="flex flex-col min-w-0">
-                    <h2 class="text-lg font-bold leading-tight">${f.name}</h2>
+                    <h2 class="text-lg font-bold leading-tight">${name}</h2>
                     <p
                       class="text-xs opacity-70 max-sm:hidden"
                       id="hub-feature-desc-${f.id}"
                     >
-                      ${f.desc}
+                      ${t(f.desc)}
                     </p>
                   </div>
                   <div class="flex items-center gap-3">
                     <button
                       class="btn btn-sm btn-outline btn-error flex items-center gap-2"
                       data-reset-feature="${f.id}"
-                      aria-label="Reset ${f.name} settings"
+                      aria-label="${t("Reset {name} settings", { name })}"
                     >
                       <span
                         class="size-3.5 flex items-center justify-center"
                         aria-hidden="true"
                         >${unsafeHTML(RESET_SVG)}</span
                       >
-                      Reset
+                      ${t("Reset")}
                     </button>
                     <input
                       type="checkbox"
                       class="toggle toggle-xl toggle-primary hub-feature-toggle"
-                      aria-label="Enable ${f.name}"
+                      aria-label="${t("Enable {name}", { name })}"
                       aria-describedby="hub-feature-desc-${f.id}"
                       data-id="${f.id}"
                       ?checked="${enabled}"
@@ -180,7 +183,9 @@ export function bindTabPanels(shadow: ShadowRoot): void {
   const tabs = shadow.querySelectorAll<HTMLInputElement>('input[name="hub_tabs"]');
   tabs.forEach((tab) =>
     tab.addEventListener("change", () => {
-      tabs.forEach((t) => t.setAttribute("aria-selected", String(t.checked)));
+      tabs.forEach((other) =>
+        other.setAttribute("aria-selected", String(other.checked)),
+      );
       if (!tab.checked) return;
       try {
         sessionStorage.setItem(TAB_MEMORY_KEY, tab.value);
@@ -237,20 +242,27 @@ export function bindTabPanels(shadow: ShadowRoot): void {
  * push would replace with the empty list.
  */
 export async function resetConfirmMessage(feature: FeatureId): Promise<string> {
-  const name = FEATURE_DEFS.find((f) => f.id === feature)?.name ?? feature;
+  const def = FEATURE_DEFS.find((f) => f.id === feature);
+  const name = def ? t(def.name) : feature;
   if (feature === "profile" && (await hasPublicProfileContent())) {
-    return "Reset the Profile tab? This also clears your public profile (bio, status, links, name style, effect) for everyone who visits your page.";
+    return t(
+      "Reset the Profile tab? This also clears your public profile (bio, status, links, name style, effect) for everyone who visits your page.",
+    );
   }
   if (feature === "shortcuts") {
     const saved = (await getStoredLinks()).filter((l) => l.name && l.url).length;
     if (saved > 0) {
-      const cloud = (await autoPushOn())
-        ? " Auto push is on: the copy in the cloud is replaced too."
-        : "";
-      return `Reset the Shortcuts tab? This deletes your ${saved} shortcut${saved === 1 ? "" : "s"} (names, addresses, colours).${cloud}`;
+      const deletes = tp(
+        saved,
+        "Reset the Shortcuts tab? This deletes your {n} shortcut (names, addresses, colours).",
+        "Reset the Shortcuts tab? This deletes your {n} shortcuts (names, addresses, colours).",
+      );
+      return (await autoPushOn())
+        ? `${deletes} ${t("Auto push is on: the copy in the cloud is replaced too.")}`
+        : deletes;
     }
   }
-  return `Reset the ${name} tab to its default settings?`;
+  return t("Reset the {name} tab to its default settings?", { name });
 }
 
 /** Signed in with Auto push: a change reaches the cloud copy a second later. */

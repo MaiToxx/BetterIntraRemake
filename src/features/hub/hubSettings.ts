@@ -6,6 +6,7 @@
 import { html, render } from "lit-html";
 import { FeatureId } from "./hubSettings.data.ts";
 import { getConfig } from "../../core/config.ts";
+import { t } from "../../core/i18n/i18n.ts";
 import GEAR_SVG from "../../assets/svg/settings_gear.svg?raw";
 import GLOBE_OUTLINE_SVG from "../../assets/svg/globe-outline.svg?raw";
 import { getIsLight } from "../../core/theme/theme-manager.ts";
@@ -39,8 +40,8 @@ function renderGearButton(
     id="hub-gear-btn"
     class="py-5 w-full flex justify-center hover:opacity-100 opacity-40"
     href="#"
-    aria-label="Better Intra settings"
-    data-tip="Better Intra settings"
+    aria-label="${t("Better Intra settings")}"
+    data-tip="${t("Better Intra settings")}"
     data-tip-pos="right"
     @click="${(e: Event) => {
       e.preventDefault();
@@ -59,8 +60,8 @@ function renderClustersButton(
     id="ft-clusters-btn"
     class="py-5 w-full flex justify-center hover:opacity-100 opacity-40"
     href="#"
-    aria-label="Cluster map"
-    data-tip="Clusters"
+    aria-label="${t("Cluster map")}"
+    data-tip="${t("Clusters")}"
     data-tip-pos="right"
     @click="${(e: Event) => {
       e.preventDefault();
@@ -152,7 +153,8 @@ function extensionWasReloaded(): boolean {
 function offerReload(): void {
   // A native dialog: our own ones read settings, which is exactly what an
   // orphaned script can no longer do.
-  if (window.confirm("Better Intra was updated. Reload the page to use it?")) {
+  // t() only reads the language this script already knows: no settings read.
+  if (window.confirm(t("Better Intra was updated. Reload the page to use it?"))) {
     location.reload();
   }
 }

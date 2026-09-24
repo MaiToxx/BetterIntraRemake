@@ -6,13 +6,14 @@ import { html, nothing } from "lit-html";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
 import CHEVRON_DOWN_SVG from "../../../assets/svg/chevron-down.svg?raw";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import { saveSetting, settingIds } from "./context.ts";
+import { optionLabel, saveSetting, settingIds } from "./context.ts";
 
 export function renderRainbowPalette(def: HubSettingDef, value: unknown) {
   const options = def.options ?? [];
   const current =
     options.find((o) => o.value === value) ??
     (options[0] as (typeof options)[number]);
+  const currentLabel = optionLabel(def, current.label);
   // Read as "<setting label> <picked palette>": the swatch says nothing to a
   // screen reader, and the palette name alone does not say what it is for.
   const ids = settingIds(def);
@@ -26,7 +27,7 @@ export function renderRainbowPalette(def: HubSettingDef, value: unknown) {
     >
       <summary
         class="btn btn-sm btn-outline flex items-center gap-2 justify-between w-full border-base-content/30"
-        data-tip="${current.label}"
+        data-tip="${currentLabel}"
         aria-labelledby="${ids.label} ${currentId}"
         aria-describedby="${ids.desc ?? nothing}"
       >
@@ -36,7 +37,7 @@ export function renderRainbowPalette(def: HubSettingDef, value: unknown) {
           aria-hidden="true"
         ></span>
         <span class="opacity-80 text-xs" id="${currentId}"
-          >${current.label}</span
+          >${currentLabel}</span
         >
         <span
           class="size-3 shrink-0 opacity-60 flex items-center justify-center"
@@ -74,7 +75,7 @@ export function renderRainbowPalette(def: HubSettingDef, value: unknown) {
                   style="background: linear-gradient(90deg, ${o.color});"
                   aria-hidden="true"
                 ></span>
-                <span>${o.label}</span>
+                <span>${optionLabel(def, o.label)}</span>
               </button>
             </li>`,
         )}

@@ -2,6 +2,7 @@ import { getConfig } from "../../../core/config.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 import { appendSvg } from "../../../core/dom/svg.ts";
 import { THEMES, getEffectiveTheme } from "../../../core/theme/theme-manager.ts";
+import { msg, t } from "../../../core/i18n/i18n.ts";
 import SORT_AZ_SVG from "../../../assets/svg/sort-az.svg?raw";
 import SORT_ZA_SVG from "../../../assets/svg/sort-za.svg?raw";
 import CAL_DOWN_SVG from "../../../assets/svg/calendar-arrow-down.svg?raw";
@@ -20,8 +21,8 @@ interface ProjectItem {
 const HOST_ID = "better-intra-sort-host";
 
 const FIELD_LABELS: Record<SortField, string> = {
-  name: "Name",
-  date: "Date",
+  name: msg("Name"),
+  date: msg("Date"),
 };
 
 const FIELD_DEFAULTS: Record<SortField, "asc" | "desc"> = {
@@ -186,9 +187,11 @@ export async function initProjectsSort() {
           "color-mix(in oklab, var(--color-base-content) 20%, transparent)";
         btn.style.color = "var(--color-base-content)";
       }
-      btn.title = `${FIELD_LABELS[f]}${
-        field === f ? ` (${asc ? "asc" : "desc"})` : ""
-      }`;
+      const fieldLabel = t(FIELD_LABELS[f]);
+      btn.title =
+        field === f
+          ? t(asc ? "{field} (asc)" : "{field} (desc)", { field: fieldLabel })
+          : fieldLabel;
       const icon =
         f === "name"
           ? field === "name"

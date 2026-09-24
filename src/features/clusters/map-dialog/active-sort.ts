@@ -6,6 +6,7 @@ import {
   sortActiveUsers,
   type ActiveSortMode,
 } from "./render";
+import { t } from "../../../core/i18n/i18n.ts";
 import SORT_AZ_SVG from "../../../assets/svg/sort-az.svg?raw";
 import SORT_ZA_SVG from "../../../assets/svg/sort-za.svg?raw";
 import CAL_DOWN_SVG from "../../../assets/svg/calendar-arrow-down.svg?raw";
@@ -49,9 +50,9 @@ export function updateActiveSortControls(state: DialogState) {
     nameBtn.dataset.tip =
       activeSortMode === "name"
         ? activeNameDir === "asc"
-          ? "Name A → Z (click to invert)"
-          : "Name Z → A (click to invert)"
-        : "Sort by login";
+          ? t("Name A → Z (click to invert)")
+          : t("Name Z → A (click to invert)")
+        : t("Sort by login");
     nameBtn.setAttribute("aria-label", nameBtn.dataset.tip);
     nameBtn.setAttribute("aria-pressed", String(activeSortMode === "name"));
   }
@@ -73,9 +74,9 @@ export function updateActiveSortControls(state: DialogState) {
     sinceBtn.dataset.tip =
       activeSortMode === "since"
         ? activeSinceDir === "desc"
-          ? "Newest first (click to invert)"
-          : "Oldest first (click to invert)"
-        : "Sort by connection time";
+          ? t("Newest first (click to invert)")
+          : t("Oldest first (click to invert)")
+        : t("Sort by connection time");
     sinceBtn.setAttribute("aria-label", sinceBtn.dataset.tip);
     sinceBtn.setAttribute("aria-pressed", String(activeSortMode === "since"));
   }
@@ -84,9 +85,11 @@ export function updateActiveSortControls(state: DialogState) {
     wifiBtn.setAttribute("aria-pressed", String(activeWifiOnly));
     wifiBtn.style.opacity = activeWifiOnly ? "1" : "0.45";
     wifiBtn.style.fontWeight = activeWifiOnly ? "700" : "";
-    wifiBtn.dataset.tip = activeWifiOnly
-      ? "Showing only Wi-Fi users (click to show all)"
-      : "Show only Wi-Fi users";
+    wifiBtn.dataset.tip = t(
+      activeWifiOnly
+        ? "Showing only Wi-Fi users (click to show all)"
+        : "Show only Wi-Fi users",
+    );
   }
 }
 

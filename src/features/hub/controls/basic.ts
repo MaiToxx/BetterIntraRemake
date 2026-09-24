@@ -15,17 +15,34 @@ import LINK_SVG from "../../../assets/svg/link.svg?raw";
 import { CLUSTERS } from "../../campus/campus.ts";
 import type { LinkKind } from "../../profile/extras/extras.ts";
 import { normalizeLink } from "../../profile/extras/extras-sanitize.ts";
+import { msg, t } from "../../../core/i18n/i18n.ts";
 import type { HubSettingDef } from "../hubSettings.data.ts";
-import { saveSetting, settingIds, type LiveOptions } from "./context.ts";
+import {
+  optionLabel,
+  saveSetting,
+  settingIds,
+  type LiveOptions,
+} from "./context.ts";
 
-/** Only the shapes normalizeLink() accepts are published: say so live. */
+/**
+ * Only the shapes normalizeLink() accepts are published: say so live.
+ * Translated where shown (module code runs before the language is known).
+ */
 const LINK_HINTS: Record<string, string> = {
-  github: "Not recognised. Use your user name, or the URL of your GitHub profile.",
-  gitlab: "Not recognised. Use your user name, or the URL of your GitLab profile.",
-  linkedin: "Not recognised. Use your public identifier, or the URL of your profile.",
-  website: "Not recognised. Use a full https address, e.g. https://example.com.",
-  discord: "Not recognised. Use your Discord handle, e.g. student or student#0001.",
+  github: msg("Not recognised. Use your user name, or the URL of your GitHub profile."),
+  gitlab: msg("Not recognised. Use your user name, or the URL of your GitLab profile."),
+  linkedin: msg("Not recognised. Use your public identifier, or the URL of your profile."),
+  website: msg("Not recognised. Use a full https address, e.g. https://example.com."),
+  discord: msg("Not recognised. Use your Discord handle, e.g. student or student#0001."),
 };
+
+/**
+ * The placeholder of a def, translated: the defs mark the ones that are
+ * words with msg(); colours, emojis and code examples come back as written.
+ */
+function placeholderOf(def: HubSettingDef, fallback = ""): string {
+  return def.placeholder ? t(def.placeholder) : fallback;
+}
 
 function linkFieldIsValid(kind: LinkKind, value: string): boolean {
   return value.trim() === "" || normalizeLink(kind, value) !== null;
@@ -88,9 +105,20 @@ function saveNumber(def: HubSettingDef) {
   };
 }
 
-/** PROFILE_EVENT_TYPE_FILTER offers the fetched event types after "Show All". */
+/**
+ * PROFILE_EVENT_TYPE_FILTER offers the fetched event types after "Show All".
+ * The event type names come from the data files and are shown as written.
+ */
 function eventTypeChoices(live: LiveOptions) {
-  return [{ label: "Show All", value: "all" }, ...live.eventTypes];
+  return [{ label: t("Show All"), value: "all" }, ...live.eventTypes];
+}
+
+/** The options of a def, their labels as the hub shows them. */
+function defChoices(def: HubSettingDef) {
+  return (def.options ?? []).map((o) => ({
+    label: optionLabel(def, o.label),
+    value: o.value,
+  }));
 }
 
 export function renderToggle(
@@ -171,7 +199,7 @@ export function renderSelect(
               label: c.name.toUpperCase(),
               value: c.id,
             }))
-          : (def.options ?? []);
+          : defChoices(def);
   return html`<select
     class="select select-accent w-44"
     data-setting-key="${def.key}"
@@ -222,7 +250,7 @@ export function renderRadioGroup(
   const options =
     def.key === "PROFILE_EVENT_TYPE_FILTER" && live.eventTypes.length > 0
       ? eventTypeChoices(live)
-      : (def.options ?? []);
+      : defChoices(def);
   // Each radio is named by its own option (aria-label is also what daisyUI
   // shows on the button); the group carries the setting's label.
   return html`<div
@@ -299,7 +327,7 @@ export function renderText(
   const input = html`<input
     type="text"
     class="input input-accent ${def.fullWidth ? "w-full" : "w-60"}"
-    placeholder="${def.placeholder || ""}"
+    placeholder="${placeholderOf(def)}"
     maxlength="${def.maxLength ?? nothing}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"
@@ -323,7 +351,7 @@ export function renderText(
       id="${ids.hint}"
       class="text-xs text-error leading-tight"
       ?hidden="${valid}"
-      >${LINK_HINTS[def.linkKind]}</span
+      >${t(LINK_HINTS[def.linkKind] ?? "")}</span
     >
   </div>`;
 }
@@ -337,7 +365,7 @@ export function renderTextarea(
     class="textarea textarea-accent w-full font-mono text-xs leading-snug"
     rows="8"
     spellcheck="false"
-    placeholder="${def.placeholder || ""}"
+    placeholder="${placeholderOf(def)}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"
     aria-labelledby="${settingIds(def).label}"
@@ -356,7 +384,7 @@ export function renderEmoji(
   return html`<input
     type="text"
     class="input input-accent w-30 text-center text-xl"
-    placeholder="${def.placeholder || "🐝"}"
+    placeholder="${placeholderOf(def, "🐝")}"
     maxlength="${def.maxLength ?? 6}"
     .value="${String(value || "")}"
     data-setting-key="${def.key}"

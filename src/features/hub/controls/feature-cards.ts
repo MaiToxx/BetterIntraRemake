@@ -10,7 +10,7 @@ import {
   type FeatureCardOption,
   type HubSettingDef,
 } from "../hubSettings.data.ts";
-import { saveSetting } from "./context.ts";
+import { optionLabel, saveSetting } from "./context.ts";
 
 export async function renderFeatureCards(
   def: HubSettingDef,
@@ -38,10 +38,31 @@ export async function renderFeatureCards(
       subCloudDisabled: !!(opt.subToggle?.requiresCloud && !cloudToken),
     });
   }
+  // what each card says, in the hub's language (the def's texts are keys)
+  const tr = (text: string | undefined) => optionLabel(def, text);
   return html`<div class="grid grid-cols-2 gap-4 w-full col-span-full">
-    ${cards.map((c) => renderFeatureCard({ ...c, enabled }))}
+    ${cards.map((c) =>
+      renderFeatureCard({
+        ...c,
+        text: {
+          label: tr(c.opt.label),
+          desc: tr(c.opt.desc),
+          subLabel: tr(c.opt.subToggle?.label),
+          subDesc: tr(c.opt.subToggle?.desc),
+        },
+        enabled,
+      }),
+    )}
   </div>`;
 }
+
+/** The texts of a card as shown, empty when the card has none. */
+type FeatureCardText = {
+  label: string;
+  desc: string;
+  subLabel: string;
+  subDesc: string;
+};
 
 const FEATURE_CARD_COLORS: Record<string, string> = {
   warning: "var(--color-warning)",
@@ -59,10 +80,19 @@ function renderFeatureCard(params: {
   subDisabled: boolean;
   /** The part of subDisabled the card's own switch cannot lift. */
   subCloudDisabled: boolean;
+  text: FeatureCardText;
   enabled: boolean;
 }): ReturnType<typeof html> {
-  const { opt, value, subValue, disabled, subDisabled, subCloudDisabled, enabled } =
-    params;
+  const {
+    opt,
+    value,
+    subValue,
+    disabled,
+    subDisabled,
+    subCloudDisabled,
+    text,
+    enabled,
+  } = params;
   // The switches point at the card's own title and text (the tab's grid is
   // one shadow root, and each key is on one card only, so ids are unique).
   const id = `hub-fc-${opt.value}`;
@@ -91,16 +121,16 @@ function renderFeatureCard(params: {
       style="border-top-color: ${FEATURE_CARD_COLORS[opt.color ?? ""] ??
       "var(--color-primary)"}"
       data-search="${normalizeSearchText(
-        [opt.label, opt.desc, opt.subToggle?.label, opt.subToggle?.desc]
+        [text.label, text.desc, text.subLabel, text.subDesc]
           .filter(Boolean)
           .join(" "),
       )}"
     >
       <div class="flex items-center justify-between gap-2">
         <div class="flex flex-col gap-1">
-          <h3 class="font-bold text-base" id="${id}-label">${opt.label}</h3>
+          <h3 class="font-bold text-base" id="${id}-label">${text.label}</h3>
           ${opt.desc
-            ? html`<p class="text-xs opacity-70" id="${id}-desc">${opt.desc}</p>`
+            ? html`<p class="text-xs opacity-70" id="${id}-desc">${text.desc}</p>`
             : ""}
         </div>
         <input
@@ -129,14 +159,14 @@ function renderFeatureCard(params: {
                 style="min-height: 3.5rem"
               >
                 <span class="text-sm font-semibold leading-5" id="${subId}-label"
-                  >${opt.subToggle.label}</span
+                  >${text.subLabel}</span
                 >
                 ${opt.subToggle.desc
                   ? html`<p
                       class="text-xs opacity-70 leading-4 line-clamp-2"
                       id="${subId}-desc"
                     >
-                      ${opt.subToggle.desc}
+                      ${text.subDesc}
                     </p>`
                   : ""}
               </div>

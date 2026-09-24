@@ -4,6 +4,7 @@
  * dispatch below is the one place that maps a setting kind to its renderer.
  */
 import { html, nothing } from "lit-html";
+import { t } from "../../../core/i18n/i18n.ts";
 import { until } from "lit-html/directives/until.js";
 import { getConfig } from "../../../core/config.ts";
 import { renderCalendarPanel } from "../../calendar/calendar.ui.ts";
@@ -62,7 +63,7 @@ export function renderSetting(
       class="divider font-bold my-2 col-span-full opacity-70"
       data-search-divider
     >
-      ${def.label}
+      ${t(def.label ?? "")}
     </div>`;
   }
 
@@ -93,7 +94,7 @@ export function renderSetting(
       : enabled
         ? ""
         : "opacity-40 grayscale"}"
-    data-search="${normalizeSearchText(`${def.label} ${def.desc ?? ""}`)}"
+    data-search="${normalizeSearchText(`${t(def.label ?? "")} ${def.desc ? t(def.desc) : ""}`)}"
   >
     <div
       class="flex ${isFullWidth
@@ -102,18 +103,18 @@ export function renderSetting(
     >
       <div class="flex flex-col">
         <span class="flex items-center gap-2">
-          <span class="text-sm" id="${ids.label}">${def.label}</span>
+          <span class="text-sm" id="${ids.label}">${t(def.label ?? "")}</span>
           ${needsReload
             ? html`<span
                 class="badge badge-xs badge-ghost opacity-70 font-normal"
-                title="Takes effect after a page reload"
-                >reload</span
+                title="${t("Takes effect after a page reload")}"
+                >${t("reload")}</span
               >`
             : ""}
         </span>
         ${def.desc
           ? html`<span class="text-xs opacity-50" id="${ids.desc}"
-              >${def.desc}</span
+              >${t(def.desc)}</span
             >`
           : ""}
       </div>
