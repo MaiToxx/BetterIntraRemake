@@ -43,11 +43,25 @@ const DEFAULT_PUSHED = "LOOK_DEFAULT_PUBLISHED";
  * accounts that never chose push once, so that their look and theme show up
  * without waiting for their next settings change. A choice the user made
  * (the key is in storage) is left alone.
+ *
+ * Only for a browser that pushed before (LAST_CLOUD_SYNC), and never while
+ * the restore question of a fresh sign-in is open: on a new install the
+ * first sign-in reloaded the tab and this pushed every synced key at its
+ * default 600 ms later, over the cloud backup (friends, shortcuts, custom
+ * CSS, visuals), before "Restore your settings?" was even asked. A new
+ * install has no old default to replace: its first push carries the new one.
  */
 export async function publishDefaultLookOnce(): Promise<void> {
-  const raw = await chrome.storage.local.get([SHARE_KEY, DEFAULT_PUSHED, "CLOUD_TOKEN"]);
+  const raw = await chrome.storage.local.get([
+    SHARE_KEY,
+    DEFAULT_PUSHED,
+    "CLOUD_TOKEN",
+    "LAST_CLOUD_SYNC",
+    "PENDING_SETTINGS_RESTORE",
+  ]);
   if (raw[DEFAULT_PUSHED] || !raw.CLOUD_TOKEN) return;
   await chrome.storage.local.set({ [DEFAULT_PUSHED]: true });
+  if (!raw.LAST_CLOUD_SYNC || raw.PENDING_SETTINGS_RESTORE) return;
   // a stored value, not the key: some storages list missing keys as undefined
   if (typeof raw[SHARE_KEY] === "boolean") return;
   publishLookIfShared(SHARE_KEY);

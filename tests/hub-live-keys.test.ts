@@ -10,6 +10,7 @@ import { HUB_SETTING_DEFS, isLiveKey } from "../src/features/hub/hubSettings.dat
 import { CUSTOMIZE_KEYS } from "../src/features/customize/customize.ts";
 import { EXTRAS_KEYS } from "../src/features/profile/extras/extras.ts";
 import { PERF_KEYS } from "../src/features/performance/perf.ts";
+import { LOGTIME_LIVE_KEYS } from "../src/features/logtime/logtime.ts";
 
 /**
  * Each listener and the keys it applies, as its source reads today. Sharing
@@ -36,6 +37,7 @@ const LISTENERS: { file: string; keys: readonly string[]; marker?: RegExp }[] = 
     keys: ["BETTER_INTRA_THEME", "PROFILE_THEME_PRESET"],
   },
   { file: "src/features/campus/campus.ts", keys: ["CLUSTERS_CAMPUS"] },
+  { file: "src/features/logtime/logtime.ts", keys: [...LOGTIME_LIVE_KEYS] },
 ];
 
 describe("live keys", () => {
@@ -57,9 +59,9 @@ describe("live keys", () => {
     expect(wrong).toEqual([]);
   });
 
-  it("the feature switches and the Logtime settings need a reload", () => {
+  it("the feature switches need a reload, the Logtime settings no longer do", () => {
     expect(isLiveKey("ACTIVE_SCRIPTS")).toBe(false);
-    expect(isLiveKey("LOGTIME_SHOW_AVERAGE")).toBe(false);
+    expect(isLiveKey("LOGTIME_SHOW_AVERAGE")).toBe(true);
     expect(isLiveKey("CUSTOM_HIDE_FOOTER")).toBe(true);
   });
 });

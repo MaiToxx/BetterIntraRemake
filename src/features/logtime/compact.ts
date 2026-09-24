@@ -1,6 +1,6 @@
 import { html } from "lit-html";
 import { AVG_ONLY_ACTIVE_DAYS, PAST_MONTHS_OPACITY } from "./constants";
-import { fmtHours } from "./utils";
+import { fmtHours, goalTip } from "./utils";
 import type { LogtimeConfig } from "./types.ts";
 
 export type MonthEntry = { ym: string; data: Record<string, number> };
@@ -79,7 +79,7 @@ function renderCompactMonthCard(
           class="day-cell"
           style="background: transparent; width: auto; height: auto; padding: 0; cursor: help; border: none;"
           data-tip="${config.show_goal
-            ? `Remaining: ${fmtHours(Math.max(0, goalSecs - total))}`
+            ? goalTip(ym, total, goalSecs)
             : ""}"
         >
           ${config.show_goal ? html`<b>${goalPercent}%</b>` : ""}

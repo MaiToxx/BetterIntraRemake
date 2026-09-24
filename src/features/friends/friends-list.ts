@@ -19,7 +19,9 @@ function renderEmpty() {
         >${unsafeHTML(FRIENDS_SVG)}</span
       >
       <p class="text-sm font-bold">No friends yet</p>
-      <p class="text-xs">Add one using the input below</p>
+      <p class="text-xs text-center">
+        Press + to add a login, or use Add friend on their profile
+      </p>
     </div>
   `;
 }

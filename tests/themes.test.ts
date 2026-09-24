@@ -152,7 +152,7 @@ describe("publishing the look by default", () => {
     vi.doMock("../src/features/account/account.ts", () => ({ syncToCloud: sync }));
     vi.useFakeTimers();
     try {
-      await chrome.storage.local.set({ CLOUD_TOKEN: "sess" });
+      await chrome.storage.local.set({ CLOUD_TOKEN: "sess", LAST_CLOUD_SYNC: 1 });
       const { publishDefaultLookOnce } = await import("../src/features/customize/publish.ts");
       await publishDefaultLookOnce();
       await vi.advanceTimersByTimeAsync(2_000);
@@ -160,6 +160,29 @@ describe("publishing the look by default", () => {
       await publishDefaultLookOnce();
       await vi.advanceTimersByTimeAsync(2_000);
       expect(sync).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      vi.doUnmock("../src/features/account/account.ts");
+    }
+  });
+
+  it("never on a fresh install or while the restore question is open: that pushed defaults over the backup", async () => {
+    const sync = vi.fn(async () => true);
+    vi.doMock("../src/features/account/account.ts", () => ({ syncToCloud: sync }));
+    vi.useFakeTimers();
+    try {
+      const { publishDefaultLookOnce } = await import("../src/features/customize/publish.ts");
+      // just signed in on a new install: a session, never pushed, restore pending
+      await chrome.storage.local.set({ CLOUD_TOKEN: "sess", PENDING_SETTINGS_RESTORE: true });
+      await publishDefaultLookOnce();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(sync).not.toHaveBeenCalled();
+      // and not later either, once the question is answered
+      await chrome.storage.local.remove("PENDING_SETTINGS_RESTORE");
+      await chrome.storage.local.set({ LAST_CLOUD_SYNC: 1 });
+      await publishDefaultLookOnce();
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(sync).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
       vi.doUnmock("../src/features/account/account.ts");

@@ -93,15 +93,15 @@ describe("a first visit the worker cannot date", () => {
     await chrome.storage.local.set({ CLOUD_TOKEN: "tok", CLOUD_LOGIN: "bob" });
   });
 
-  const workerAnswering = (report: Response | null) =>
+  // Real Responses: the tracker goes through workerFetch, which reads headers.
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  const workerAnswering = (report: unknown | null) =>
     vi.fn(async (url: string) => {
       if (url.includes("/subjects/state")) {
-        return {
-          ok: true,
-          json: async () => ({ subjects: [{ slug: "libft", tracked: false }] }),
-        };
+        return json({ subjects: [{ slug: "libft", tracked: false }] });
       }
-      return report ?? { ok: false, status: 503, json: async () => ({}) };
+      return report ? json(report) : json({}, 503);
     });
 
   it("shows no badge when the report fails", async () => {
@@ -117,11 +117,8 @@ describe("a first visit the worker cannot date", () => {
     vi.stubGlobal(
       "fetch",
       workerAnswering({
-        ok: true,
-        json: async () => ({
-          subjects: [{ slug: "libft", status: "first", createdAt: null, modifiedAt: null }],
-        }),
-      } as unknown as Response),
+        subjects: [{ slug: "libft", status: "first", createdAt: null, modifiedAt: null }],
+      }),
     );
     mountAttachments();
     await initSubjectTracker();

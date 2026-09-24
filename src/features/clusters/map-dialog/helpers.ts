@@ -30,15 +30,27 @@ export function formatCampusClock(timezone?: string): string {
   }
 }
 
-export function findClusterForSeat(
-  clusters: { id: string; name: string }[],
+/**
+ * The cluster a seat is in: the LONGEST cluster name the seat starts with.
+ * The first match used to win, and Paris lists f1 before f1b (Amsterdam f1
+ * before f1r7): an f1b seat opened the f1 map with nothing highlighted, and
+ * friend links pointed at the wrong cluster.
+ */
+export function findClusterForSeat<T extends { id: string; name: string }>(
+  clusters: readonly T[],
   seatId: string,
-): { id: string; name: string } | undefined {
+): T | undefined {
   const seat = normalizeSeatId(seatId);
-  return clusters.find((c) => {
+  let best: T | undefined;
+  let bestLength = 0;
+  for (const c of clusters) {
     const name = normalizeSeatId(c.name.trim());
-    return name && seat.startsWith(name);
-  });
+    if (name && name.length > bestLength && seat.startsWith(name)) {
+      best = c;
+      bestLength = name.length;
+    }
+  }
+  return best;
 }
 
 export interface PseudoClusterChange {

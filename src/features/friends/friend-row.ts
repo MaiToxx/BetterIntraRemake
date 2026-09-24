@@ -11,6 +11,7 @@ import { formatTimeAgo, svgIcon } from "./friends-format.ts";
 import { sanitizeCssColor } from "../profile/header/visuals-sanitize.ts";
 import { cssUrl } from "../../core/security/css-sanitize.ts";
 import { CLUSTERS } from "../clusters/clusters.data.ts";
+import { findClusterForSeat } from "../clusters/map-dialog/helpers.ts";
 import WALLET_SVG from "../../assets/svg/wallet.svg?raw";
 import EVAL_SVG from "../../assets/svg/eval.svg?raw";
 import ARROW_SHARE_SVG from "../../assets/svg/arrow_share.svg?raw";
@@ -69,7 +70,7 @@ function renderLevelBar(level: number) {
 }
 
 function clusterUrl(location: string): string {
-  const cluster = CLUSTERS.find((c) => location.startsWith(c.name));
+  const cluster = findClusterForSeat(CLUSTERS, location);
   const hash = cluster ? `#cluster-${cluster.id}` : "";
   return `https://meta.intra.42.fr/clusters?seat=${location}${hash}`;
 }

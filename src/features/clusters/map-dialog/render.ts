@@ -19,6 +19,26 @@ export const ACTIVE_SORT_DEFAULT = {
   sinceDir: "desc",
 } as const;
 
+/**
+ * The viewer's friends (FRIENDS_LIST, lower case), set when the map opens:
+ * their seats get a ring and they come first in the Active list. The map
+ * used to treat them like everyone else.
+ */
+let mapFriends: ReadonlySet<string> = new Set();
+
+export function setMapFriends(logins: unknown): void {
+  mapFriends = new Set(
+    (Array.isArray(logins) ? logins : [])
+      .filter((l): l is string => typeof l === "string")
+      .map((l) => l.toLowerCase().trim())
+      .filter(Boolean),
+  );
+}
+
+export function isMapFriend(login: string): boolean {
+  return mapFriends.has(login.toLowerCase());
+}
+
 export function sortActiveUsers(
   list: OccupancyEntry[],
   mode: ActiveSortMode,
@@ -26,6 +46,8 @@ export function sortActiveUsers(
   sinceDir: "asc" | "desc",
 ): OccupancyEntry[] {
   return [...list].sort((a, b) => {
+    const friendA = isMapFriend(a.login);
+    if (friendA !== isMapFriend(b.login)) return friendA ? -1 : 1;
     if (mode === "since") {
       const at = new Date(a.begin_at).getTime();
       const bt = new Date(b.begin_at).getTime();
@@ -172,7 +194,9 @@ export function renderSeatOverlays(
     ].join("");
     if (round) a.dataset.round = "true";
     a.dataset.host = host;
-    a.setAttribute("data-tip", `${seat.login} - since ${timeStr}`);
+    const friend = isMapFriend(seat.login);
+    if (friend) a.classList.add("is-friend");
+    a.setAttribute("data-tip", `${friend ? "★ " : ""}${seat.login} - since ${timeStr}`);
     a.setAttribute("data-tip-size", "15px");
 
     const avatar = Object.assign(document.createElement("img"), {
@@ -187,7 +211,12 @@ export function renderSeatOverlays(
   mapArea.appendChild(overlay);
 }
 
-export function renderActiveList(shadow: ShadowRoot, users: OccupancyEntry[]) {
+/** `wifiOnly`: the list is filtered to Wi-Fi users, and its empty state says so. */
+export function renderActiveList(
+  shadow: ShadowRoot,
+  users: OccupancyEntry[],
+  wifiOnly = false,
+) {
   const mapArea = shadow.getElementById("map-area");
   if (!mapArea) return;
   mapArea.style.position = "";
@@ -196,7 +225,7 @@ export function renderActiveList(shadow: ShadowRoot, users: OccupancyEntry[]) {
     const emptyDiv = document.createElement("div");
     emptyDiv.className =
       "flex items-center justify-center p-12 text-base-content/50";
-    emptyDiv.textContent = "No one connected";
+    emptyDiv.textContent = wifiOnly ? "No one on Wi-Fi right now" : "No one connected";
     mapArea.replaceChildren(emptyDiv);
     return;
   }
@@ -241,9 +270,15 @@ export function renderActiveList(shadow: ShadowRoot, users: OccupancyEntry[]) {
     });
     avatar.style.cssText =
       "width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;";
+    const friend = isMapFriend(user.login);
+    if (friend) {
+      avatar.style.outline = "3px solid var(--color-accent)";
+      avatar.style.outlineOffset = "2px";
+      card.dataset.friend = "true";
+    }
 
     const login = document.createElement("span");
-    login.textContent = user.login;
+    login.textContent = friend ? `★ ${user.login}` : user.login;
     login.style.cssText =
       "font-size:13px;font-weight:600;color:var(--color-base-content);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
 

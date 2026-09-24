@@ -36,9 +36,34 @@ export let CLUSTERS: { id: string; name: string; svg?: string }[] = [];
 import { WORKER_URL } from "../../core/worker.ts";
 const CAMPUS_BASE = `${WORKER_URL}/gh/campuses`;
 const CACHE_PREFIX = "CAMPUS_DATA_";
+/**
+ * When the worker last answered 404 for a campus (13 of the 55 have no data
+ * file): the answer is kept for the same hour as a file. Every page of those
+ * campuses used to ask again, and the profile start-up waited for the 404.
+ */
+const MISSING_PREFIX = "CAMPUS_MISSING_";
 const MANIFEST_CACHE_KEY = "CAMPUS_MANIFEST_V2";
 const CACHE_TTL = 60 * 60 * 1000;
+/** A campus request that has not answered by then is a failed one. */
+const CAMPUS_FETCH_TIMEOUT_MS = 10_000;
 const inFlightLoads = new Map<string, Promise<ClusterDataFile>>();
+
+/**
+ * fetch() with a deadline: a worker that hangs used to hold the profile
+ * start-up (the clusters feature awaits the campus file) with no limit.
+ */
+async function campusFetch(url: string, force?: boolean): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CAMPUS_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      cache: force ? "no-store" : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 async function resolveCampusFolder(
   campusId: string,
@@ -58,9 +83,7 @@ async function resolveCampusId(
   const manifest = await fetchCampusList(force);
   for (const campus of manifest.campuses) {
     const prefix = campus.name.toLowerCase().replace(/\s+/g, "-");
-    const res = await fetch(`${CAMPUS_BASE}/${prefix}.json`, {
-      cache: force ? "no-store" : undefined,
-    });
+    const res = await campusFetch(`${CAMPUS_BASE}/${prefix}.json`, force);
     if (res.ok) return campus.id;
   }
   return "";
@@ -117,9 +140,7 @@ export async function fetchCampusList(
   }
   let manifest: CampusManifest;
   try {
-    const res = await fetch(`${CAMPUS_BASE}/campuses.json`, {
-      cache: force ? "no-store" : undefined,
-    });
+    const res = await campusFetch(`${CAMPUS_BASE}/campuses.json`, force);
     if (!res.ok) throw new Error("Failed to fetch campus list");
     manifest = (await res.json()) as CampusManifest;
   } catch (e) {
@@ -142,14 +163,19 @@ export async function loadCampusData(
   const resolvedId = await resolveCampusId(campusId, force);
   if (!resolvedId) throw new Error("No campus data available");
   const cacheKey = `${CACHE_PREFIX}${resolvedId}`;
+  const missingKey = `${MISSING_PREFIX}${resolvedId}`;
   // Also the stale-if-error fallback below. Not read for a forced load: that
   // one is a request for fresh data (the hub's reload), so it must fail loudly.
   let cachedData: { data: ClusterDataFile; timestamp: number } | undefined;
   if (!force) {
-    const cached = await chrome.storage.local.get(cacheKey);
+    const cached = await chrome.storage.local.get([cacheKey, missingKey]);
     cachedData = cached[cacheKey] as typeof cachedData;
     if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
       return cachedData.data;
+    }
+    const missingAt = cached[missingKey];
+    if (!cachedData && typeof missingAt === "number" && Date.now() - missingAt < CACHE_TTL) {
+      throw new Error(`No campus data for ${resolvedId}`);
     }
   }
   const existing = force ? undefined : inFlightLoads.get(cacheKey);
@@ -158,9 +184,10 @@ export async function loadCampusData(
     let data: ClusterDataFile;
     try {
       const prefix = await resolveCampusFolder(resolvedId, force);
-      const res = await fetch(`${CAMPUS_BASE}/${prefix}.json`, {
-        cache: force ? "no-store" : undefined,
-      });
+      const res = await campusFetch(`${CAMPUS_BASE}/${prefix}.json`, force);
+      if (res.status === 404) {
+        await chrome.storage.local.set({ [missingKey]: Date.now() });
+      }
       if (!res.ok)
         throw new Error(`Failed to fetch campus data for ${resolvedId}`);
       data = (await res.json()) as ClusterDataFile;
@@ -203,6 +230,7 @@ function pendingRefresh(campusId: string): Promise<ClusterDataFile> | undefined 
 export async function clearCampusConfigCache(campusId: string): Promise<void> {
   await chrome.storage.local.remove([
     `${CACHE_PREFIX}${campusId}`,
+    `${MISSING_PREFIX}${campusId}`,
     MANIFEST_CACHE_KEY,
   ]);
 }

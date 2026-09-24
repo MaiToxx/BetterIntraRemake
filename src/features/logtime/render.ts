@@ -7,7 +7,7 @@ import {
   PAST_MONTHS_OPACITY,
   INTRA_FONT,
 } from "./constants";
-import { fmtHours, hexToRgba, safeLabelsColor } from "./utils";
+import { fmtHours, hexToRgba, safeLabelsColor, goalTip } from "./utils";
 import type { LogtimeConfig, CalendarEvent, EventsByDate } from "./types.ts";
 import { sharedStylesLink } from "../../core/styles/shared-styles.ts";
 import { escapeHtml } from "../../core/dom/tooltip.ts";
@@ -242,7 +242,7 @@ export function renderMonthCard(
         class="day-cell"
         style="background: transparent; width: auto; height: auto; padding: 0; cursor: help; border: none;"
         data-tip="${config.show_goal
-          ? `Remaining: ${fmtHours(Math.max(0, goalSecs - total))}`
+          ? goalTip(ym, total, goalSecs)
           : ""}"
       >
         ${config.show_goal ? html`<b>${goalPercent}%</b>` : ""}

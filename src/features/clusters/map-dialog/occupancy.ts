@@ -84,7 +84,10 @@ export function applyOccupancy(
     state.activeSinceDir,
   );
   state.seatedUsers = [...workCopy.values()];
-  const activeVisible = state.activeUsers.length > 0;
+  // The tab is there while anyone is active, whatever the Wi-Fi filter: its
+  // switch lives in that tab, and a filtered-out list used to remove the tab
+  // with the switch in it, for good (the choice is saved).
+  const activeVisible = workCopy.size + state.wifiUsers.length > 0;
   let clustersChanged = false;
   const activeChange = applyActivePresence(state.clusters, activeVisible);
   if (activeChange.added || activeChange.removed) {
@@ -113,7 +116,7 @@ export function applyOccupancy(
     renderSeatOverlays(shadow, workCopy, positions, viewBox);
   }
   if (activeCluster.id === "active") {
-    renderActiveList(shadow, state.activeUsers);
+    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
   }
   if (state.flashingSeat) {
     applySeatGlow(state, state.flashingSeat);

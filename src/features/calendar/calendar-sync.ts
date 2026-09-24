@@ -28,6 +28,34 @@ function formatIcsDate(iso: string): string {
     .replace(/\.\d{3}/, "");
 }
 
+/**
+ * RFC 5545 §3.1: a content line is at most 75 octets; a longer one goes on
+ * as lines that start with a space. Cut between code points, never inside a
+ * character's UTF-8 bytes. Strict calendar apps dropped the long SUMMARY and
+ * LOCATION lines (or the whole event) of an unfolded feed.
+ */
+export function foldIcsLine(line: string): string {
+  const encoder = new TextEncoder();
+  if (encoder.encode(line).length <= 75) return line;
+  const parts: string[] = [];
+  let current = "";
+  let bytes = 0;
+  for (const ch of line) {
+    const size = encoder.encode(ch).length;
+    // 75 on the first line, 74 after the leading space of the others
+    const room = parts.length === 0 ? 75 : 74;
+    if (bytes + size > room) {
+      parts.push(current);
+      current = "";
+      bytes = 0;
+    }
+    current += ch;
+    bytes += size;
+  }
+  parts.push(current);
+  return parts.join("\r\n ");
+}
+
 // Covers every field the .ics is built from: with only id and begin_at, a
 // subscribed event whose end, name or room changed was never re-uploaded.
 // An empty list hashes to "0", so dropping the last event is uploaded once.
@@ -42,7 +70,13 @@ function computeHash(events: IcsEvent[]): string {
   return String(h);
 }
 
-export function generateIcs(events: IcsEvent[]): string {
+/**
+ * `now` is the DTSTAMP of every event (RFC 5545 requires one per VEVENT; the
+ * feed had none). It is not part of computeHash(): an unchanged list is
+ * still not uploaded again.
+ */
+export function generateIcs(events: IcsEvent[], now: Date = new Date()): string {
+  const stamp = formatIcsDate(now.toISOString());
   const lines: string[] = [];
   lines.push(
     "BEGIN:VCALENDAR",
@@ -61,6 +95,7 @@ export function generateIcs(events: IcsEvent[]): string {
     lines.push(
       "BEGIN:VEVENT",
       `UID:${ev.id}@better-intra`,
+      `DTSTAMP:${stamp}`,
       `DTSTART:${formatIcsDate(ev.begin_at)}`,
       `DTEND:${formatIcsDate(ev.end_at)}`,
       `SUMMARY:${escapeIcs(ev.name)}`,
@@ -76,7 +111,7 @@ export function generateIcs(events: IcsEvent[]): string {
   }
 
   lines.push("END:VCALENDAR");
-  return lines.filter(Boolean).join("\r\n");
+  return lines.filter(Boolean).map(foldIcsLine).join("\r\n");
 }
 
 export async function syncCalendarIcs(

@@ -105,7 +105,7 @@ export function toggleActiveWifi(state: DialogState) {
     state.activeSinceDir,
   );
   if (activeCluster.id === "active")
-    renderActiveList(shadow, state.activeUsers);
+    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
   updateActiveSortControls(state);
 }
 
@@ -128,6 +128,6 @@ export function toggleActiveSort(state: DialogState, mode: ActiveSortMode) {
     state.activeSinceDir,
   );
   if (activeCluster.id === "active")
-    renderActiveList(shadow, state.activeUsers);
+    renderActiveList(shadow, state.activeUsers, state.activeWifiOnly);
   updateActiveSortControls(state);
 }

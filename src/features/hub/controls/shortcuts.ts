@@ -34,9 +34,15 @@ export function renderShortcutsPanel(): HTMLElement {
       SHORTCUTS_LINKS: JSON.stringify(extractLinksFromForm(container)),
     });
   };
+  // The preview follows the typing (it used to wait for an "Update Preview"
+  // button): the rows redraw from what they hold, so nothing typed is lost.
   const debouncedSave = () => {
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => void save(), 300);
+    saveTimer = setTimeout(() => {
+      void save();
+      syncFromForm();
+      update();
+    }, 300);
   };
 
   // What the rows show now, half-typed text included. `links` used to be
@@ -77,10 +83,6 @@ export function renderShortcutsPanel(): HTMLElement {
           await save();
         },
         () => debouncedSave(),
-        () => {
-          syncFromForm();
-          update();
-        },
         (from, to) => {
           syncFromForm();
           if (to < 0 || to >= links.length || from === to) return;

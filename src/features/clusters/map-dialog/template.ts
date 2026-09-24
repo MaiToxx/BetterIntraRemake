@@ -105,6 +105,12 @@ export function renderTemplate(state: DialogState): TemplateResult {
       .seat-link:hover {
         overflow: visible !important;
       }
+      /* a friend's seat (FRIENDS_LIST): ringed in the accent colour */
+      .seat-link.is-friend {
+        outline: 3px solid var(--color-accent, #f5c518);
+        outline-offset: 1px;
+        z-index: 1;
+      }
       .seat-link img {
         width: 100%;
         height: 100%;

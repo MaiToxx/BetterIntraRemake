@@ -143,7 +143,7 @@ function renderCard(
                             colspan="3"
                             class="text-center text-xs opacity-50 py-4"
                           >
-                            No logtime data yet.
+                            No logtime data yet (it comes from the Logtime feature).
                           </td>
                         </tr>
                       `
@@ -210,7 +210,15 @@ function getTrackerStateSync(mode: string): TrackerState | null {
 
 function updateBadgeIndicator() {
   if (!_state || !_badgeEl) return;
-  const progress = lastStats ? computeWeekProgress(lastStats, _state) : null;
+  // No week to judge yet (the Logtime feature fills lastStats, and it may be
+  // off): the badge stays neutral. It used to glow red with a cross, a "not
+  // met" that meant "not measured".
+  if (!lastStats) {
+    for (const prop of ["border", "border-color", "box-shadow"]) _badgeEl.style.removeProperty(prop);
+    _badgeEl.querySelector(".ft-tracker-icon")?.remove();
+    return;
+  }
+  const progress = computeWeekProgress(lastStats, _state);
   const met = progress ? thresholdsMet(progress, _state) : false;
   const color = met ? "#10b981" : "#ef4444";
   const glow = met
@@ -314,7 +322,7 @@ function renderPopover() {
                       <div
                         class="col-span-2 text-center text-xs opacity-50 py-2"
                       >
-                        No logtime data yet.
+                        No logtime data yet (it comes from the Logtime feature).
                       </div>
                     `}
               </div>

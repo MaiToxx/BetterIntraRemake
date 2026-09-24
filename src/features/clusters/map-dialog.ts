@@ -8,6 +8,7 @@ import { bindTooltips } from "../../core/dom/tooltip.ts";
 import { makeResizable } from "../../core/dom/resizable-dialog.ts";
 import {
   ACTIVE_SORT_DEFAULT,
+  setMapFriends,
   type ActiveSortMode,
 } from "./map-dialog/render.ts";
 import type { DialogState } from "./map-dialog/context.ts";
@@ -109,6 +110,8 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
   if (typeof savedActiveWifi.MAP_ACTIVE_WIFI === "boolean") {
     activeWifiOnly = savedActiveWifi.MAP_ACTIVE_WIFI;
   }
+  // Read at each opening: the list may have changed since the last one.
+  setMapFriends(await getConfig("FRIENDS_LIST"));
 
   let campusOptions: { id: string; name: string; timezone?: string }[] = [];
   try {
@@ -472,6 +475,11 @@ async function openClusterDialogImpl(opts?: { seatId?: string }) {
   // spinner, and let the campus menu do the rest.
   if (!clusters.some((c) => c.svg)) {
     renderNoClusterData(state, activeCampusId);
+    // The poll and the clock start anyway: the campus menu can switch to a
+    // campus with maps, and loadCampus() does not start them. Occupancy used
+    // to load once there, and the clock stayed frozen.
+    stopPoll = startOccupancyPoll(state, abortController.signal);
+    stopClock = startCampusClock(state);
     return;
   }
   await Promise.all([

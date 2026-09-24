@@ -57,7 +57,7 @@ describe("shortcut editor", () => {
       { name: "", url: "", color: "#ff0000", emoji: "" },
     ];
     render(
-      renderShortcutsSettings(links, () => {}, () => {}, () => {}, () => {}, () => {}),
+      renderShortcutsSettings(links, () => {}, () => {}, () => {}, () => {}),
       host,
     );
     const rows = host.querySelectorAll(".link-group");
@@ -83,7 +83,7 @@ describe("shortcut editor", () => {
     ];
     const moves: [number, number][] = [];
     render(
-      renderShortcutsSettings(links, () => {}, () => {}, () => {}, () => {}, (from, to) =>
+      renderShortcutsSettings(links, () => {}, () => {}, () => {}, (from, to) =>
         moves.push([from, to]),
       ),
       host,

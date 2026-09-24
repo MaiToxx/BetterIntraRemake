@@ -39,6 +39,21 @@ export const normalizeLink = (link: unknown): ShortcutLink => {
   };
 };
 
+/**
+ * The name a shortcut gets when only its address was typed: the host without
+ * "www.", cut to the name field's 20 characters. A row without a name used to
+ * be dropped at save, and was gone the next time the tab opened.
+ */
+export const defaultShortcutName = (url: unknown): string => {
+  const safe = sanitizeUrl(url);
+  if (!safe) return "";
+  try {
+    return new URL(safe).hostname.replace(/^www\./, "").slice(0, 20);
+  } catch {
+    return "";
+  }
+};
+
 export const getFaviconUrl = (url: string): string => {
   try {
     const parsed = new URL(url);
@@ -67,6 +82,9 @@ export function renderShortcutRow(
 ): ReturnType<typeof html> {
   // The placeholders are not names: each field says which shortcut it edits.
   const which = position ? `Shortcut ${position}` : "Shortcut";
+  // A name without a usable address cannot be stored: say so on the row
+  // instead of dropping it without a word.
+  const unsaved = !!link.name.trim() && !sanitizeUrl(link.url);
   // Three groups that wrap: one line on a wide hub; on a phone emoji + name,
   // then the address, then the colour and the buttons (one line there left
   // the name 26 px and the address 48 px wide). live(): the editor redraws
@@ -92,7 +110,7 @@ export function renderShortcutRow(
         data-shortcuts-name
         aria-label="${which} name"
         .value="${live(link.name)}"
-        placeholder="Name"
+        placeholder="${defaultShortcutName(link.url) || "Name"}"
         maxlength="20"
       />
     </div>
@@ -146,6 +164,11 @@ export function renderShortcutRow(
         <span aria-hidden="true">✕</span>
       </button>
     </div>
+    ${unsaved
+      ? html`<p class="w-full text-xs text-warning" role="status">
+          Not saved: add the address this shortcut opens.
+        </p>`
+      : nothing}
   </div>`;
 }
 
@@ -154,14 +177,17 @@ export function renderShortcutsSettings(
   onAddRow: () => void,
   onDeleteRow: (index: number) => void,
   onInput: () => void,
-  onRefreshPreview: () => void,
   onMoveRow: (from: number, to: number) => void,
 ): ReturnType<typeof html> {
   const maxLinks = 8;
   const isFull = links.length >= maxLinks;
   // The rows can hold what is being typed: the preview shows the sanitised
-  // form (no javascript: href), one chip per row so the indexes match.
-  const previewLinks = links.map(normalizeLink);
+  // form (no javascript: href) under the name it will be saved with, one
+  // chip per row so the indexes match.
+  const previewLinks = links.map((link) => {
+    const normalized = normalizeLink(link);
+    return normalized.name ? normalized : { ...normalized, name: defaultShortcutName(normalized.url) };
+  });
 
   return html`
     <div class="shortcuts-settings flex flex-col gap-4">
@@ -185,14 +211,6 @@ export function renderShortcutsSettings(
           ${isFull
             ? "Limit Reached"
             : html`Add Link (${links.length}/${maxLinks})`}
-        </button>
-
-        <button
-          type="button"
-          class="btn btn-info px-6"
-          @click="${onRefreshPreview}"
-        >
-          Update Preview
         </button>
       </div>
 
@@ -257,8 +275,8 @@ export function extractLinksFromForm(root: HTMLElement): ShortcutLink[] {
         emoji: emojiInput ? emojiInput.value : "",
       });
 
-      if (link.url && link.name) {
-        links.push(link);
+      if (link.url) {
+        links.push(link.name ? link : { ...link, name: defaultShortcutName(link.url) });
       }
     }
   });

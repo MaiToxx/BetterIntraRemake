@@ -251,7 +251,7 @@ export async function loadCluster(
 
   if (cluster.id === "active") {
     updateActiveSortControls(state);
-    renderActiveList(state.shadow, state.activeUsers);
+    renderActiveList(state.shadow, state.activeUsers, state.activeWifiOnly);
     return;
   }
 

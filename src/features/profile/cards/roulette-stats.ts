@@ -61,15 +61,43 @@ function formatRouletteDate(dateStr: string): string {
   return `${day}/${month}/${year}`;
 }
 
-function nextRouletteTimestamp(from: number): number {
+/** The roulette runs on Fridays at 08:00, Paris time. */
+const ROULETTE_ZONE = "Europe/Paris";
+const ROULETTE_HOUR = 8;
+
+/** How far `zone`'s wall clock is ahead of UTC at `ts`, in ms. */
+function zoneOffsetMs(ts: number, zone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+  }).formatToParts(new Date(ts));
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  const wall = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return wall - Math.floor(ts / 1000) * 1000;
+}
+
+/**
+ * The next roulette after `from`: the next Friday 08:00 in Paris, summer or
+ * winter time. It was a fixed 06:00 UTC, which is 08:00 in summer only: from
+ * the end of October the countdown reached zero at 07:00 while the label
+ * still said 8:00.
+ */
+export function nextRouletteTimestamp(from: number): number {
   const d = new Date(from);
-  const next = new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 6, 0, 0),
-  );
-  while (next.getUTCDay() !== 5 || next.getTime() <= from) {
-    next.setUTCDate(next.getUTCDate() + 1);
+  for (let i = 0; i < 9; i++) {
+    const guess = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + i, ROULETTE_HOUR);
+    const at = guess - zoneOffsetMs(guess - zoneOffsetMs(guess, ROULETTE_ZONE), ROULETTE_ZONE);
+    const weekday = new Date(guess).getUTCDay();
+    if (weekday === 5 && at > from) return at;
   }
-  return next.getTime();
+  // unreachable: a Friday comes within a week
+  return from + 7 * 86400000;
 }
 
 function getNextRoulette(): {
@@ -85,8 +113,11 @@ function getNextRoulette(): {
   const hours = Math.floor((diff % 86400000) / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
 
+  // The viewer's own clock, from the same instant as the countdown: 8:00 in
+  // Paris, 7:00 in Lisbon, 11:00 in Abu Dhabi.
   const d = new Date(nextMs);
-  const dateLabel = `${d.toLocaleDateString("en-US", { weekday: "long" })} ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "long" })}, 8:00`;
+  const time = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
+  const dateLabel = `${d.toLocaleDateString("en-US", { weekday: "long" })} ${d.getDate()} ${d.toLocaleDateString("en-US", { month: "long" })}, ${time}`;
 
   return { days, hours, minutes, dateLabel };
 }

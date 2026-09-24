@@ -224,22 +224,37 @@ describe("the shortcut editor", () => {
 
   it("previews a typed address in its sanitised form, and keeps the field as typed", async () => {
     const panel = await mountEditor([{ name: "", url: "", color: "#7dd3fc", emoji: "" }]);
-    const refresh = () =>
-      [...panel.querySelectorAll("button")]
-        .find((b) => /Update Preview/.test(b.textContent ?? ""))!
-        .click();
     const chipHref = () =>
-      panel.querySelector<HTMLAnchorElement>("#shortcuts-display a")!.getAttribute("href");
+      panel.querySelector<HTMLAnchorElement>("#shortcuts-display a")?.getAttribute("href");
     typeInto(field(rows(panel)[0], "data-shortcuts-name"), "X");
     typeInto(field(rows(panel)[0], "data-shortcuts-url"), "github.com");
-    refresh();
-    expect(chipHref()).toBe("https://github.com/");
+    // the preview follows the typing, after the save's short debounce
+    await vi.waitFor(() => expect(chipHref()).toBe("https://github.com/"), { timeout: 3000 });
     expect(field(rows(panel)[0], "data-shortcuts-url").value).toBe("github.com");
 
     typeInto(field(rows(panel)[0], "data-shortcuts-url"), "javascript:alert(1)");
-    refresh();
-    expect(chipHref()).not.toMatch(/^javascript:/i);
+    await vi.waitFor(() => expect(chipHref()).not.toBe("https://github.com/"), { timeout: 3000 });
+    expect(chipHref() ?? "").not.toMatch(/^javascript:/i);
     expect(field(rows(panel)[0], "data-shortcuts-url").value).toBe("javascript:alert(1)");
+  });
+
+  describe("rows that used to vanish", () => {
+    it("an address without a name is saved under its host", async () => {
+      const panel = await mountEditor([{ name: "", url: "", color: "#7dd3fc", emoji: "" }]);
+      typeInto(field(rows(panel)[0], "data-shortcuts-url"), "https://www.github.com/me");
+      await vi.waitFor(
+        async () => expect((await storedLinks())[0]).toMatchObject({ name: "github.com", url: "https://www.github.com/me" }),
+        { timeout: 3000 },
+      );
+      expect(field(rows(panel)[0], "data-shortcuts-name").placeholder).toBe("github.com");
+    });
+
+    it("a name without an address says it is not saved", async () => {
+      const panel = await mountEditor([{ name: "", url: "", color: "#7dd3fc", emoji: "" }]);
+      typeInto(field(rows(panel)[0], "data-shortcuts-name"), "Half");
+      await vi.waitFor(() => expect(rows(panel)[0].textContent).toMatch(/Not saved: add the address/), { timeout: 3000 });
+      expect(await storedLinks()).toEqual([]);
+    });
   });
 });
 

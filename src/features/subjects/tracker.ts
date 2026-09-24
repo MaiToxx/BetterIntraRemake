@@ -1,5 +1,4 @@
 import { getConfig } from "../../core/config.ts";
-import { hashLogin } from "../../core/crypto.ts";
 import {
   decide,
   normalizeUrl,
@@ -10,7 +9,7 @@ import {
 import { renderSubjectBadge } from "./ui.ts";
 import { waitForElement } from "../../core/dom/dom-wait.ts";
 
-import { WORKER_URL } from "../../core/worker.ts";
+import { workerFetch } from "../../core/worker.ts";
 const CHECK_COOLDOWN_MS = 15 * 60 * 1000;
 
 interface LocalSubjectState {
@@ -42,9 +41,10 @@ interface WorkerReportEntry {
   subjectId?: string | null;
 }
 
+/** The session workerFetch() signs a request with (it hashes the login). */
 interface CloudClient {
   token: string;
-  hashedLogin: string;
+  login: string;
 }
 
 export function matchProjectSlug(pathname: string): string | null {
@@ -89,24 +89,22 @@ async function cloudClient(): Promise<CloudClient | null> {
     getConfig("CLOUD_LOGIN"),
   ]);
   if (!token || !login) return null;
-  return { token, hashedLogin: await hashLogin(login) };
+  return { token, login };
 }
 
 async function getWorkerState(
   slug: string,
   client: CloudClient,
 ): Promise<WorkerStateEntry | null> {
-  const url = `${WORKER_URL}/api/v1/private/subjects/state?login=${encodeURIComponent(client.hashedLogin)}&slugs=${encodeURIComponent(slug)}`;
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${client.token}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { subjects?: WorkerStateEntry[] };
-    return data.subjects?.find((s) => s.slug === slug) ?? null;
-  } catch {
-    return null;
-  }
+  // workerFetch: a 401 flags CLOUD_AUTH_FAILED (the hub's "Reconnect")
+  // instead of failing without a word, and a hung worker times out.
+  const res = await workerFetch(
+    `/api/v1/private/subjects/state?slugs=${encodeURIComponent(slug)}`,
+    { auth: client },
+  );
+  if (!res.ok) return null;
+  const data = res.json as { subjects?: WorkerStateEntry[] } | null;
+  return data?.subjects?.find((s) => s.slug === slug) ?? null;
 }
 
 async function reportToWorker(
@@ -114,22 +112,14 @@ async function reportToWorker(
   client: CloudClient,
   url: string,
 ): Promise<WorkerReportEntry | null> {
-  const endpoint = `${WORKER_URL}/api/v1/private/subjects/report?login=${encodeURIComponent(client.hashedLogin)}`;
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${client.token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ items: [{ slug, url: normalizeUrl(url) }] }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { subjects?: WorkerReportEntry[] };
-    return data.subjects?.find((s) => s.slug === slug) ?? null;
-  } catch {
-    return null;
-  }
+  const res = await workerFetch("/api/v1/private/subjects/report", {
+    method: "POST",
+    body: { items: [{ slug, url: normalizeUrl(url) }] },
+    auth: client,
+  });
+  if (!res.ok) return null;
+  const data = res.json as { subjects?: WorkerReportEntry[] } | null;
+  return data?.subjects?.find((s) => s.slug === slug) ?? null;
 }
 
 function versionDateOf(

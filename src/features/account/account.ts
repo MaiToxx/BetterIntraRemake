@@ -50,7 +50,7 @@ async function privateFailure(res: WorkerResult): Promise<CloudFailure> {
   // The worker's write limiter (10 a minute per login, shared with sign-in,
   // calendar sync and image upload): nothing wrong with the connection.
   if (res.status === 429) return "busy";
-  // A value over 8 KB or a record over 64 KB: retrying cannot help until the
+  // A value over 64 KB or a record over 256 KB: retrying cannot help until the
   // custom CSS or the saved presets shrink.
   if (res.status === 413) return "too-large";
   return "rejected";
@@ -369,7 +369,7 @@ export const PUSH_FAILURE_KEY = "CLOUD_PUSH_FAILURE";
 export interface PushFailure {
   /** "auth" is left to CLOUD_AUTH_FAILED and its sign-in prompt. */
   reason: Exclude<CloudFailure, "auth">;
-  /** The worker's own words (e.g. "Setting CUSTOM_CSS too long (max 8 KB)"). */
+  /** The worker's own words (e.g. "Setting CUSTOM_CSS too long (max 64 KB)"). */
   detail: string;
   at: number;
 }
@@ -487,6 +487,13 @@ export async function pushSettings(): Promise<PushResult> {
  * @returns A promise that resolves to true on success, false on failure.
  */
 export async function syncToCloud(): Promise<boolean> {
+  // The automatic pushes (a friend added, the look republished...) wait for
+  // the answer to "Restore your settings?": until then this browser holds
+  // defaults, and a push replaces the cloud copy key by key. The Push
+  // buttons call pushSettings() and stay the user's call.
+  if ((await chrome.storage.local.get(RESTORE_PENDING_KEY))[RESTORE_PENDING_KEY]) {
+    return false;
+  }
   return (await pushSettings()) === "ok";
 }
 
@@ -684,32 +691,44 @@ export async function applyCloudSettings(
   }
 }
 
+/** Set by a fresh sign-in, cleared once "Restore your settings?" is answered. */
+const RESTORE_PENDING_KEY = "PENDING_SETTINGS_RESTORE";
+
 /**
  * Prompts the user to restore their cloud settings after a fresh 42 connect.
- * Triggered once per connect via the PENDING_SETTINGS_RESTORE flag.
+ * Triggered by the PENDING_SETTINGS_RESTORE flag, which stays until the
+ * question is answered (or there is nothing to restore): syncToCloud() holds
+ * the automatic pushes meanwhile. It used to be removed before the backup
+ * was even read, so a push could overwrite the backup under the dialog.
  */
 export async function maybePromptRestore(): Promise<void> {
   const pending = (await chrome.storage.local.get(
-    "PENDING_SETTINGS_RESTORE",
+    RESTORE_PENDING_KEY,
   )) as Record<string, unknown>;
-  if (!pending.PENDING_SETTINGS_RESTORE) return;
-  await chrome.storage.local.remove("PENDING_SETTINGS_RESTORE");
+  if (!pending[RESTORE_PENDING_KEY]) return;
 
   const login = await getCloudLogin();
   const token = await getConfig("CLOUD_TOKEN");
-  if (!login || !token) return;
+  if (!login || !token) {
+    await chrome.storage.local.remove(RESTORE_PENDING_KEY);
+    return;
+  }
 
+  // No answer from the server: asked again on the next page.
   const settings = await fetchMySettings();
   if (!settings) return;
 
-  if (
-    hasCloudData(settings) &&
-    (await showConfirmDialog({
-      message: "Cloud backup found. Restore your settings?",
-      confirmLabel: "Restore",
-      cancelLabel: "Cancel",
-    }))
-  ) {
+  if (!hasCloudData(settings)) {
+    await chrome.storage.local.remove(RESTORE_PENDING_KEY);
+    return;
+  }
+  const restore = await showConfirmDialog({
+    message: "Cloud backup found. Restore your settings?",
+    confirmLabel: "Restore",
+    cancelLabel: "Cancel",
+  });
+  await chrome.storage.local.remove(RESTORE_PENDING_KEY);
+  if (restore) {
     await applyCloudSettings(settings);
     window.location.reload();
   }

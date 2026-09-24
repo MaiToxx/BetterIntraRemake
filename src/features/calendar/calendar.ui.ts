@@ -1,14 +1,13 @@
 import { html, render } from "lit-html";
 import { ref } from "lit-html/directives/ref.js";
 import { unsafeHTML } from "lit-html/directives/unsafe-html.js";
-import { hashLogin } from "../../core/crypto.ts";
 import { clearAuthFailed, loginWith42 } from "../account/account.ts";
 import { generateQrDataUrl } from "./qr.ts";
 import { maybeSyncCalendar } from "./calendar-sync.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
-import { WORKER_URL } from "../../core/worker.ts";
+import { WORKER_URL, workerFetch } from "../../core/worker.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
 
 export const REGENERATE_CONFIRM =
@@ -16,6 +15,24 @@ export const REGENERATE_CONFIRM =
 
 function calUrl(token: string): string {
   return `https://${WORKER_URL.replace("https://", "")}/calendar/${token}.ics`;
+}
+
+/** The same feed for the calendar app of the system (Apple Calendar, Outlook...). */
+export function webcalUrl(token: string): string {
+  return calUrl(token).replace(/^https:/, "webcal:");
+}
+
+/** Google Calendar's "add by URL" page with the feed already filled in. */
+export function googleCalendarUrl(token: string): string {
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl(token))}`;
+}
+
+/** What a failed link request tells the student, by status (0: no answer). */
+export function generateError(status: number): string {
+  if (status === 401) return "Your Better Intra session has expired. Sign in again to create the link.";
+  if (status === 429) return "Too many requests in a row. Wait a minute and try again.";
+  if (status === 0) return "Could not reach the server. Try again.";
+  return `The server could not create the link (error ${status}). Try again later.`;
 }
 
 export function renderCalendarPanel() {
@@ -31,6 +48,10 @@ function renderPanel(el: Element | undefined) {
   if (!el) return;
   const container = el as HTMLElement;
   let error: string | null = null;
+  /** The last request answered 401: the sign-in button comes back. */
+  let sessionExpired = false;
+  let copied = false;
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
 
   const connect = () =>
     loginWith42(async () => {
@@ -61,12 +82,22 @@ function renderPanel(el: Element | undefined) {
           <div class="card-body p-4 sm:p-6 gap-4">
             <h3 class="card-title text-lg">Calendar Sync</h3>
             <p class="text-sm opacity-70">
-              Subscribe to your upcoming 42 events in any calendar app. Your
-              calendar auto-syncs every time you visit your profile.
+              Subscribe to the 42 events you are registered for in any
+              calendar app. The feed updates every time you visit your
+              profile.
             </p>
 
             ${error
               ? html`<p class="text-sm text-error" role="alert">${error}</p>`
+              : ""}
+            ${sessionExpired
+              ? html`<button
+                  type="button"
+                  class="btn btn-primary btn-sm self-start"
+                  @click="${connect}"
+                >
+                  Sign in again
+                </button>`
               : ""}
             ${!signedIn && !token
               ? html`
@@ -91,16 +122,33 @@ function renderPanel(el: Element | undefined) {
                       >${calUrl(token)}</code
                     >
                     <button
+                      type="button"
                       class="btn btn-sm btn-square"
-                      @click="${async () => {
-                        await navigator.clipboard.writeText(calUrl(token));
-                      }}"
-                      data-tip="Copy link"
+                      @click="${() => copyLink(calUrl(token))}"
+                      data-tip="${copied ? "Copied!" : "Copy link"}"
+                      aria-label="${copied ? "Link copied" : "Copy link"}"
                     >
                       <span class="size-4 flex items-center justify-center"
                         >${unsafeHTML(COPY_SVG)}</span
                       >
                     </button>
+                  </div>
+                  <span class="sr-only" role="status"
+                    >${copied ? "Link copied" : ""}</span
+                  >
+
+                  <div class="flex flex-wrap gap-2">
+                    <a class="btn btn-sm btn-primary" href="${webcalUrl(token)}"
+                      >Open in my calendar app</a
+                    >
+                    <a
+                      class="btn btn-sm"
+                      style="border: 2px solid var(--color-info)"
+                      href="${googleCalendarUrl(token)}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Add to Google Calendar</a
+                    >
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
@@ -174,6 +222,25 @@ function renderPanel(el: Element | undefined) {
     );
   };
 
+  // The copy used to give no sign of success and did nothing when the
+  // clipboard was refused (no focus, a strict browser): the link is then
+  // offered in a prompt, like the theme code.
+  const copyLink = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      window.prompt("Copy your calendar link:", url);
+      return;
+    }
+    copied = true;
+    await update();
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => {
+      copied = false;
+      void update();
+    }, 2000);
+  };
+
   // One click used to revoke the link: every phone or Google calendar
   // subscribed to it stopped updating, without a word.
   const handleRegenerate = () => {
@@ -195,31 +262,27 @@ function renderPanel(el: Element | undefined) {
     }
 
     const uuid = crypto.randomUUID();
-    const hashed = await hashLogin(cloudLogin);
-
-    try {
-      const res = await fetch(
-        `${WORKER_URL}/api/v1/private/calendar/token?login=${encodeURIComponent(hashed)}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionToken}`,
-          },
-          body: JSON.stringify({ token: uuid }),
-        },
-      );
-      if (!res.ok) throw new Error("Failed to register token");
-      await chrome.storage.local.set({ [TOKEN_KEY]: uuid });
-      error = null;
-      await update();
-      // fill the new feed now rather than at the next profile visit
-      void maybeSyncCalendar();
-    } catch {
+    // workerFetch, not a bare fetch: a 401 flags CLOUD_AUTH_FAILED (the
+    // hub's "Reconnect"), and every failure used to read "Could not reach
+    // the server", an expired session and a rate limit included.
+    const res = await workerFetch("/api/v1/private/calendar/token", {
+      method: "POST",
+      body: { token: uuid },
+      auth: { login: cloudLogin, token: sessionToken },
+    });
+    if (!res.ok) {
       // the existing link, QR and button stay: the message sits above them
-      error = "Could not reach the server. Try again.";
+      sessionExpired = res.status === 401;
+      error = generateError(res.status);
       await update();
+      return;
     }
+    await chrome.storage.local.set({ [TOKEN_KEY]: uuid });
+    error = null;
+    sessionExpired = false;
+    await update();
+    // fill the new feed now rather than at the next profile visit
+    void maybeSyncCalendar();
   };
 
   update();

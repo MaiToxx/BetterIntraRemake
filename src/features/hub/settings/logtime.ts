@@ -42,8 +42,8 @@ export const LOGTIME_SETTINGS: readonly HubSettingDef[] = [
   {
     feature: "logtime",
     key: "LOGTIME_SHOW_DAYS_MODE",
-    label: "Day labels mode",
-    desc: "Chooses how the day labels are displayed.",
+    label: "Last active badge",
+    desc: "How the badge next to the Logtime title shows your last day in a cluster: its date, how long ago, or both.",
     kind: "radio-group",
     defaultValue: CONFIG_DEFAULT.LOGTIME_SHOW_DAYS_MODE,
     options: [

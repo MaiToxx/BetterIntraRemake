@@ -23,6 +23,7 @@ import { applyPublicLogtimeSettings, initLogtime } from "../../logtime/logtime.t
 import { sanitizeVisualUrls } from "./visuals-sanitize.ts";
 import { applyVisitorLook } from "../../customize/customize.ts";
 import type { PublicLook } from "../../customize/public-look.ts";
+import { savePreset, snapshotCustomization } from "../../customize/presets.ts";
 import {
   applyProfileExtras,
   clearProfileExtras,
@@ -333,6 +334,19 @@ export const injectCustomStyles = () => {
 
 const LOOK_BADGE_ID = "ft-visitor-look-badge";
 let lookBadgeLogin: string | null = null;
+/** The look on screen, read when "Save" is pressed (it can arrive after the badge). */
+let lookOnScreen: PublicLook | null = null;
+
+/**
+ * Keeps someone's published look as a preset of mine, named after them. Laid
+ * over my own settings: what a look does not carry (fonts, font size, my
+ * custom CSS) stays mine. It used to take a theme code sent by the owner.
+ */
+export async function saveVisitorLook(login: string, look: PublicLook): Promise<string> {
+  const name = `${login}'s style`;
+  await savePreset(name, { ...(await snapshotCustomization()), ...look });
+  return name;
+}
 
 /**
  * Apply the look published by the profile's owner (or clear it) and show a
@@ -355,6 +369,7 @@ export function showVisitorLook(
   // `extras` means nothing by itself: ask the sanitizer.
   const visibleExtras = !!extras && extrasAreVisible(extras);
   const active = !own && !hidden && (!!look || visibleExtras);
+  lookOnScreen = active ? look : null;
   void applyVisitorLook(active && look ? look : null);
   if (!own) {
     if (active && visibleExtras) {
@@ -378,6 +393,18 @@ export function showVisitorLook(
     sessionStorage.setItem(hiddenKey, "1");
     showVisitorLook(null);
   };
+  const save = async (e: Event) => {
+    const button = e.currentTarget as HTMLButtonElement;
+    if (!lookOnScreen || !login) return;
+    try {
+      const name = await saveVisitorLook(login, lookOnScreen);
+      button.textContent = "✓ Saved";
+      button.title = `Saved as "${name}" in Customize > Presets`;
+      button.disabled = true;
+    } catch {
+      button.textContent = "Not saved";
+    }
+  };
   render(
     html`<style>
         #${LOOK_BADGE_ID} {
@@ -395,7 +422,10 @@ export function showVisitorLook(
         #${LOOK_BADGE_ID} button:hover { opacity: 1; background: hsl(var(--muted, 220 20% 15%)); }
       </style>
       <span title="This profile is shown with the look and extras its owner published with Better Intra">🎨 ${login}'s style</span>
-      <button type="button" title="Show my own style instead (this visit only)" @click=${hide}>✕</button>`,
+      ${look
+        ? html`<button type="button" title="Keep this style in my presets (Customize > Presets)" @click=${save}>Save</button>`
+        : ""}
+      <button type="button" title="Show my own style instead (this visit only)" aria-label="Show my own style instead" @click=${hide}>✕</button>`,
     host,
   );
   if (!existing) (document.body || document.documentElement).appendChild(host);

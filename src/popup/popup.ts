@@ -49,6 +49,13 @@ const REQUIRED_ORIGINS = [
  * Firefox (Manifest V3) does not grant host permissions automatically: the
  * extension then silently does nothing on the Intranet. Show a one-click fix.
  */
+/**
+ * Set by main() once the tab strip exists: access just granted, the tab is
+ * asked again, and the strip offers the reload the content script needs (a
+ * tab opened before the grant has none). It used to stay empty.
+ */
+let onHostAccessGranted: (() => void) | null = null;
+
 async function renderPermissionBanner(root: HTMLElement) {
   let granted = true;
   try {
@@ -77,7 +84,10 @@ async function renderPermissionBanner(root: HTMLElement) {
               const ok = await chrome.permissions.request({
                 origins: REQUIRED_ORIGINS,
               });
-              if (ok) banner.remove();
+              if (ok) {
+                banner.remove();
+                onHostAccessGranted?.();
+              }
             } catch {
               /* refused */
             }
@@ -128,7 +138,9 @@ async function main() {
     const status = document.createElement("div");
     status.id = "tab-status";
     root.parentElement?.insertBefore(status, root);
-    void probeTab(tab).then((s) => renderTabStatus(status, s, tab?.id));
+    const probe = () => void probeTab(tab).then((s) => renderTabStatus(status, s, tab?.id));
+    onHostAccessGranted = probe;
+    probe();
     await initAccountSettings(root);
   } else {
     renderPlaceholder(root);

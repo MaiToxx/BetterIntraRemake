@@ -133,7 +133,9 @@ export const PROFILE_SETTINGS: readonly HubSettingDef[] = [
     desc: "Choose which types of events you want to see.",
     kind: "radio-group",
     defaultValue: CONFIG_DEFAULT.PROFILE_EVENT_TYPE_FILTER,
-    options: [],
+    // The event types come from the Intra when the hub opens; without them
+    // (offline, a failed read) the control used to show no button at all.
+    options: [{ label: "Show All", value: "all" }],
   },
 
   // Last on purpose: the public section closes the tab, behind its divider

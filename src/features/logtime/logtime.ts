@@ -720,15 +720,24 @@ function installFetchHook() {
   });
 }
 
-export function applyPublicLogtimeSettings(logtime: {
+type PublicLogtimeSettings = {
   calendarColor?: string;
   labelsColor?: string;
   emoji?: string;
   emojiDivisor?: string | number;
   emojiRate?: string | number;
   rainbowPalette?: string;
-}) {
+};
+
+/**
+ * The published settings of the profile on screen: a change to your own
+ * Logtime settings re-reads them, and these go back on top.
+ */
+let publicLogtime: PublicLogtimeSettings | null = null;
+
+export function applyPublicLogtimeSettings(logtime: PublicLogtimeSettings) {
   if (!isLoaded || !logtime) return;
+  publicLogtime = logtime;
 
   // These values belong to the viewed user and are interpolated into <style>
   // text: only accept plain hex colours and finite, positive numbers.
@@ -765,6 +774,23 @@ export function applyPublicLogtimeSettings(logtime: {
 let initPromise: Promise<void> | null = null;
 let hookInstalled = false;
 
+/** The settings the widget re-reads and applies while the page is open. */
+export const LOGTIME_LIVE_KEYS: ReadonlySet<string> = new Set([
+  "LOGTIME_GOAL_HOURS",
+  "LOGTIME_SHOW_AVERAGE",
+  "LOGTIME_SHOW_GOAL",
+  "LOGTIME_SHOW_TACOS",
+  "LOGTIME_EMOJI",
+  "LOGTIME_EMOJI_DIVISOR",
+  "LOGTIME_EMOJI_RATE",
+  "LOGTIME_SHOW_DAYS_MODE",
+  "LOGTIME_CALENDAR_COLOR",
+  "LOGTIME_LABELS_COLOR",
+  "LOGTIME_RAINBOW_PALETTE",
+  "LOGTIME_MAX_EARNINGS",
+  "DISABLE_ANIMATIONS",
+]);
+
 function useTheme(theme: "dark" | "light", presetKey: string): void {
   currentTheme = theme;
   const preset = THEMES[presetKey] ?? THEMES["dark"];
@@ -794,6 +820,19 @@ export function initLogtime(): Promise<void> {
       onThemeChange(({ theme: next, preset }) => {
         useTheme(next, preset);
         if (lastStats) renderLogtime(lastStats);
+      });
+      // The Logtime tab of the hub opens over the widget: its settings show at
+      // once instead of after a reload. LOGTIME_CALENDAR_VIEW is left out:
+      // the widget writes it itself and has already re-rendered.
+      chrome.storage.onChanged?.addListener((changes, area) => {
+        if (area !== "local") return;
+        const keys = Object.keys(changes);
+        if (!keys.some((k) => LOGTIME_LIVE_KEYS.has(k))) return;
+        void getConfigs().then((next) => {
+          CONFIG = next;
+          if (publicLogtime && !isOwnProfile()) applyPublicLogtimeSettings(publicLogtime);
+          else if (lastStats) renderLogtime(lastStats);
+        });
       });
       hookInstalled = true;
     }

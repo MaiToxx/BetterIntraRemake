@@ -196,7 +196,7 @@ describe("reload hint", () => {
     const { shadow } = await openHub();
     const hint = shadow.querySelector<HTMLElement>("#hub-reload-hint")!;
     expect(hint.classList.contains("hidden")).toBe(true);
-    storageChanged({ LOGTIME_SHOW_AVERAGE: false });
+    storageChanged({ PROFILE_USE_MODERN_INFO_CARD: false });
     expect(hint.classList.contains("hidden")).toBe(false);
     expect(hint.textContent).toBe("Reload to apply");
     expect(shadow.querySelector("#hub-reload")!.classList.contains("btn-warning")).toBe(true);
@@ -221,8 +221,10 @@ describe("reload hint", () => {
         .querySelector(`[data-setting-key="${key}"]`)!
         .closest(".card")!
         .querySelector(".badge")?.textContent?.trim();
-    expect(tag("LOGTIME_SHOW_AVERAGE")).toBe("reload");
+    expect(tag("PROFILE_USE_MODERN_INFO_CARD")).toBe("reload");
     expect(tag("CUSTOM_HIDE_FOOTER")).toBeUndefined();
+    // the Logtime widget applies its settings live since 1.15
+    expect(tag("LOGTIME_SHOW_AVERAGE")).toBeUndefined();
   });
 });
 

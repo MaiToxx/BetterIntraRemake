@@ -10,7 +10,7 @@ export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
     feature: "advanced",
     key: "ADVANCED_OPEN_LINKS_NEW_TAB",
     label: "Open links in new tab",
-    desc: "External links from Better Intra open in a new tab instead of the current one.",
+    desc: "Your shortcuts and the links of the profile card open in a new tab instead of the current one.",
     kind: "toggle",
     defaultValue: CONFIG_DEFAULT.ADVANCED_OPEN_LINKS_NEW_TAB,
     grid: true,

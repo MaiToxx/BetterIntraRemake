@@ -1,6 +1,7 @@
 import { getConfig } from "../../../core/config.ts";
 import { CLUSTERS, getClusterData } from "../../clusters/clusters.data.ts";
 import { openClusterDialog } from "../../clusters/map-dialog.ts";
+import { findClusterForSeat } from "../../clusters/map-dialog/helpers.ts";
 import { adoptSharedStyles } from "../../../core/styles/shared-styles.ts";
 import { bindTooltips } from "../../../core/dom/tooltip.ts";
 import { appendSvg } from "../../../core/dom/svg.ts";
@@ -159,12 +160,15 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   );
   const seatText = seatEl?.textContent?.trim() || null;
   if (!seatText || !seatEl) return;
-
-  seatEl.style.setProperty("display", "none", "important");
+  // The Intra's own pill is hidden once ours is in place, never before: on a
+  // campus without cluster data the lookup below threw, and the seat was
+  // shown nowhere.
+  const hideIntraPill = () => seatEl.style.setProperty("display", "none", "important");
 
   const existing = wrapper.querySelector<HTMLElement>("[data-ft-seat]");
   if (existing) {
     existing.querySelector(".value")!.textContent = seatText;
+    hideIntraPill();
     return;
   }
 
@@ -184,6 +188,7 @@ async function injectSeatBadge(profileCard: HTMLElement) {
     badge.style.cursor = "default";
     badge.textContent = "unavailable";
     wrapper.prepend(badge);
+    hideIntraPill();
     applyBadgeLayout(wrapper);
     return;
   }
@@ -200,16 +205,25 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   badge.style.color = "inherit";
   badge.style.fontWeight = "600";
 
-  let clusters = CLUSTERS;
+  // Thirteen campuses have no cluster data: the seat is then plain text,
+  // not a link. No campus known yet: no lookup (an empty id loads another
+  // campus's file).
+  let clusters: readonly { id: string; name: string }[] = CLUSTERS;
   if (clusters.length === 0) {
     const campus = await getConfig("CLUSTERS_CAMPUS");
-    const data = await getClusterData(campus);
-    clusters = data.clusters;
+    try {
+      clusters = campus ? (await getClusterData(campus)).clusters : [];
+    } catch {
+      clusters = [];
+    }
+  }
+  // Another pass may have added the badge during the lookup.
+  if (wrapper.querySelector("[data-ft-seat]")) {
+    hideIntraPill();
+    return;
   }
 
-  const cluster = clusters.find((c) =>
-    seatText.toLowerCase().startsWith(c.name.toLowerCase()),
-  );
+  const cluster = findClusterForSeat(clusters, seatText);
 
   const value = document.createElement("span");
   value.className = "value text-lg font-semibold";
@@ -238,6 +252,7 @@ async function injectSeatBadge(profileCard: HTMLElement) {
   }
 
   wrapper.prepend(badge);
+  hideIntraPill();
   applyBadgeLayout(wrapper);
 }
 

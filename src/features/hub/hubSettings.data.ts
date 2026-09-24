@@ -234,7 +234,8 @@ export const HUB_SETTING_DEFS: Record<FeatureId, readonly HubSettingDef[]> = {
  * Keys a storage.onChanged listener applies without a page reload, for the
  * defs that do not carry `live` themselves: the theme (theme-manager.ts,
  * shared-styles.ts), the profile extras (extras-apply.ts), the performance
- * flags (perf.ts), the campus (campus.ts). tests/hub-live-keys.test.ts checks
+ * flags (perf.ts), the campus (campus.ts), the Logtime widget (logtime.ts,
+ * LOGTIME_LIVE_KEYS). tests/hub-live-keys.test.ts checks
  * the list against the listeners.
  */
 export const LIVE_KEYS: ReadonlySet<string> = new Set<string>([
@@ -247,6 +248,18 @@ export const LIVE_KEYS: ReadonlySet<string> = new Set<string>([
   "PERF_DEFER_OFFSCREEN",
   "PERF_PAUSE_HIDDEN",
   "PERF_PRECONNECT",
+  "LOGTIME_GOAL_HOURS",
+  "LOGTIME_SHOW_AVERAGE",
+  "LOGTIME_SHOW_GOAL",
+  "LOGTIME_SHOW_TACOS",
+  "LOGTIME_EMOJI",
+  "LOGTIME_EMOJI_DIVISOR",
+  "LOGTIME_EMOJI_RATE",
+  "LOGTIME_SHOW_DAYS_MODE",
+  "LOGTIME_CALENDAR_COLOR",
+  "LOGTIME_LABELS_COLOR",
+  "LOGTIME_RAINBOW_PALETTE",
+  "LOGTIME_MAX_EARNINGS",
 ]);
 
 /** Prefixes of key families whose listener watches the whole family. */
