@@ -218,10 +218,14 @@ jobs:
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
         run: npx --yes chrome-webstore-upload-cli@4.0.1 --source better-intra-chrome-store.zip
 
-      # Firefox last: it waits for Mozilla.
+      # Firefox last: it waits for Mozilla. An approval that takes longer
+      # (AMO holds some updates for a manual review of hours or days) is not
+      # a failure: finish-release.yaml fetches the signed file every half hour
+      # and completes the release when Mozilla approves it.
       - name: web-ext sign (Firefox)
         if: env.HAS_AMO == 'true'
         id: web-ext-sign
+        continue-on-error: true
         uses: kewisch/action-web-ext@v2
         with:
           cmd: sign
@@ -230,11 +234,14 @@ jobs:
           channel: unlisted
           apiKey: ${{ secrets.AMO_SIGN_KEY }}
           apiSecret: ${{ secrets.AMO_SIGN_SECRET }}
-          # AMO approval can queue well past 15 min: wait up to an hour
-          timeout: 3600000
+          timeout: 1200000
+
+      - name: Signing still waiting for Mozilla
+        if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome != 'success'
+        run: echo "::notice::Mozilla has not approved this version yet. The Chrome files and updates.xml are out; finish-release.yaml attaches the .xpi and updates updates.json once Mozilla signs it."
 
       - name: Rename signed artifact
-        if: env.HAS_AMO == 'true'
+        if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome == 'success'
         run: mv "${{ steps.web-ext-sign.outputs.target }}" better-intra.xpi
 
       - name: Use unsigned artifact (no AMO credentials configured)
@@ -244,12 +251,13 @@ jobs:
           echo "::warning::AMO_SIGN_KEY / AMO_SIGN_SECRET not set: the Firefox .xpi is unsigned and will not auto-update."
 
       - name: Upload Firefox file to GitHub Release
+        if: env.HAS_AMO != 'true' || steps.web-ext-sign.outcome == 'success'
         uses: softprops/action-gh-release@v3
         with:
           files: better-intra.xpi
 
       - name: Update Firefox auto-update manifest
-        if: env.HAS_AMO == 'true'
+        if: env.HAS_AMO == 'true' && steps.web-ext-sign.outcome == 'success'
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |

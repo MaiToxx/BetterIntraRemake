@@ -1,0 +1,136 @@
+# Completes the latest release when publish.yaml could not: attaches the
+# Chrome files if they are missing, and the signed Firefox .xpi as soon as
+# Mozilla approves it (AMO can hold an update for a manual review that lasts
+# hours or days; publish.yaml only waits so long). Runs every half hour and
+# does nothing once the release has its files, so it costs a few seconds.
+name: Finish release
+
+on:
+  schedule:
+    - cron: "17,47 * * * *"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to complete (default: the latest release)"
+        required: false
+
+concurrency:
+  group: finish-release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  finish:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HAS_AMO: ${{ secrets.AMO_SIGN_KEY != '' && secrets.AMO_SIGN_SECRET != '' }}
+      HAS_CRX: ${{ secrets.CRX_PRIVATE_KEY != '' }}
+    steps:
+      - name: What the release lacks
+        id: state
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="$INPUT_TAG"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          fi
+          ASSETS=" $(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets -q '[.assets[].name] | join(" ")') "
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          case "$ASSETS" in *" better-intra-chrome.zip "*) ;; *) echo "need_chrome=true" >> "$GITHUB_OUTPUT" ;; esac
+          case "$ASSETS" in *" better-intra.xpi "*) ;; *) echo "need_xpi=true" >> "$GITHUB_OUTPUT" ;; esac
+          echo "release $TAG has:$ASSETS"
+
+      # main for the scripts and the manifests, the release tag (in release/)
+      # for what is built
+      - name: Checkout main
+        if: steps.state.outputs.need_chrome == 'true' || steps.state.outputs.need_xpi == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Checkout the release
+        if: steps.state.outputs.need_chrome == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.state.outputs.tag }}
+          path: release
+
+      - name: Setup Node.js
+        if: steps.state.outputs.need_chrome == 'true' || steps.state.outputs.need_xpi == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "lts/*"
+
+      - name: Build and attach the Chrome files
+        if: steps.state.outputs.need_chrome == 'true'
+        env:
+          CRX_PRIVATE_KEY: ${{ secrets.CRX_PRIVATE_KEY }}
+          TAG: ${{ steps.state.outputs.tag }}
+        run: |
+          cd release
+          npm ci
+          npm run build:chrome
+          npx web-ext build --source-dir dist-chrome --filename better-intra-chrome.zip --overwrite-dest
+          FILES="web-ext-artifacts/better-intra-chrome.zip"
+          if [ "$HAS_CRX" = "true" ]; then
+            printf '%s\n' "$CRX_PRIVATE_KEY" > crx-key.pem
+            npx --yes crx@5.0.1 pack dist-chrome -o better-intra.crx -p crx-key.pem
+            rm -f crx-key.pem
+            FILES="$FILES better-intra.crx"
+          fi
+          gh release upload "$TAG" $FILES --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Chrome auto-update manifest
+        if: steps.state.outputs.need_chrome == 'true' && env.HAS_CRX == 'true'
+        env:
+          TAG: ${{ steps.state.outputs.tag }}
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+          node scripts/update-updates-xml.js "${TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add updates.xml
+          git commit -m "chore: update updates.xml for ${TAG}" || exit 0
+          git push origin HEAD:main
+
+      - name: Signed .xpi from Mozilla
+        id: amo
+        if: steps.state.outputs.need_xpi == 'true' && env.HAS_AMO == 'true'
+        env:
+          AMO_KEY: ${{ secrets.AMO_SIGN_KEY }}
+          AMO_SECRET: ${{ secrets.AMO_SIGN_SECRET }}
+          VERSION: ${{ steps.state.outputs.version }}
+        run: |
+          set +e
+          node scripts/amo-signed-xpi.mjs "$VERSION" better-intra.xpi
+          code=$?
+          set -e
+          case $code in
+            0) echo "signed=true" >> "$GITHUB_OUTPUT" ;;
+            3) echo "::notice::$VERSION is still waiting for Mozilla's approval; the next run checks again." ;;
+            4) echo "::warning::Mozilla refused or disabled $VERSION: see the add-on's page on addons.mozilla.org." ;;
+            2) echo "::notice::$VERSION was never submitted to Mozilla." ;;
+            *) exit $code ;;
+          esac
+
+      - name: Attach the .xpi and publish the Firefox update
+        if: steps.amo.outputs.signed == 'true'
+        env:
+          TAG: ${{ steps.state.outputs.tag }}
+        run: |
+          gh release upload "$TAG" better-intra.xpi --repo "$GITHUB_REPOSITORY" --clobber
+          git fetch origin main
+          git reset --hard origin/main
+          node scripts/update-updates-json.js "${TAG#v}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add updates.json
+          git commit -m "chore: update updates.json for ${TAG}" || exit 0
+          git push origin HEAD:main
