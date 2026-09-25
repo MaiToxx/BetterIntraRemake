@@ -484,10 +484,9 @@ export async function pushSettings(): Promise<PushResult> {
     await clearPushFailure();
     return "ok";
   }
+  // Recorded, and shown by the popup and the hub footer: not logged as an
+  // error (a 429 after a burst of edits filled the extension's error list).
   const reason = await privateFailure(res);
-  if (reason !== "auth" && reason !== "network") {
-    console.error("Cloud sync failed:", res.status, res.message ?? res.text);
-  }
   await recordPushFailure(reason, res);
   return reason;
 }
@@ -507,7 +506,46 @@ export async function syncToCloud(): Promise<boolean> {
   if ((await chrome.storage.local.get(RESTORE_PENDING_KEY))[RESTORE_PENDING_KEY]) {
     return false;
   }
-  return (await pushSettings()) === "ok";
+  // One automatic push at a time. Two friends added in a row, or a friend
+  // and the look together, sent one whole push each, and the worker's write
+  // limit (10 a minute per login, shared with uploads and sign-in) answered
+  // 429. A request made while a push is out is served by one more push after
+  // it, which reads the settings as they are by then.
+  if (pushInFlight) {
+    pushAgain = true;
+    return pushInFlight;
+  }
+  pushInFlight = (async () => {
+    let result: PushResult;
+    do {
+      pushAgain = false;
+      result = await pushSettings();
+    } while (pushAgain && result === "ok");
+    if (result === "busy") retryAfterLimit();
+    else if (retryTimer && result === "ok") {
+      clearTimeout(retryTimer);
+      retryTimer = null;
+    }
+    return result === "ok";
+  })().finally(() => {
+    pushInFlight = null;
+  });
+  return pushInFlight;
+}
+
+/** The automatic push in flight, and whether a request came in meanwhile. */
+let pushInFlight: Promise<boolean> | null = null;
+let pushAgain = false;
+/** After a 429 ("retry in a minute"), one more try once the minute is over. */
+const LIMIT_RETRY_MS = 65_000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function retryAfterLimit(): void {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void syncToCloud();
+  }, LIMIT_RETRY_MS);
 }
 
 /**

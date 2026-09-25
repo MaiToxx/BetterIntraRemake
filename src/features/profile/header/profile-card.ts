@@ -297,7 +297,7 @@ function injectGivePointsButton(statsBar: HTMLElement, container: HTMLElement) {
   );
   wrapper.style.cssText =
     "display:inline-flex;align-items:center;margin-left:auto;background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer;";
-  const icon = svg.cloneNode(true) as SVGElement;
+  const icon = iconCopy(svg);
   // The name comes from aria-label; the icon itself is decoration.
   icon.setAttribute("aria-hidden", "true");
   icon.setAttribute("focusable", "false");
@@ -308,6 +308,29 @@ function injectGivePointsButton(statsBar: HTMLElement, container: HTMLElement) {
   });
 
   evBadge.appendChild(wrapper);
+}
+
+/** A length an SVG width/height attribute accepts ("16", "1.5em", "100%"). */
+const SVG_LENGTH = /^\d+(\.\d+)?(px|em|rem|%)?$/;
+
+/**
+ * The Intra's icon rebuilt in a new <svg>, with a real size. Its own svg
+ * carries height="auto", which is not an SVG length: every clone of it made
+ * Chrome log "<svg> attribute height: Expected length, 'auto'" against
+ * Better Intra. Its shapes are copied as they are.
+ */
+function iconCopy(source: SVGElement): SVGSVGElement {
+  const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  for (const { name, value } of Array.from(source.attributes)) {
+    if (name !== "width" && name !== "height") icon.setAttribute(name, value);
+  }
+  const width = source.getAttribute("width") ?? "";
+  const height = source.getAttribute("height") ?? "";
+  const size = SVG_LENGTH.test(width) ? width : SVG_LENGTH.test(height) ? height : "16";
+  icon.setAttribute("width", SVG_LENGTH.test(width) ? width : size);
+  icon.setAttribute("height", SVG_LENGTH.test(height) ? height : size);
+  for (const child of Array.from(source.childNodes)) icon.appendChild(child.cloneNode(true));
+  return icon;
 }
 
 function pollForUpdatedStats(attempts = 0) {

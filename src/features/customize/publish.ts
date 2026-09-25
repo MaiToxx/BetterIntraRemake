@@ -22,18 +22,30 @@ const ALWAYS_PUBLIC = new Set<string>([SHARE_KEY, ...EXTRAS_KEYS]);
 let timer: ReturnType<typeof setTimeout> | null = null;
 /** A key of ALWAYS_PUBLIC changed during the current burst. */
 let forced = false;
+/** Every change of the current burst came from the hub. */
+let fromHubOnly = true;
 
-export function publishLookIfShared(changedKey: string): void {
+/**
+ * `fromHub`: the change was made in the settings hub (every caller but the
+ * one-off default push below). With Auto push on, the hub already pushes
+ * every synced change it sees; this one used to push the same change a
+ * second time, half a second later.
+ */
+export function publishLookIfShared(changedKey: string, fromHub = true): void {
   if (!RELEVANT.has(changedKey)) return;
+  if (!fromHub) fromHubOnly = false;
   if (ALWAYS_PUBLIC.has(changedKey)) forced = true;
   if (timer) clearTimeout(timer);
   timer = setTimeout(async () => {
     timer = null;
     const force = forced;
     forced = false;
-    const c = await getConfigMany([SHARE_KEY, "CLOUD_TOKEN"]);
+    const hubOnly = fromHubOnly;
+    fromHubOnly = true;
+    const c = await getConfigMany([SHARE_KEY, "CLOUD_TOKEN", "CLOUD_SYNC_ENABLED"]);
     // Turning sharing off must reach the server too (the flag is synced).
     if (!c.CLOUD_TOKEN) return;
+    if (hubOnly && c.CLOUD_SYNC_ENABLED) return;
     if (!c.CUSTOM_SHARE_LOOK && !force) return;
     await syncToCloud();
     // public-by-nature keys are pushed sooner: the user often edits their
@@ -70,5 +82,5 @@ export async function publishDefaultLookOnce(): Promise<void> {
   if (!raw.LAST_CLOUD_SYNC || raw.PENDING_SETTINGS_RESTORE) return;
   // a stored value, not the key: some storages list missing keys as undefined
   if (typeof raw[SHARE_KEY] === "boolean") return;
-  publishLookIfShared(SHARE_KEY);
+  publishLookIfShared(SHARE_KEY, false);
 }

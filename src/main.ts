@@ -33,6 +33,7 @@ import { initPerfStyles } from "./features/performance/perf.ts";
 import { initEasterEggs } from "./features/eggs/eggs.ts";
 import { maybeSyncCalendar } from "./features/calendar/calendar-sync.ts";
 import { initI18n, t } from "./core/i18n/i18n.ts";
+import { installOrphanErrorFilter } from "./core/lifecycle/orphan-errors.ts";
 
 // The toolbar popup asks this page: sign in with its Intra token (the popup
 // cannot see it), "is Better Intra running here?", and open the hub.
@@ -40,6 +41,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) =>
   answerPopupMessage(message, sendResponse, { openHub }),
 );
 import { html, render } from "lit-html";
+
+installOrphanErrorFilter();
 
 // The language (UI_LANGUAGE, or the browser's) before any text is drawn:
 // everything that renders at start-up waits for it (one settings read).
