@@ -68,7 +68,7 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
 
 ## Auth mode
 
-`package.json` `config.authMode` selects how *Connect with 42* works and is compiled in as `AUTH_MODE` (`src/core/worker.ts`). This deployment uses `"intra"`: the extension sends the Intra session JWT (issued by `auth.42.fr`, captured by `hook.js`) once to the worker's `/auth/intra`, the worker verifies it against 42's JWKS and returns a random session token that the extension stores as `CLOUD_TOKEN`. Friends, correction stats and roulette history are then read from the Intra with the user's own session. `"oauth"` is upstream's flow (a 42 application on the worker, `/login`, `/callback` and `src/auth-callback.ts`); its code paths stay in the tree and are tested (`tests/friends-data-oauth.test.ts`) but are never taken here.
+`package.json` `config.authMode` selects how *Sign in with 42* works and is compiled in as `AUTH_MODE` (`src/core/worker.ts`). This deployment uses `"intra"`: the extension sends the Intra session JWT (issued by `auth.42.fr`, captured by `hook.js`) once to the worker's `/auth/intra`, the worker verifies it against 42's JWKS and returns a random session token that the extension stores as `CLOUD_TOKEN`. Friends, correction stats and roulette history are then read from the Intra with the user's own session. `"oauth"` is upstream's flow (a 42 application on the worker, `/login`, `/callback` and `src/auth-callback.ts`); its code paths stay in the tree and are tested (`tests/friends-data-oauth.test.ts`) but are never taken here.
 
 ## Toolchain
 
@@ -81,25 +81,37 @@ cross-env TARGET=firefox BUILD_OUT_DIR=dist-firefox tsc && cross-env TARGET=fire
 
 ## Worker
 
-The Cloudflare Worker (`../better-intra-worker`) handles the Intra-token sign-in, settings sync, public visuals and looks, the calendar `.ics` feed, the subject tracker, the announcement and the public stats. It has its own `package.json`.
+The Cloudflare Worker (`../better-intra-worker`) handles the Intra-token sign-in and its sessions, settings sync, public visuals and looks, uploaded profile images, the calendar `.ics` feed, the subject tracker, the data export, the announcement and the public stats. It has its own `package.json`, and its README documents every route, limit and table. AGENTS.md has the short version, including the error codes and the compatibility rule: extension builds stay installed for weeks, so a worker change keeps the routes and success bodies they read.
 
 ### Commands
 
 ```bash
 cd ../better-intra-worker
 npm install
-npm run dev       # wrangler dev
-npm run deploy    # wrangler deploy --remote (never without the user's explicit consent)
+npm test            # vitest, with an in-memory KV and a SQLite D1 built from migrations/
+npm run typecheck   # tsc --noEmit -p .
+npm run dev         # wrangler dev (run `npx wrangler d1 migrations apply better-intra-d1 --local` once first)
+npm run deploy      # never without the user's explicit consent: see below
 ```
 
 ### Storage
 
-- **`BETTER_INTRA_KV`** — one record per login hash (session tokens, settings) and small caches (JWKS, project map). The free plan allows 1,000 writes a day for the whole namespace.
-- **D1** (`better_intra_d1`) — `users` (login hash, country, first sign-in; feeds `/api/v1/public/stats`), `calendar_ics`, subject tracker tables.
+- **`BETTER_INTRA_KV`** — one record per login hash (`{settings, settingsRev}`), the uploaded images (`img:<hash>:<slot>`) and two small caches (JWKS, announcement). The free plan allows 1,000 writes a day for the whole namespace, so pushes, uploads and first sign-ins spend a daily budget counted in D1 (200 a day per login) before writing.
+- **D1** (`better_intra_d1`, database `better-intra-d1`) — `sessions` (a SHA-256 of each token, 10 per login, 365 days) and `session_migrations`, `users` (login hash, first sign-in; feeds `/api/v1/public/stats`), `calendar_ics`, `calendar_tokens`, `subjects`, `kv_write_budget`, `public_visuals` (what visitors are served, read before the KV record). The live database also keeps upstream tables that nothing reads; they are left alone.
+- **Migrations** — `migrations/NNNN_name.sql`, applied in order by `npx wrangler d1 migrations apply better-intra-d1 --remote`. They only add (`CREATE ... IF NOT EXISTS`) and are never edited once applied: a schema change is a new numbered file.
 
-### Dormant oauth mode
+### Deploy and roll back
 
-The worker still contains upstream's OAuth login, evaluation notifications (Discord) and their crons. They need a 42 application (`CLIENT_ID`/`CLIENT_SECRET`) and `DISCORD_ENABLED`; without them every cron returns at once and the routes are never called by this extension. Keep them compiling, do not build on them.
+Both touch the live worker: only with the user's explicit consent.
+
+1. `npx wrangler d1 migrations list better-intra-d1 --remote`, and `... migrations apply better-intra-d1 --remote` when one is pending (before the deploy: the new code needs its tables).
+2. `npm run deploy` (`scripts/deploy.mjs`) refuses uncommitted changes, failing tests or type check and unapplied migrations, then deploys with the commit as the version tag (`npm run deploy -- --dry-run` runs the checks but the live migrations one, and builds without uploading).
+3. Check that `https://betterintra-remake.maitox.workers.dev/api/v1/public/stats` answers JSON.
+4. To roll back: `npx wrangler deployments list`, then `npx wrangler rollback <version-id> --message "<why>"`. Code and config go back, D1 and KV do not: read the "Rolling back" notes in the worker README first (a worker from before D1 sessions signs out the sessions opened since, and brings back the ones revoked since while their KV record still lists them).
+
+### Removed upstream code
+
+Upstream's OAuth login (`/login`, `/callback`), evaluation notifications (Discord), the students directory, logtime history and every cron were removed from the worker in 1.13.0; its tests assert that those routes answer 404. The extension's `"oauth"` auth mode stays in the tree (see *Auth mode*) but would need upstream's worker.
 
 ## Testing
 
@@ -110,7 +122,7 @@ npm test           # vitest run (single pass)
 npm run test:watch # vitest (watch mode)
 ```
 
-Test files: `tests/*.test.ts`, one per feature or concern (about a hundred). Global setup (the `chrome.storage` mock) is in `tests/setup.ts`. `tests/no-html-injection.test.ts` enforces the no-`innerHTML` rule, `tests/manifests.test.ts` the manifest build, `tests/privacy-doc.test.ts` keeps PRIVACY.md in step with the manifests and the sync key list.
+Test files: `tests/*.test.ts`, one per feature or concern (about a hundred). Global setup (the `chrome.storage` mock) is in `tests/setup.ts`. `tests/no-html-injection.test.ts` enforces the no-`innerHTML` rule, `tests/manifests.test.ts` the manifest build, `tests/privacy-doc.test.ts` keeps PRIVACY.md in step with the manifests and the sync key list and, when the worker repository sits next to this one, with the worker's D1 tables, session limits, write budget and export.
 
 ## Coding conventions
 

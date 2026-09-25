@@ -20,6 +20,8 @@ export const CONFIG_DEFAULT: BetterIntraConfig = {
   CLOUD_TOKEN: "",
   CLOUD_LOGIN: "",
   CLOUD_AUTH_FAILED: false,
+  CLOUD_SETTINGS_REV: null,
+  LOOK_PUBLISH_PENDING: {},
   SIGNIN_DISCLOSURE_ACCEPTED: false,
   ACCOUNT: null,
 

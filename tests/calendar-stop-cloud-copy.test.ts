@@ -63,9 +63,15 @@ describe("the cloud copy after Stop sharing", () => {
     [...host.querySelectorAll("button")].find((b) => /Stop sharing/.test(b.textContent ?? ""))!.click();
 
     await vi.waitFor(() => expect(settingsPosts()).toHaveLength(1));
-    expect(calls[0]).toMatchObject({ method: "DELETE", path: "/api/v1/private/calendar/token" });
+    // the first request but the panel's own GET of the live link
+    expect(calls.filter((c) => c.method !== "GET")[0]).toMatchObject({
+      method: "DELETE",
+      path: "/api/v1/private/calendar/token",
+    });
+    // baseRev: the answer then carries the new revision (account.ts pushPartial)
     expect(settingsPosts()[0].body).toEqual({
       settings: { CALENDAR_SYNC_TOKEN: "", CALENDAR_EVENTS_HASH: "" },
+      baseRev: 0,
     });
   });
 
@@ -73,7 +79,7 @@ describe("the cloud copy after Stop sharing", () => {
     await chrome.storage.local.set({ PENDING_SETTINGS_RESTORE: true });
     await forgetCloudCalendarLink();
     expect(settingsPosts().map((c) => c.body)).toEqual([
-      { settings: { CALENDAR_SYNC_TOKEN: "", CALENDAR_EVENTS_HASH: "" } },
+      { settings: { CALENDAR_SYNC_TOKEN: "", CALENDAR_EVENTS_HASH: "" }, baseRev: 0 },
     ]);
   });
 

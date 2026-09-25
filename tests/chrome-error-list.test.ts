@@ -158,14 +158,16 @@ describe("automatic pushes", () => {
     // timers do not drive
     vi.useRealTimers();
     await chrome.storage.local.set({ CLOUD_SYNC_ENABLED: true, CUSTOM_SHARE_LOOK: true });
-    const { publishLookIfShared } = await import("../src/features/customize/publish.ts");
+    const { publishLookIfShared, LOOK_PUBLISH_DELAY_MS } = await import(
+      "../src/features/customize/publish.ts"
+    );
     publishLookIfShared("CUSTOM_ACCENT_COLOR");
-    await new Promise((r) => setTimeout(r, 2_200));
+    await new Promise((r) => setTimeout(r, LOOK_PUBLISH_DELAY_MS + 300));
     expect(posts).toHaveLength(0);
     // Manual push: this is the one push that publishes the look
     await chrome.storage.local.set({ CLOUD_SYNC_ENABLED: false });
     publishLookIfShared("CUSTOM_ACCENT_COLOR");
-    await vi.waitFor(() => expect(posts).toHaveLength(1), { timeout: 5_000 });
+    await vi.waitFor(() => expect(posts).toHaveLength(1), { timeout: LOOK_PUBLISH_DELAY_MS + 4_000 });
   });
 
 });

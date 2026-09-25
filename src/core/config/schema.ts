@@ -23,6 +23,19 @@ export interface BetterIntraConfig {
   CLOUD_TOKEN: string;
   CLOUD_LOGIN: string;
   CLOUD_AUTH_FAILED: boolean;
+  /**
+   * The revision of the cloud settings this browser last pulled or pushed
+   * (the worker's settingsRev); a full push sends it as baseRev, and the
+   * worker refuses it (409) when another browser wrote since. null: never
+   * known (a browser from before revisions, or just signed in).
+   */
+  CLOUD_SETTINGS_REV: number | null;
+  /**
+   * Public settings changed here and not published yet, each with when it
+   * changed (publish.ts). Kept in storage so that a reload or a link within
+   * the publish delay does not lose the change: the next page sends it.
+   */
+  LOOK_PUBLISH_PENDING: Record<string, number>;
   /** The sign-in notice was read and accepted on this browser (loginWith42). */
   SIGNIN_DISCLOSURE_ACCEPTED: boolean;
   ACCOUNT: object | null; // Stores user account info from 42 API

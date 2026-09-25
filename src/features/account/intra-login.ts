@@ -15,7 +15,7 @@ import {
   isJwtExpired,
   waitForIntrapyToken,
 } from "../../core/intra/intrapy.ts";
-import { WORKER_HOST, workerFetch } from "../../core/worker.ts";
+import { WORKER_HOST, workerErrorText, workerFetch } from "../../core/worker.ts";
 import { t } from "../../core/i18n/i18n.ts";
 
 export const INTRA_LOGIN_MESSAGE = "FT_INTRA_LOGIN";
@@ -101,6 +101,10 @@ async function signIn(): Promise<IntraLoginResult> {
       error: t("Too many sign-in attempts. Wait a minute, then try again."),
     };
   }
+  // The daily write budget and a busy KV answer 503 too: they are not 42's
+  // key server, and each says when to try again.
+  const known = workerErrorText(res);
+  if (known) return { ok: false, error: known };
   if (!res.ok) {
     const text = res.message ?? res.text;
     const details = `${t("Server refused the login ({status}): {text}", {
@@ -134,6 +138,8 @@ async function signIn(): Promise<IntraLoginResult> {
     return { ok: false, error: t("Unexpected server response.") };
   }
 
+  // The settings revision is settled by the restore question this flag
+  // brings (account.ts maybePromptRestore).
   await chrome.storage.local.set({
     CLOUD_TOKEN: data.token,
     CLOUD_LOGIN: data.login,

@@ -143,7 +143,7 @@ A panel in the bottom-right corner: add friends by login, see avatar, level, wal
 
 ### ☁️ Account
 
-From the extension popup: connect with 42 (Intra session, no password), push/pull settings, auto-push, disconnect, wipe all cloud data.
+From the extension popup: sign in with 42 (Intra session, no password), push/pull settings, auto-push, sign out, wipe all cloud data. A push from a browser that has not seen another browser's newer one is refused instead of overwriting it: *Pull*, or *Push anyway*. In the hub's Advanced tab (*Cloud account*): the signed-in browsers, with *Sign out my other browsers*, and *Download my cloud data* (a JSON copy of what the server keeps about you).
 
 ### ⚡ Lighten the Intra
 
@@ -191,7 +191,7 @@ The **transcript download** is still in the extension but only shows up on campu
 See [PRIVACY.md](./PRIVACY.md).
 
 - Settings live in `chrome.storage.local`. Signed out, the extension only talks to the worker for the public visuals of the profiles you open (by login hash), campus and announcement data, and to GitHub for the update check.
-- With the cloud account, the settings you push (friends list included), custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login, plus a users row (login hash, first sign-in date) for the public counters. *Wipe All Data* deletes all of it.
+- With the cloud account, the settings you push (friends list included), custom visuals and (if enabled) your public look are stored on the fork's worker under a hash of your login, plus a users row (login hash, first sign-in date) for the public counters and, for each signed-in browser, a hash of its session token (365 days at most). Signed in, you can download a copy of what the worker keeps about you; *Wipe All Data* deletes it (PRIVACY.md lists the few bookkeeping rows that stay).
 - Signing in sends your current Intra session token to the worker once, for verification against 42's public keys. It is not stored.
 - Other users' profiles: their public visuals and look are fetched from the worker when they use Better Intra; their images load from wherever they are hosted.
 - No analytics, tracking or advertising. Permissions: `storage`, `alarms` (not in the Chrome Web Store build), `activeTab` (Firefox only), and access to `*.intra.42.fr` and the worker. No host permission is needed for `api.github.com`: the update check is an ordinary cross-origin request.

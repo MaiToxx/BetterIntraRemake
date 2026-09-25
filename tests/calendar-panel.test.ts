@@ -33,13 +33,19 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 }
 
+/** Mounted, and past the check of the live link (Generate waits for it). */
 async function mount(): Promise<HTMLElement> {
   const host = document.createElement("div");
   document.body.appendChild(host);
   render(renderCalendarPanel(), host);
   await settle();
+  await vi.waitFor(() => expect(host.querySelector('[aria-busy="true"]')).toBeNull());
   return host;
 }
+
+/** The requests but the panel's own GET of the live link. */
+const sent = (fetch: ReturnType<typeof vi.fn>) =>
+  fetch.mock.calls.filter(([, init]) => ((init as RequestInit | undefined)?.method ?? "GET") !== "GET");
 
 const buttonNamed = (root: ParentNode, text: RegExp) =>
   [...root.querySelectorAll("button")].find((b) => text.test(b.textContent ?? ""));
@@ -50,6 +56,9 @@ beforeEach(async () => {
   account.loginWith42.mockClear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // an older worker, which answers the GET of the live link with a 405:
+  // the panel keeps what this browser knows (calendar-live-link.test.ts)
+  vi.stubGlobal("fetch", vi.fn(answer(405)));
 });
 
 describe("calendar panel", () => {
@@ -107,13 +116,13 @@ describe("calendar panel", () => {
     await settle();
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(confirm.mock.calls[0][0]).toMatch(/stop updating/);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(sent(fetch)).toHaveLength(0);
     expect((await chrome.storage.local.get("CALENDAR_SYNC_TOKEN")).CALENDAR_SYNC_TOKEN).toBe("old-token");
 
     confirm.mockReturnValue(true);
     buttonNamed(host, /Regenerate/)!.click();
     await vi.waitFor(async () => {
-      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(sent(fetch)).toHaveLength(1);
       const stored = (await chrome.storage.local.get("CALENDAR_SYNC_TOKEN")).CALENDAR_SYNC_TOKEN;
       expect(stored).not.toBe("old-token");
     });
@@ -126,7 +135,7 @@ describe("calendar panel", () => {
     const confirm = vi.spyOn(window, "confirm");
     const host = await mount();
     buttonNamed(host, /Generate calendar link/)!.click();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(sent(fetch)).toHaveLength(1));
     expect(confirm).not.toHaveBeenCalled();
   });
 
@@ -171,7 +180,9 @@ describe("calendar panel", () => {
     await settle();
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/calendar/tok.ics"));
     expect(copy().getAttribute("data-tip")).toBe("Copied!");
-    expect(host.querySelector('[role="status"]')!.textContent).toBe("Link copied");
+    // the other status line is the live-link check's notice, empty here
+    const statuses = [...host.querySelectorAll('[role="status"]')].map((s) => s.textContent!.trim());
+    expect(statuses.filter(Boolean)).toEqual(["Link copied"]);
 
     writeText.mockRejectedValueOnce(new Error("denied"));
     const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);

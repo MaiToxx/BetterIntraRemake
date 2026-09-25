@@ -24,11 +24,16 @@ import {
 } from "../../core/theme/theme-manager.ts";
 import { WORKER_URL } from "../../core/worker.ts";
 import {
+  PUSH_FAILURE_KEY,
   clearAuthFailed,
+  describeCloudFailure,
+  getPushFailure,
   loginWith42,
   logoutCloud,
+  pullSettings,
   pushSettings,
 } from "../account/account.ts";
+import { flushLookPublish } from "../customize/publish.ts";
 import {
   FEATURE_DEFS,
   HUB_INFO,
@@ -227,6 +232,10 @@ async function createModal(active: FeatureId[]): Promise<void> {
   // so the line under the button says whose, what for, and that it is
   // optional, before the click. Signed in: "Push now" for Manual mode, which
   // had no way to push from the hub (only the toolbar popup could).
+  // The light/dark switch: both faces of the swap are in the DOM (one is only
+  // faded out), so the label's text reads "Light Dark": the switch is named
+  // by what "checked" means instead. (Comments stay out of the template: an
+  // HTML comment there ships in content.js.)
   const modalTemplate = html`${sharedStylesLink()}<style>
       :host {
         display: block;
@@ -361,9 +370,6 @@ async function createModal(active: FeatureId[]): Promise<void> {
           <label
             class="swap btn btn-accent border border-base-content/20 text-center items-center"
           >
-            <!-- Both faces of the swap are in the DOM (one is only faded out),
-              so the label's text reads "Light Dark": the switch is named by
-              what "checked" means instead. -->
             <input
               type="checkbox"
               id="hub-theme-toggle"
@@ -467,6 +473,26 @@ async function createModal(active: FeatureId[]): Promise<void> {
                 </button>`
               : ""}
             <span id="hub-push-status" class="hidden" role="status"></span>
+            ${isConnected
+              ? html`<span id="hub-conflict" class="flex gap-2 hidden">
+                  <button
+                    type="button"
+                    id="hub-conflict-pull"
+                    class="btn btn-info btn-xs font-bold"
+                    aria-describedby="hub-push-status"
+                  >
+                    ${t("Pull")}
+                  </button>
+                  <button
+                    type="button"
+                    id="hub-conflict-push"
+                    class="btn btn-warning btn-xs font-bold"
+                    aria-describedby="hub-push-status"
+                  >
+                    ${t("Push anyway")}
+                  </button>
+                </span>`
+              : ""}
             <button
               type="button"
               id="hub-push-reconnect"
@@ -601,10 +627,17 @@ export function pushFailureText(reason: string): string {
       return t("Push failed: your sign-in expired");
     case "network":
       return t("Push failed: the Better Intra server did not answer");
-    case "busy":
-      return t("Push failed: too many pushes in a minute");
     case "too-large":
       return t("Push failed: too large for the cloud (custom CSS, presets)");
+    case "conflict":
+      return t("Not pushed: changed from another browser");
+    case "daily-limit":
+      return t("Push failed: the server's daily limit is reached");
+    // KV refused a write made within a second of another: "too many pushes"
+    // says it well enough in a footer, and saves a text
+    case "busy":
+    case "kv-busy":
+      return t("Push failed: too many pushes in a minute");
     default:
       return t("Push failed: the server refused it");
   }
@@ -612,10 +645,23 @@ export function pushFailureText(reason: string): string {
 
 /**
  * Failures the same push can get past later: an unreachable worker, its rate
- * limit, a server error. A lapsed sign-in or an oversized payload fails the
- * same way until the user acts.
+ * limit, a server error. A lapsed sign-in, an oversized payload, a conflict
+ * (Pull or Push anyway: the user's call) and the server's daily limit (until
+ * 00:00 UTC) fail the same way until the user acts or the day ends.
  */
-const RETRY_WONT_HELP: ReadonlySet<string> = new Set(["auth", "too-large"]);
+const RETRY_WONT_HELP: ReadonlySet<string> = new Set([
+  "auth",
+  "too-large",
+  "conflict",
+  "daily-limit",
+]);
+
+/**
+ * After these, Auto stops pushing on every change (each one would fail the
+ * same way): until the user signs in again, settles the conflict, or the
+ * day's budget is back.
+ */
+const STOPS_AUTO: ReadonlySet<string> = new Set(["auth", "conflict", "daily-limit"]);
 
 /**
  * The footer's cloud and reload logic, fed by storage.onChanged while the
@@ -633,7 +679,12 @@ const RETRY_WONT_HELP: ReadonlySet<string> = new Set(["auth", "too-large"]);
  *   changes it has not pushed.
  * - Closing the hub sends what Auto has not pushed yet, a failed push
  *   included. Reload pushes first when Auto is on and something is not
- *   pushed yet, and stays on the hub when that push fails.
+ *   pushed yet, and stays on the hub when that push fails. With Manual,
+ *   closing publishes the look changes still waiting (publish.ts).
+ * - A conflict (another browser pushed since this one last synced: nothing
+ *   was written) shows Pull and Push anyway, whichever push got it: this
+ *   hub's, or one made elsewhere on the page (a friend added). Push now
+ *   asks before it pushes over it.
  */
 async function bindCloudSync(
   shadow: ShadowRoot,
@@ -645,6 +696,7 @@ async function bindCloudSync(
   const syncStatus = shadow.querySelector<HTMLElement>("#hub-sync-status");
   const pushNow = shadow.querySelector<HTMLButtonElement>("#hub-push-now");
   const reconnect = shadow.querySelector<HTMLElement>("#hub-push-reconnect");
+  const conflict = shadow.querySelector<HTMLElement>("#hub-conflict");
   // The banner already offers the sign-in; a second button for it would be
   // a second login started next to the first.
   const bannerUp = !!shadow.querySelector("[data-hub-auth-banner]");
@@ -684,7 +736,19 @@ async function bindCloudSync(
     pushNow.classList.toggle("btn-outline", !dirty);
   };
 
-  const push = async (): Promise<boolean> => {
+  const inConflict = () => !!conflict && !conflict.classList.contains("hidden");
+  const showConflict = (on: boolean) => {
+    conflict?.classList.toggle("hidden", !on);
+    if (on) {
+      lastFailure = "conflict";
+      const reason = pushFailureText("conflict");
+      showPushStatus(t("{reason} - settings kept locally", { reason }), false);
+    } else if (lastFailure === "conflict") {
+      lastFailure = null;
+    }
+  };
+
+  const push = async (force = false): Promise<boolean> => {
     if (timer) {
       clearTimeout(timer);
       timer = null;
@@ -694,11 +758,14 @@ async function bindCloudSync(
     // file knows, and each one still gets a message
     let result: string;
     try {
-      result = await pushSettings();
+      result = await pushSettings({ force });
     } catch {
       result = "network";
     }
     reconnect?.classList.add("hidden");
+    // Push anyway can fail too (no answer): the conflict is still there
+    if (result === "ok") conflict?.classList.add("hidden");
+    else if (result === "conflict") conflict?.classList.remove("hidden");
     if (result === "ok") {
       if (changes === pushed) dirty = false;
       retries = 0;
@@ -758,13 +825,46 @@ async function bindCloudSync(
   showPushNow();
   autoPushRadios.forEach((r) => r.addEventListener("change", showPushNow));
   pushNow?.addEventListener("click", async () => {
+    // over another browser's push only once the user said so
+    const force = inConflict();
+    if (force && !window.confirm(t("Replace your cloud settings with this browser's?"))) return;
     pushNow.disabled = true;
-    await push();
+    await push(force);
     pushNow.disabled = false;
+  });
+
+  // A conflict one of the page's own pushes got (a friend added, a look
+  // published) before the hub opened.
+  if (conflict && (await getPushFailure())?.reason === "conflict") showConflict(true);
+
+  shadow.querySelector("#hub-conflict-push")?.addEventListener("click", async (e) => {
+    const button = e.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    await push(true);
+    button.disabled = false;
+  });
+  shadow.querySelector("#hub-conflict-pull")?.addEventListener("click", async (e) => {
+    if (!window.confirm(t("Overwrite current local settings with cloud backup?"))) return;
+    const button = e.currentTarget as HTMLButtonElement;
+    button.disabled = true;
+    const result = await pullSettings();
+    button.disabled = false;
+    if (result.ok) {
+      location.reload();
+      return;
+    }
+    showPushStatus(describeCloudFailure(result.reason), false);
   });
 
   chrome.storage.onChanged?.addListener((changed, area) => {
     if (area !== "local" || !dialog.open) return;
+    if (PUSH_FAILURE_KEY in changed) {
+      const failure = changed[PUSH_FAILURE_KEY].newValue as
+        | { reason?: string }
+        | undefined;
+      if (failure?.reason === "conflict") showConflict(true);
+      else if (!failure) showConflict(false);
+    }
     for (const key of Object.keys(changed)) {
       if (!isUserSetting(key)) continue;
       if (!isLiveKey(key)) markReloadNeeded();
@@ -772,8 +872,9 @@ async function bindCloudSync(
         dirty = true;
         changes++;
         // after a lapsed sign-in every push fails the same way until the
-        // user signs in again (which reloads the page)
-        if (autoSelected() && lastFailure !== "auth") schedulePush();
+        // user signs in again (which reloads the page); a conflict and the
+        // daily limit until the user settles it or the day ends
+        if (autoSelected() && !STOPS_AUTO.has(lastFailure ?? "")) schedulePush();
         showPushNow();
       }
     }
@@ -782,14 +883,18 @@ async function bindCloudSync(
   // What Auto has not pushed when the hub closes goes out now, whether its
   // push is still waiting or already failed once: the user is done editing,
   // and "Auto" must not depend on how the hub was closed.
+  // Manual: the look's changes wait a few seconds before they are published;
+  // the user is done, they go now (Auto's push above carries them).
   dialog.addEventListener("close", () => {
-    if (autoSelected() && (dirty || timer) && lastFailure !== "auth") void push();
+    if (!autoSelected()) void flushLookPublish();
+    else if ((dirty || timer) && !STOPS_AUTO.has(lastFailure ?? "")) void push();
   });
 
   reloadBtn?.addEventListener("click", async () => {
     // A push after a lapsed sign-in fails again: it would keep the user on
     // the hub for good, and the settings are already kept on this browser.
-    if (autoSelected() && (dirty || timer) && lastFailure !== "auth") {
+    // The same for a conflict and the daily limit.
+    if (autoSelected() && (dirty || timer) && !STOPS_AUTO.has(lastFailure ?? "")) {
       reloadBtn.disabled = true;
       const ok = await push();
       reloadBtn.disabled = false;

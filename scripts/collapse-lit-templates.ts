@@ -8,6 +8,9 @@
  * whitespace that contains a newline into one space changes nothing on screen
  * (inline text keeps its single separating space). The CSS comments of a
  * template's <style> go too: they explain the code, the browser skips them.
+ * So do its HTML comments (notes for the reader, never rendered: 1.2 KB of
+ * content.js after 1.17.1), except the `<!--!` ones, the convention for a
+ * comment that must stay (a licence notice).
  *
  * Only the string parts (quasis) of templates tagged exactly `html` or `css`
  * are touched: ICS bodies, toast texts and other untagged literals stay
@@ -35,6 +38,26 @@ const SKIP = /<pre\b|<textarea\b|white-space\s*:\s*(pre|break-spaces)|\bwhitespa
  */
 const CSS_COMMENT = /\s*\/\*[\s\S]*?\*\/\s*/g;
 const STYLE_TAG = /<(\/?)style\b/gi;
+
+/**
+ * An HTML comment, not a `<!--!` one. Removed with nothing in its place: a
+ * comment between two words does not separate them on screen either.
+ */
+const HTML_COMMENT = /<!--(?!!)[\s\S]*?-->/g;
+const ANY_HTML_COMMENT = /<!--[\s\S]*?-->/g;
+
+/**
+ * Whether every HTML comment of the template opens and closes in the same
+ * quasi. A comment cut by a ${} leaves the next quasi starting inside it,
+ * where a `<!--` of its text would be taken for a new comment: such a
+ * template keeps all its comments.
+ */
+function commentsWithinQuasis(code: string, quasis: [number, number][]): boolean {
+  return quasis.every(([start, end]) => {
+    const rest = code.slice(start, end).replace(ANY_HTML_COMMENT, "");
+    return !rest.includes("<!--") && !rest.includes("-->");
+  });
+}
 
 /** \r too: in a CRLF file the run used to stop at the \r, and every line
  * still shipped a newline (the minifier writes \r\n as \n). */
@@ -86,21 +109,21 @@ function taggedTemplates(code: string, file: string): Template[] {
 }
 
 /**
- * `raw` without the comments of the <style> it is in or opens; `inStyle`
- * says whether it starts inside one (a <style> spans several quasis when it
- * holds a ${}).
+ * `raw` without the comments of the <style> it is in or opens and, with
+ * `html`, without the HTML comments outside it; `inStyle` says whether it
+ * starts inside one (a <style> spans several quasis when it holds a ${}).
  */
-function stripStyleComments(raw: string, inStyle: boolean): [string, boolean] {
+function stripComments(raw: string, inStyle: boolean, html: boolean): [string, boolean] {
+  const strip = (part: string, style: boolean) =>
+    style ? part.replace(CSS_COMMENT, " ") : html ? part.replace(HTML_COMMENT, "") : part;
   let out = "";
   let last = 0;
   for (const m of raw.matchAll(STYLE_TAG)) {
-    const part = raw.slice(last, m.index);
-    out += (inStyle ? part.replace(CSS_COMMENT, " ") : part) + m[0];
+    out += strip(raw.slice(last, m.index), inStyle) + m[0];
     last = m.index + m[0].length;
     inStyle = m[1] === "";
   }
-  const rest = raw.slice(last);
-  return [out + (inStyle ? rest.replace(CSS_COMMENT, " ") : rest), inStyle];
+  return [out + strip(raw.slice(last), inStyle), inStyle];
 }
 
 /** The collapsed source, or null when nothing changed. */
@@ -115,12 +138,13 @@ export function collapseLitTemplates(code: string, file: string): string | null 
       changed = true;
     }
     let inStyle = false;
+    const htmlComments = kind === "html" && commentsWithinQuasis(code, quasis);
     for (const [start, end] of quasis) {
       // The parser gives the quasi's raw text span (between ` or } and ${ or `).
       const raw = code.slice(start, end);
       let text = raw;
       if (kind === "css") text = raw.replace(CSS_COMMENT, " ");
-      else [text, inStyle] = stripStyleComments(raw, inStyle);
+      else [text, inStyle] = stripComments(raw, inStyle, htmlComments);
       text = collapse(text);
       if (text !== raw) {
         s.overwrite(start, end, text);

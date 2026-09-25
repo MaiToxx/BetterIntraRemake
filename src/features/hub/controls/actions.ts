@@ -21,6 +21,7 @@ import {
 import { HUB_INFO, type HubSettingDef } from "../hubSettings.data.ts";
 import { getActiveFeatures } from "../hubSettings.storage.ts";
 import { settingIds, type LiveOptions } from "./context.ts";
+import { renderCloudAccountAction } from "./cloud-account.ts";
 
 export function renderAction(def: HubSettingDef) {
   const { actionType, actionLabel } = def as {
@@ -73,6 +74,10 @@ export function renderAction(def: HubSettingDef) {
       </button>
       <p class="text-xs text-error hidden" role="status" data-campus-reload-status></p>
     </div>`;
+  }
+
+  if (actionType === "cloud-sessions" || actionType === "cloud-export") {
+    return renderCloudAccountAction(def);
   }
 
   // Its own branch: an action type this function does not know falls

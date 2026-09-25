@@ -23,6 +23,10 @@ export default defineConfig({
     __DAISY_VERSION__: JSON.stringify("test"),
     __WEB_EXT_VERSION__: JSON.stringify("test"),
   },
+  // tests/worker-contract.test.ts runs the client against the worker's own
+  // code when the worker repository sits next to this one (not in CI): vite
+  // refuses to load files outside the project otherwise.
+  server: { fs: { allow: [".", "../better-intra-worker"] } },
   test: {
     globals: true,
     environment: "jsdom",

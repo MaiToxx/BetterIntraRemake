@@ -144,7 +144,7 @@ leaves the browser.
 | Category | What the extension sends |
 | --- | --- |
 | Personally identifiable information | The SHA-256 hash of an Intra login (the key of everything stored, and of each profile lookup); at sign-in, the Intra session token, which carries the login; the friends list (other students' logins) inside pushed settings. |
-| Authentication information | The Intra session token (JWT), sent once at sign-in, checked against 42's public keys and not stored; the random session token the worker returns, kept by the extension and the worker. |
+| Authentication information | The Intra session token (JWT), sent once at sign-in, checked against 42's public keys and not stored; the random session token the worker returns, kept by the extension (the worker keeps only its SHA-256 hash, 365 days at most). |
 | Location | Not collected. The IP address reaches Cloudflare with every request and is not stored; no country is kept (since 1.14.0), and uploaded images are stripped of their GPS metadata. Leave this box unticked. |
 | Web history | The login hash of each Intra profile opened (`?login=<hash>`, also when signed out); when signed in with *Share with the community* on, the project slug and subject PDF address of project pages opened. |
 | Website content | Pushed settings (shortcuts, custom CSS, texts), the public profile texts and look, uploaded images, the subscribed Intra events of the calendar feed, subject PDF addresses. |
@@ -201,8 +201,8 @@ auto-published version is reviewed again. Paste:
 Optional: a 2-3 minute unlisted walkthrough video, with its link added to
 the text above (*Walkthrough video: <link>*). Film only your own profile:
 install, open profile-v3.intra.42.fr, the hub (settings and search), logtime,
-a profile customisation, then *Connect with 42* with the disclosure line
-visible, and *Connected as <login>*. Leave out the cluster map, the friends
+a profile customisation, then *Sign in with 42* with the disclosure line
+visible, and the signed-in *Account Status* card. Leave out the cluster map, the friends
 list and other students' profiles, or blur them: they show other students'
 names, logins and photos.
 

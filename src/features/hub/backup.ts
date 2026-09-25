@@ -17,6 +17,10 @@ export const BACKUP_EXCLUDED_KEYS: ReadonlySet<string> = new Set<ConfigKey>([
   // consent given on one browser, not carried to another in a file
   "SIGNIN_DISCLOSURE_ACCEPTED",
   "LAST_CLOUD_SYNC",
+  // sync state of this browser: restored elsewhere, a revision would hide
+  // another browser's changes from the conflict check
+  "CLOUD_SETTINGS_REV",
+  "LOOK_PUBLISH_PENDING",
   "ACCOUNT",
   "CALENDAR_SYNC_TOKEN",
   "CALENDAR_EVENTS_HASH",

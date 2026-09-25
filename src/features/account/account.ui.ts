@@ -10,6 +10,9 @@ import {
 import { getConfig } from "../../core/config.ts";
 import { t } from "../../core/i18n/i18n.ts";
 import { WORKER_HOST } from "../../core/worker.ts";
+// The shapes alone: the editor's metadata (Illustrator comment, Inkscape and
+// Sodipodi namespaces) was 700 of the file's 1,100 bytes, in content.js and
+// in the popup (64 KB budget) alike.
 import FORTY_TWO_SVG from "../../assets/svg/42_Logo.svg?raw";
 import { AccountState, createInitialState } from "./state.ts";
 import { createHandlers } from "./handlers.ts";

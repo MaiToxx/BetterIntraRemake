@@ -48,6 +48,10 @@ async function mount(): Promise<HTMLElement> {
 const buttonNamed = (root: ParentNode, text: RegExp) =>
   [...root.querySelectorAll("button")].find((b) => text.test(b.textContent ?? ""));
 
+/** The requests but the panel's own GET of the live link (calendar-live-link.test.ts). */
+const sent = (fetch: ReturnType<typeof vi.fn>) =>
+  fetch.mock.calls.filter(([, init]) => ((init as RequestInit | undefined)?.method ?? "GET") !== "GET");
+
 const stored = async () =>
   chrome.storage.local.get(["CALENDAR_SYNC_TOKEN", "CALENDAR_EVENTS_HASH"]);
 
@@ -78,7 +82,7 @@ describe("Stop sharing", () => {
     expect(confirm).toHaveBeenCalledWith(STOP_SHARING_CONFIRM);
     expect(STOP_SHARING_CONFIRM).toMatch(/stop updating/);
     expect(STOP_SHARING_CONFIRM).toMatch(/deleted/);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(sent(fetch)).toHaveLength(0);
     expect(await stored()).toEqual({ CALENDAR_SYNC_TOKEN: "live-link", CALENDAR_EVENTS_HASH: "123" });
   });
 
@@ -90,8 +94,8 @@ describe("Stop sharing", () => {
     buttonNamed(host, /Stop sharing/)!.click();
     await vi.waitFor(async () => expect(await stored()).toEqual({}));
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(sent(fetch)).toHaveLength(1);
+    const [url, init] = sent(fetch)[0] as unknown as [string, RequestInit];
     const u = new URL(url);
     expect(u.pathname).toBe("/api/v1/private/calendar/token");
     expect(u.searchParams.get("login")).toBe(await hashedLogin("alice"));
@@ -128,7 +132,9 @@ describe("Stop sharing", () => {
 
   it("while the stop is on its way, neither a second stop nor Regenerate can be sent", async () => {
     let release!: () => void;
-    const fetch = vi.fn(async () => {
+    const fetch = vi.fn(async (_url: string, init: RequestInit = {}) => {
+      // the GET of the live link answers at once, as an older worker would
+      if ((init.method ?? "GET") === "GET") return answer(405)();
       await new Promise<void>((r) => (release = r));
       return new Response(null, { status: 204 });
     });
@@ -139,7 +145,7 @@ describe("Stop sharing", () => {
     // two clicks in a row: the second lands before the first has read storage
     stop.click();
     stop.click();
-    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(sent(fetch)).toHaveLength(1));
     await settle();
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(buttonNamed(host, /Stop sharing/)!.disabled).toBe(true);
@@ -147,7 +153,7 @@ describe("Stop sharing", () => {
     expect(buttonNamed(host, /Regenerate/)!.disabled).toBe(true);
     release();
     await vi.waitFor(async () => expect(await stored()).toEqual({}));
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(sent(fetch)).toHaveLength(1);
   });
 
   it("no answer says the server could not be reached", async () => {

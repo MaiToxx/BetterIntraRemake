@@ -148,17 +148,22 @@ describe("the theme in looks, presets and codes", () => {
 
 describe("publishing the look by default", () => {
   it("pushes once for an account that never chose, and never again", async () => {
-    const sync = vi.fn(async () => true);
-    vi.doMock("../src/features/account/account.ts", () => ({ syncToCloud: sync }));
+    // publish.ts sends only the public keys (pushPartial) since the look publish
+    // stopped pushing the whole record
+    const sync = vi.fn(async () => "ok");
+    vi.doMock("../src/features/account/account.ts", () => ({
+      pushPartial: sync,
+      getPushFailure: async () => null,
+    }));
     vi.useFakeTimers();
     try {
       await chrome.storage.local.set({ CLOUD_TOKEN: "sess", LAST_CLOUD_SYNC: 1 });
       const { publishDefaultLookOnce } = await import("../src/features/customize/publish.ts");
       await publishDefaultLookOnce();
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(sync).toHaveBeenCalledTimes(1);
       await publishDefaultLookOnce();
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(sync).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
@@ -167,21 +172,26 @@ describe("publishing the look by default", () => {
   });
 
   it("never on a fresh install or while the restore question is open: that pushed defaults over the backup", async () => {
-    const sync = vi.fn(async () => true);
-    vi.doMock("../src/features/account/account.ts", () => ({ syncToCloud: sync }));
+    // publish.ts sends only the public keys (pushPartial) since the look publish
+    // stopped pushing the whole record
+    const sync = vi.fn(async () => "ok");
+    vi.doMock("../src/features/account/account.ts", () => ({
+      pushPartial: sync,
+      getPushFailure: async () => null,
+    }));
     vi.useFakeTimers();
     try {
       const { publishDefaultLookOnce } = await import("../src/features/customize/publish.ts");
       // just signed in on a new install: a session, never pushed, restore pending
       await chrome.storage.local.set({ CLOUD_TOKEN: "sess", PENDING_SETTINGS_RESTORE: true });
       await publishDefaultLookOnce();
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(sync).not.toHaveBeenCalled();
       // and not later either, once the question is answered
       await chrome.storage.local.remove("PENDING_SETTINGS_RESTORE");
       await chrome.storage.local.set({ LAST_CLOUD_SYNC: 1 });
       await publishDefaultLookOnce();
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(sync).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
@@ -190,15 +200,20 @@ describe("publishing the look by default", () => {
   });
 
   it("leaves a choice alone, and does nothing signed out", async () => {
-    const sync = vi.fn(async () => true);
-    vi.doMock("../src/features/account/account.ts", () => ({ syncToCloud: sync }));
+    // publish.ts sends only the public keys (pushPartial) since the look publish
+    // stopped pushing the whole record
+    const sync = vi.fn(async () => "ok");
+    vi.doMock("../src/features/account/account.ts", () => ({
+      pushPartial: sync,
+      getPushFailure: async () => null,
+    }));
     vi.useFakeTimers();
     try {
       const { publishDefaultLookOnce } = await import("../src/features/customize/publish.ts");
       await publishDefaultLookOnce();
       await chrome.storage.local.set({ CLOUD_TOKEN: "sess", CUSTOM_SHARE_LOOK: false });
       await publishDefaultLookOnce();
-      await vi.advanceTimersByTimeAsync(2_000);
+      await vi.advanceTimersByTimeAsync(5_000);
       expect(sync).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

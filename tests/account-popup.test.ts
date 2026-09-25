@@ -154,12 +154,26 @@ function harness() {
 
 describe("Push", () => {
   it("is a single POST, with no probe before it", async () => {
+    await chrome.storage.local.set({ CLOUD_SETTINGS_REV: 7 });
     reply = () => new Response("Saved", { status: 200 });
     const { state, handlers } = harness();
     await handlers.handlePush();
     expect(calls.map((c) => c.init.method)).toEqual(["POST"]);
     expect(state.buttons.push.text).toBe("Synced!");
     expect(state.cloud).toBe("online");
+  });
+
+  it("with no revision known yet, learns it once after the POST", async () => {
+    reply = (_url, init) =>
+      init.method === "POST"
+        ? new Response("Saved", { status: 200 })
+        : new Response(JSON.stringify({ activeSessions: 1, rev: 42 }), {
+            headers: { "Content-Type": "application/json" },
+          });
+    const { handlers } = harness();
+    await handlers.handlePush();
+    expect(calls.map((c) => c.init.method)).toEqual(["POST", "GET"]);
+    expect((await chrome.storage.local.get("CLOUD_SETTINGS_REV")).CLOUD_SETTINGS_REV).toBe(42);
   });
 
   it("names a worker that does not answer in time", async () => {

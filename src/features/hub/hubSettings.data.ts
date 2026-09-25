@@ -230,7 +230,9 @@ export type HubSettingDef = {
     | "reset"
     | "backup"
     | "reload-campus"
-    | "open-visuals-editor";
+    | "open-visuals-editor"
+    | "cloud-sessions"
+    | "cloud-export";
 };
 
 /** Every setting of every tab, in the order the tab draws them. */

@@ -69,6 +69,42 @@ describe("collapse-lit-templates build plugin", () => {
     );
   });
 
+  it("drops the HTML comments of an html template, not a <!--! one nor the text", () => {
+    const src = [
+      "const a = html`",
+      "  <!-- Header: a <link> in the note",
+      "       across lines -->",
+      "  <p>a<!-- x -->b</p>",
+      "  <!--! Kept: a licence notice -->",
+      "  <style>.a { color: red; }</style>",
+      '  <span title="${t}">${n}</span><!-- after an expression -->`;',
+      "const b = `<!-- untagged -->`;",
+    ].join("\n");
+    expect(collapseLitTemplates(src, "x.ts")).toBe(
+      [
+        'const a = html` <p>ab</p> <!--! Kept: a licence notice --> <style>.a { color: red; }</style> <span title="${t}">${n}</span>`;',
+        "const b = `<!-- untagged -->`;",
+      ].join("\n"),
+    );
+  });
+
+  it("keeps every comment of a template where one is cut by a ${}", () => {
+    // The second quasi starts inside the comment: its "<!--" is comment text,
+    // and removing "<!-- b -->" would leave the first one swallowing the <p>.
+    const src = "const a = html`<!-- a ${x} <!-- b --><p>c</p><!-- d -->`;";
+    expect(collapseLitTemplates(src, "x.ts")).toBeNull();
+  });
+
+  it("renders the same elements and text once the comments are gone", () => {
+    const h1 = document.createElement("div");
+    const h2 = document.createElement("div");
+    render(html`<ul><!-- a --><li>${"x"}</li><!-- b --><li>y<!-- c -->z</li></ul>`, h1);
+    render(html`<ul><li>${"x"}</li><li>yz</li></ul>`, h2);
+    expect(h1.textContent).toBe(h2.textContent);
+    const tags = (h: HTMLElement) => [...h.querySelectorAll("*")].map((e) => e.tagName);
+    expect(tags(h1)).toEqual(tags(h2));
+  });
+
   it("ships a css block as the plain literal, without comments or indentation", () => {
     const src = [
       'import { css } from "../core/dom/css.ts";',

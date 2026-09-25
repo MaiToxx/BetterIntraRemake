@@ -55,6 +55,29 @@ describe("uploadProfileImage", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("too big", { status: 413 })));
     expect((await uploadProfileImage("avatar", png())).ok).toBe(false);
   });
+
+  it("says when to try again after the worker's daily budget or a busy key (both 503)", async () => {
+    const refuse = (error: string) =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () =>
+          new Response(JSON.stringify({ error, message: "refused" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      );
+    refuse("daily_write_budget");
+    const spent = await uploadProfileImage("avatar", png());
+    expect((spent as { error: string }).error).toMatch(/saves for today are used up\. Try again after/);
+    refuse("kv_busy");
+    const busy = await uploadProfileImage("avatar", png());
+    expect((busy as { error: string }).error).toMatch(/busy: try again in a few seconds/);
+    // any other 503 keeps the status sentence
+    refuse("server_error");
+    const other = await uploadProfileImage("avatar", png());
+    expect((other as { error: string }).error).toBe("Upload failed (503).");
+  });
 });
 
 describe("the URL field's Upload button", () => {

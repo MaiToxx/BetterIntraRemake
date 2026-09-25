@@ -186,6 +186,10 @@ export const LOCAL_ONLY_KEYS: ConfigKey[] = [
   "CLOUD_LOGIN",
   "CLOUD_AUTH_FAILED",
   "LAST_CLOUD_SYNC",
+  // what this browser knows of the cloud copy, and what it still has to
+  // publish: another browser has its own
+  "CLOUD_SETTINGS_REV",
+  "LOOK_PUBLISH_PENDING",
   "ACCOUNT",
   // Manual/Auto push is a policy of this device: a pull from another device
   // used to flip it silently

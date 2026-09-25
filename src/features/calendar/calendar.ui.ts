@@ -11,9 +11,23 @@ import { maybeSyncCalendar } from "./calendar-sync.ts";
 import CALENDAR_PLUS_SVG from "../../assets/svg/calendar-plus.svg?raw";
 import COPY_SVG from "../../assets/svg/copy.svg?raw";
 
-import { WORKER_URL, workerFetch } from "../../core/worker.ts";
+import { WORKER_URL, workerFetch, type WorkerResult } from "../../core/worker.ts";
 import { msg, t } from "../../core/i18n/i18n.ts";
 const TOKEN_KEY = "CALENDAR_SYNC_TOKEN";
+
+/**
+ * The live link in the worker's answer to GET calendar/token: its token,
+ * null when the login has no live link (never made, stopped, wiped), or
+ * undefined when the answer says neither (no answer, an older worker's 405,
+ * an error, a body without `token`). Only a URL-safe token is taken: it
+ * goes into the feed URL and the QR code.
+ */
+export function liveLinkIn(res: WorkerResult): string | null | undefined {
+  if (!res.ok || !res.json || typeof res.json !== "object") return undefined;
+  const { token } = res.json as { token?: unknown };
+  if (token === null) return null;
+  return typeof token === "string" && /^[\w-]{8,200}$/.test(token) ? token : undefined;
+}
 
 /** msg(): shown with t(REGENERATE_CONFIRM) (module code runs before the language is known). */
 export const REGENERATE_CONFIRM = msg(
@@ -80,6 +94,26 @@ function renderPanel(el: Element | undefined) {
    * and a Regenerate answered after it would store a link the stop revoked.
    */
   let stopping = false;
+  /**
+   * What the worker said about the live link on the last check: "pending"
+   * while one is on its way (Generate waits for it), "known" once it
+   * answered, "unknown" before any check or when it could not say.
+   */
+  let serverLink: "unknown" | "pending" | "known" = "unknown";
+  /** Bumped by each Generate and Stop: a check that crosses one answers about a link that is gone. */
+  let linkChanges = 0;
+  /**
+   * Link requests (Generate, Regenerate) on their way. No check starts
+   * meanwhile: its answer could land before theirs, about the link they are
+   * replacing, and a Generate button offered then would race them.
+   */
+  let generating = 0;
+  /**
+   * What the last check changed here (a link replaced or stopped in another
+   * browser). Its status line is always drawn, sr-only while empty: a live
+   * region inserted with its text is not always read out.
+   */
+  let notice: string | null = null;
 
   const connect = () =>
     loginWith42(async () => {
@@ -118,6 +152,9 @@ function renderPanel(el: Element | undefined) {
             ${error
               ? html`<p class="text-sm text-error" role="alert">${error}</p>`
               : ""}
+            <p class="${notice ? "text-sm font-medium" : "sr-only"}" role="status">
+              ${notice ?? ""}
+            </p>
             ${sessionExpired
               ? html`<button
                   type="button"
@@ -243,14 +280,27 @@ function renderPanel(el: Element | undefined) {
                 `
               : html`
                   <button
+                    type="button"
                     class="btn btn-primary btn-sm"
+                    ?disabled=${serverLink === "pending"}
+                    aria-busy="${serverLink === "pending" ? "true" : "false"}"
                     @click="${handleGenerate}"
                   >
-                    <span class="size-4 flex items-center justify-center"
-                      >${unsafeHTML(CALENDAR_PLUS_SVG)}</span
-                    >
+                    ${serverLink === "pending"
+                      ? html`<span
+                          class="loading loading-spinner loading-xs"
+                          aria-hidden="true"
+                        ></span>`
+                      : html`<span class="size-4 flex items-center justify-center"
+                          >${unsafeHTML(CALENDAR_PLUS_SVG)}</span
+                        >`}
                     ${t("Generate calendar link")}
                   </button>
+                  ${serverLink === "unknown"
+                    ? html`<p class="text-xs opacity-60">
+                        ${t("If you already made a link in another browser, this replaces it.")}
+                      </p>`
+                    : ""}
                 `}
           </div>
         </div>
@@ -286,6 +336,7 @@ function renderPanel(el: Element | undefined) {
   };
 
   const handleGenerate = async () => {
+    linkChanges++;
     const store = await chrome.storage.local.get([
       "CLOUD_TOKEN",
       "CLOUD_LOGIN",
@@ -302,11 +353,13 @@ function renderPanel(el: Element | undefined) {
     // workerFetch, not a bare fetch: a 401 flags CLOUD_AUTH_FAILED (the
     // hub's "Reconnect"), and every failure used to read "Could not reach
     // the server", an expired session and a rate limit included.
+    generating++;
     const res = await workerFetch("/api/v1/private/calendar/token", {
       method: "POST",
       body: { token: uuid },
       auth: { login: cloudLogin, token: sessionToken },
     });
+    generating--;
     if (!res.ok) {
       // the existing link, QR and button stay: the message sits above them
       sessionExpired = res.status === 401;
@@ -316,6 +369,7 @@ function renderPanel(el: Element | undefined) {
     }
     await chrome.storage.local.set({ [TOKEN_KEY]: uuid });
     error = null;
+    notice = null;
     sessionExpired = false;
     await update();
     // fill the new feed now rather than at the next profile visit
@@ -329,6 +383,7 @@ function renderPanel(el: Element | undefined) {
     if (stopping || !window.confirm(t(STOP_SHARING_CONFIRM))) return;
     // set before the first await: the storage read leaves room for a click
     stopping = true;
+    linkChanges++;
     const store = await chrome.storage.local.get(["CLOUD_TOKEN", "CLOUD_LOGIN"]);
     const sessionToken = String(store.CLOUD_TOKEN || "");
     const cloudLogin = String(store.CLOUD_LOGIN || "");
@@ -354,6 +409,7 @@ function renderPanel(el: Element | undefined) {
     }
     await chrome.storage.local.remove([TOKEN_KEY, "CALENDAR_EVENTS_HASH"]);
     error = null;
+    notice = null;
     sessionExpired = false;
     await update();
     // The link is a synced setting: the cloud copy must lose it too, or
@@ -362,5 +418,94 @@ function renderPanel(el: Element | undefined) {
     void forgetCloudCalendarLink();
   };
 
+  // Only the browser that made a link knew it. Another one offered Generate,
+  // which revoked the link a phone was subscribed to, and a link regenerated
+  // or stopped elsewhere kept showing here, its uploads still answered 200.
+  // The worker says which link is live: this browser takes it, or forgets a
+  // stopped one, and Generate waits for the answer.
+  const checkLiveLink = async () => {
+    if (serverLink === "pending" || stopping || generating) return;
+    serverLink = "pending";
+    const started = linkChanges;
+    try {
+      const store = await chrome.storage.local.get([TOKEN_KEY, "CLOUD_TOKEN", "CLOUD_LOGIN"]);
+      if (!store.CLOUD_TOKEN || !store.CLOUD_LOGIN) return;
+      const local = store[TOKEN_KEY] as string | undefined;
+      await update();
+      const live = liveLinkIn(
+        await workerFetch("/api/v1/private/calendar/token", {
+          auth: { login: String(store.CLOUD_LOGIN), token: String(store.CLOUD_TOKEN) },
+        }),
+      );
+      serverLink = live === undefined ? "unknown" : "known";
+      // A Generate or a Stop sent meanwhile, or a link another tab stored:
+      // the answer is about a link that is no longer the one here.
+      const { [TOKEN_KEY]: current } = await chrome.storage.local.get(TOKEN_KEY);
+      if (live === undefined || started !== linkChanges || current !== local) return;
+      if (live === null && current) {
+        await chrome.storage.local.remove([TOKEN_KEY, "CALENDAR_EVENTS_HASH"]);
+        notice = t("Sharing was stopped from another browser.");
+      } else if (live && live !== current) {
+        // The feed is per login, not per link. Forgetting the hash uploads it
+        // at the next profile visit, in case the browser that made the link
+        // (maybe from the hub on another page) has not yet.
+        await chrome.storage.local.set({ [TOKEN_KEY]: live });
+        await chrome.storage.local.remove("CALENDAR_EVENTS_HASH");
+        // a "stopped" left by an earlier check would sit above a live link
+        notice = current ? t("The link was replaced in another browser: this is the new one.") : null;
+        void maybeSyncCalendar();
+      } else {
+        return;
+      }
+      // what a failed Generate or Stop said was about the link just replaced
+      error = null;
+      sessionExpired = false;
+    } catch {
+      // the panel keeps what this browser knows
+    } finally {
+      if (serverLink === "pending") serverLink = "unknown";
+      await update();
+    }
+  };
+
   update();
+
+  // The hub draws every tab at once: ask each time the Calendar tab is shown
+  // (selected, or the hub opened again on it), not on every opening of the
+  // hub. Looked up once the hub's render has put the panel in its tab; drawn
+  // anywhere else, the panel asks at once.
+  setTimeout(() => {
+    const panel = container.closest<HTMLElement>('[role="tabpanel"]');
+    // the tab is a sibling of its panel (daisyUI's radio tabs), whose parent
+    // can be the shadow root itself
+    const siblings = panel?.parentNode as ParentNode | null | undefined;
+    const tab = panel?.id
+      ? siblings?.querySelector<HTMLInputElement>(`input[aria-controls="${panel.id}"]`)
+      : null;
+    if (!tab) {
+      void checkLiveLink();
+      return;
+    }
+    // The hub is one <dialog> per page, closed and shown again as it is: its
+    // Calendar tab stays checked, and no "change" says it is back on screen.
+    const dialog = (tab.getRootNode() as Partial<ShadowRoot>).host?.closest("dialog");
+    let reopened: MutationObserver | undefined;
+    const onTab = () => {
+      // a hub drawn again can leave this panel behind, listening to the same tab
+      if (!container.isConnected) {
+        tab.removeEventListener("change", onTab);
+        reopened?.disconnect();
+        return;
+      }
+      if (tab.checked) void checkLiveLink();
+    };
+    tab.addEventListener("change", onTab);
+    if (dialog) {
+      reopened = new MutationObserver(() => {
+        if (dialog.hasAttribute("open")) onTab();
+      });
+      reopened.observe(dialog, { attributes: true, attributeFilter: ["open"] });
+    }
+    if (tab.checked) void checkLiveLink();
+  });
 }

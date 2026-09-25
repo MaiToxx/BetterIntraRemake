@@ -33,8 +33,8 @@ const root = resolve(here, "..");
  * the sheet to creep back into the JavaScript.
  */
 const BUDGETS_KB = {
-  "content.js": 695, // v1.17.1: 680 KB (round 3: streaks, map search, calendar stop, retries; 11 KB of template waste removed to fit), room for fixes; v1.16.0: 667 KB, of which 56 KB is the French catalog (784 texts, the English text is the key); v1.14.0: 599 KB (theme colours +12, upload-on-save editor +7, mobile and hub work); v1.13.0: 564 KB
-  "popup.js": 64, // v1.16.0: 61 KB, of which 9 KB is the popup's own French catalog (the build keeps only its texts); v1.14.0: 51 KB (sign-in disclosure the Chrome Web Store requires, sign-in feedback, Open settings); v1.13: 42 KB
+  "content.js": 710, // v1.18.0: 694 KB (sessions, conflicts, export, cloud account block, calendar live link); v1.17.1: 680 KB (round 3: streaks, map search, calendar stop, retries; 11 KB of template waste removed to fit), room for fixes; v1.16.0: 667 KB, of which 56 KB is the French catalog (784 texts, the English text is the key); v1.14.0: 599 KB (theme colours +12, upload-on-save editor +7, mobile and hub work); v1.13.0: 564 KB
+  "popup.js": 68, // v1.18.0: 63.4 KB (translated worker error codes, daily budget and busy messages); v1.16.0: 61 KB, of which 9 KB is the popup's own French catalog (the build keeps only its texts); v1.14.0: 51 KB (sign-in disclosure the Chrome Web Store requires, sign-in feedback, Open settings); v1.13: 42 KB
   "auth-callback.js": 20, // oauth builds only: intra mode no longer builds it (scripts/build-auth.mjs); v1.16.0: 19 KB with its French texts; v1.10.0: 10 KB
   "background.js": 14, // v1.16.0: 11.8 KB (release check per browser, the store build flag, one French text); v1.10.0: 5 KB
   "hook.js": 8, // v1.10.0: 4 KB

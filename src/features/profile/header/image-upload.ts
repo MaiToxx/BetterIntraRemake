@@ -9,7 +9,7 @@
  * trying a picture out replaced the published one even after Cancel.
  */
 import { getConfigMany } from "../../../core/config.ts";
-import { WORKER_URL, hashedLogin, workerFetch } from "../../../core/worker.ts";
+import { WORKER_URL, hashedLogin, workerErrorText, workerFetch } from "../../../core/worker.ts";
 import { msg, t } from "../../../core/i18n/i18n.ts";
 
 export type ImageSlot = "avatar" | "banner" | "background";
@@ -111,6 +111,11 @@ export async function uploadProfileImage(
   if (res.status === 401) return { ok: false, error: t("Your session expired: reconnect, then retry.") };
   if (res.status === 413) return { ok: false, error: t("The image is over 2 MB.") };
   if (res.status === 429) return { ok: false, error: t("Too many uploads: wait a minute.") };
+  // The two 503s of the worker's KV writes (the day's budget spent, the key
+  // busy twice), told apart by their code: "Upload failed (503)" said neither
+  // when to try again nor that nothing is wrong with the image.
+  const shared = workerErrorText(res);
+  if (shared) return { ok: false, error: shared };
   const url = (res.json as { url?: unknown } | null)?.url;
   if (!res.ok || typeof url !== "string") {
     return { ok: false, error: t("Upload failed ({status}).", { status: res.status }) };

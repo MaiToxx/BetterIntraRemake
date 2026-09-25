@@ -36,6 +36,7 @@ import {
   showVisitorLook,
 } from "./visuals-apply.ts";
 import { attachEditorListener, attachToggleListener } from "./avatar-clicks.ts";
+import { retryPendingUploadCleanup } from "./upload-cleanup.ts";
 
 export type { VisualUrls } from "./visuals-types.ts";
 export { applyImgs, badgeColorCss, injectCustomStyles } from "./visuals-apply.ts";
@@ -181,6 +182,9 @@ export const updateVisuals = async () => {
 
   if (targetLogin === myLogin) {
     void applyOwnProfileExtras(myLogin);
+    // A removed upload whose delete had to wait (the push before it failed)
+    // is tried again here, once per page: see upload-cleanup.ts.
+    void retryPendingUploadCleanup();
     attachEditorListener(avatarEl, (updatedVisuals) => {
       visualCache = updatedVisuals;
       setCachedVisuals(targetLogin, updatedVisuals);

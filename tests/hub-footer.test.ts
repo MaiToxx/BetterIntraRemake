@@ -14,14 +14,24 @@ vi.mock("../src/features/hub/controls/context.ts", async (importOriginal) => ({
 }));
 
 const account = {
+  PUSH_FAILURE_KEY: "CLOUD_PUSH_FAILURE",
   clearAuthFailed: vi.fn(async () => {}),
   loginWith42: vi.fn(async () => {}),
   logoutCloud: vi.fn(async () => true),
   syncToCloud: vi.fn(async () => true),
   // a string: the hub must cope with reasons it does not know yet
-  pushSettings: vi.fn(async (): Promise<string> => "ok"),
+  pushSettings: vi.fn(async (_options?: { force?: boolean }): Promise<string> => "ok"),
+  getPushFailure: vi.fn(async (): Promise<{ reason: string } | null> => null),
+  describeCloudFailure: vi.fn((reason: string) => `failure: ${reason}`),
+  pullSettings: vi.fn(async (): Promise<{ ok: boolean; reason?: string }> => ({ ok: true })),
 };
 vi.mock("../src/features/account/account.ts", () => account);
+
+const publish = vi.hoisted(() => ({ flushLookPublish: vi.fn(async () => {}) }));
+vi.mock("../src/features/customize/publish.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/features/customize/publish.ts")>()),
+  flushLookPublish: publish.flushLookPublish,
+}));
 
 type Listener = (changes: Record<string, { newValue?: unknown }>, area: string) => void;
 const listeners: Listener[] = [];
@@ -108,6 +118,11 @@ beforeEach(async () => {
   account.pushSettings.mockReset();
   account.pushSettings.mockImplementation(async () => "ok");
   account.loginWith42.mockClear();
+  account.getPushFailure.mockReset();
+  account.getPushFailure.mockImplementation(async () => null);
+  account.pullSettings.mockReset();
+  account.pullSettings.mockImplementation(async () => ({ ok: true }));
+  publish.flushLookPublish.mockClear();
 });
 
 afterEach(() => {
@@ -444,5 +459,121 @@ describe("pushFailureText", () => {
     expect(pushFailureText("busy")).toMatch(/too many/);
     expect(pushFailureText("auth")).toMatch(/sign-in expired/);
     expect(pushFailureText("something-new")).toMatch(/^Push failed/);
+  });
+});
+
+describe("conflicts and the day's limit", () => {
+  async function openSignedIn(auto = false) {
+    await chrome.storage.local.set({
+      CLOUD_TOKEN: "t",
+      CLOUD_LOGIN: "xlogin",
+      CLOUD_SYNC_ENABLED: auto,
+    });
+    return openHub();
+  }
+  const conflictBox = (shadow: ShadowRoot) => shadow.querySelector<HTMLElement>("#hub-conflict")!;
+
+  it("a conflict shows Pull and Push anyway, is not retried, and stops Auto", async () => {
+    account.pushSettings.mockImplementation(async () => "conflict");
+    const { dialog, shadow } = await openSignedIn(true);
+    expect(conflictBox(shadow).classList.contains("hidden")).toBe(true);
+    vi.useFakeTimers();
+    storageChanged({ LOGTIME_GOAL_HOURS: 100 });
+    await vi.advanceTimersByTimeAsync(AUTO_PUSH_DELAY_MS + 100);
+    expect(account.pushSettings).toHaveBeenCalledTimes(1);
+    expect(conflictBox(shadow).classList.contains("hidden")).toBe(false);
+    expect(shadow.querySelector("#hub-push-status")!.textContent).toMatch(/^Not pushed.*another browser/);
+    // neither a retry nor a push per change: each would be refused the same way
+    storageChanged({ LOGTIME_GOAL_HOURS: 110 });
+    await vi.advanceTimersByTimeAsync(AUTO_PUSH_RETRY_MS[0] * 2);
+    dialog.close();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(account.pushSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("Push anyway pushes without the check and puts the buttons away", async () => {
+    account.pushSettings.mockImplementationOnce(async () => "conflict");
+    const { shadow } = await openSignedIn();
+    shadow.querySelector<HTMLButtonElement>("#hub-push-now")!.click();
+    await vi.waitFor(() => expect(conflictBox(shadow).classList.contains("hidden")).toBe(false));
+    expect(account.pushSettings).toHaveBeenLastCalledWith({ force: false });
+    shadow.querySelector<HTMLButtonElement>("#hub-conflict-push")!.click();
+    await vi.waitFor(() => expect(account.pushSettings).toHaveBeenCalledTimes(2));
+    expect(account.pushSettings).toHaveBeenLastCalledWith({ force: true });
+    await vi.waitFor(() => expect(conflictBox(shadow).classList.contains("hidden")).toBe(true));
+    expect(shadow.querySelector("#hub-push-status")!.textContent).toMatch(/Pushed/);
+  });
+
+  it("a conflict recorded before the hub opened (a friend added) shows at once; Push now asks first", async () => {
+    account.getPushFailure.mockImplementation(async () => ({ reason: "conflict" }));
+    const { shadow } = await openSignedIn();
+    expect(conflictBox(shadow).classList.contains("hidden")).toBe(false);
+    const ask = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+    shadow.querySelector<HTMLButtonElement>("#hub-push-now")!.click();
+    await settle();
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(account.pushSettings).not.toHaveBeenCalled();
+    ask.mockReturnValueOnce(true);
+    shadow.querySelector<HTMLButtonElement>("#hub-push-now")!.click();
+    await vi.waitFor(() => expect(account.pushSettings).toHaveBeenCalledWith({ force: true }));
+    ask.mockRestore();
+  });
+
+  it("a conflict another push records while the hub is open shows too, and goes once settled", async () => {
+    const { shadow } = await openSignedIn();
+    storageChanged({ CLOUD_PUSH_FAILURE: { reason: "conflict", detail: "", at: 1 } });
+    expect(conflictBox(shadow).classList.contains("hidden")).toBe(false);
+    const payload = { CLOUD_PUSH_FAILURE: { newValue: undefined } };
+    for (const fn of listeners) fn(payload, "local");
+    expect(conflictBox(shadow).classList.contains("hidden")).toBe(true);
+  });
+
+  it("Pull asks, pulls and reloads; a failed pull says why and stays", async () => {
+    account.getPushFailure.mockImplementation(async () => ({ reason: "conflict" }));
+    const { shadow } = await openSignedIn();
+    const ask = vi.spyOn(window, "confirm").mockReturnValue(true);
+    account.pullSettings.mockImplementationOnce(async () => ({ ok: false, reason: "network" }));
+    shadow.querySelector<HTMLButtonElement>("#hub-conflict-pull")!.click();
+    await vi.waitFor(() =>
+      expect(shadow.querySelector("#hub-push-status")!.textContent).toBe("failure: network"),
+    );
+    expect(reload).not.toHaveBeenCalled();
+    shadow.querySelector<HTMLButtonElement>("#hub-conflict-pull")!.click();
+    await vi.waitFor(() => expect(reload).toHaveBeenCalledTimes(1));
+    expect(account.pullSettings).toHaveBeenCalledTimes(2);
+    ask.mockRestore();
+  });
+
+  it("the day's limit is not retried and stops Auto", async () => {
+    account.pushSettings.mockImplementation(async () => "daily-limit");
+    const { shadow } = await openSignedIn(true);
+    vi.useFakeTimers();
+    storageChanged({ LOGTIME_GOAL_HOURS: 100 });
+    await vi.advanceTimersByTimeAsync(AUTO_PUSH_DELAY_MS + 100);
+    expect(shadow.querySelector("#hub-push-status")!.textContent).toMatch(/daily limit/);
+    expect(shadow.querySelector("#hub-push-status")!.textContent).not.toMatch(/trying again/);
+    storageChanged({ LOGTIME_GOAL_HOURS: 110 });
+    await vi.advanceTimersByTimeAsync(AUTO_PUSH_RETRY_MS[2] * 2);
+    expect(account.pushSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("closing in Manual publishes the waiting look changes; in Auto the hub's push carries them", async () => {
+    const manual = await openSignedIn(false);
+    manual.dialog.close();
+    await settle();
+    expect(publish.flushLookPublish).toHaveBeenCalledTimes(1);
+    publish.flushLookPublish.mockClear();
+    const auto = await openSignedIn(true);
+    auto.dialog.close();
+    await settle();
+    expect(publish.flushLookPublish).not.toHaveBeenCalled();
+  });
+
+  it("names the new reasons", async () => {
+    const { pushFailureText } = await import("../src/features/hub/hubSettings.ui.ts");
+    expect(pushFailureText("conflict")).toMatch(/another browser/);
+    expect(pushFailureText("daily-limit")).toMatch(/daily limit/);
+    // a KV write refused within its second: the footer's "too many pushes"
+    expect(pushFailureText("kv-busy")).toBe(pushFailureText("busy"));
   });
 });

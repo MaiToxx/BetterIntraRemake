@@ -1,10 +1,9 @@
 import {
-  applyCloudSettings,
   clearAuthFailed,
-  fetchPrivateSettings,
   hasCloudData,
   loginWith42,
   logoutCloud,
+  pullSettings,
   pushSettings,
   wipeAllCloudData,
   type CloudFailure,
@@ -44,6 +43,7 @@ function failureLabel(reason: CloudFailure): string {
   if (reason === "network") return t("Connection Failed");
   if (reason === "busy") return t("Too many requests");
   if (reason === "too-large") return t("Too large");
+  // a conflict too: the line under the card says what happened and what to do
   return t("Sync Failed");
 }
 
@@ -158,12 +158,18 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
   const handlePush = async () => {
     if (state.buttons.push.loading) return;
 
+    // After a conflict (the line under the card says it), the next click
+    // asks, and "yes" pushes without the revision check: Push anyway.
+    const force = state.pushFailure?.reason === "conflict";
+    if (force && !confirm(t("Replace your cloud settings with this browser's?"))) {
+      return;
+    }
     // One POST, no probe first: the request's own outcome tells network from
     // session from worker error, and the button reacts on the click itself.
     state.buttons.push = { loading: true, text: t("Connecting...") } as any;
     updateUI();
 
-    const result = await pushSettings();
+    const result = await pushSettings({ force });
     if (result === "ok") {
       await clearAuthFailed();
       state.cloud = "online";
@@ -197,7 +203,7 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     updateUI();
 
     // The one GET serves the restore and the session count alike.
-    const result = await fetchPrivateSettings();
+    const result = await pullSettings();
     if (result.ok) {
       state.cloud = "online";
       state.activeSessions = result.activeSessions;
@@ -206,9 +212,6 @@ export function createHandlers(state: AccountState, updateUI: () => void) {
     }
 
     if (result.ok && hasCloudData(result.settings)) {
-      await clearAuthFailed();
-      await applyCloudSettings(result.settings);
-      await chrome.storage.local.set({ LAST_CLOUD_SYNC: Date.now() });
       state.buttons.pull = {
         loading: false,
         success: true,

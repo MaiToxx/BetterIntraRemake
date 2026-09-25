@@ -107,7 +107,7 @@ extraction, `content.js` has about 104 KB of literals across 23 strings: the
 lit-html template texts of the widgets, the settings metadata and inline SVG.
 No single one is over 16 KB. The rest is feature code.
 
-The indentation of those templates does not ship: `scripts/collapse-lit-templates.ts` collapses the whitespace of every `html` template (except one with `<pre>`, `<textarea>` or a `white-space: pre*` value) and of every `css`-tagged stylesheet, and drops their CSS comments. In September 2026 two gaps in it cost about 6 KB of `content.js`: a template whose `<style>` said `white-space: nowrap` was skipped whole (the cluster map dialog), and in a CRLF file every line kept its newline.
+The indentation of those templates does not ship: `scripts/collapse-lit-templates.ts` collapses the whitespace of every `html` template (except one with `<pre>`, `<textarea>` or a `white-space: pre*` value) and of every `css`-tagged stylesheet, and drops their CSS comments and the HTML comments of `html` templates (a comment that must ship, such as a licence notice, starts with `<!--!`; a template where a `${}` cuts a comment keeps all of its comments). In September 2026 two gaps in it cost about 6 KB of `content.js`: a template whose `<style>` said `white-space: nowrap` was skipped whole (the cluster map dialog), and in a CRLF file every line kept its newline.
 
 ## "Lighten the Intra" (Advanced tab)
 

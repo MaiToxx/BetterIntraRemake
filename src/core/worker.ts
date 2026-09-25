@@ -1,4 +1,5 @@
 import { hashLogin } from "./crypto.ts";
+import { getLang, intlLocale, t } from "./i18n/i18n.ts";
 
 /**
  * Base URL of the Better Intra cloud worker.
@@ -61,8 +62,11 @@ export interface WorkerResult {
   json: unknown;
   /** The body when it was not JSON, "" otherwise. */
   text: string;
-  /** The worker's error code and message on a JSON error body ({error, message}). */
-  error?: string;
+  /**
+   * The worker's error code and message on a JSON error body ({error,
+   * message}): a WorkerErrorCode, or a code this build does not know yet.
+   */
+  error?: WorkerErrorCode | (string & {});
   message?: string;
   timedOut: boolean;
 }
@@ -78,6 +82,54 @@ export function hashedLogin(login: string): Promise<string> {
     hashes.set(key, hash);
   }
   return hash;
+}
+
+/**
+ * The error codes of the worker's JSON error bodies ({error, message}). The
+ * code is the contract, the English `message` is for logs and bug reports:
+ * a translated text is picked from the code, never built from the message.
+ */
+export type WorkerErrorCode =
+  | "unauthorized"
+  | "rate_limited"
+  | "daily_write_budget"
+  | "too_large"
+  | "conflict"
+  | "calendar_stopped"
+  | "bad_request"
+  | "not_found"
+  | "kv_busy"
+  | "unsupported_image_type"
+  | "image_too_large"
+  | "server_error";
+
+/** Next 00:00 UTC in the viewer's time, e.g. "02:00": when the daily budget comes back. */
+function nextUtcMidnight(now = new Date()): string {
+  const midnight = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+  );
+  return midnight.toLocaleTimeString(getLang() === "fr" ? intlLocale() : [], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/**
+ * The sentence for a worker refusal that means the same wherever it happens
+ * (a push, a sign-in, an upload), or null for any other result: the caller
+ * keeps its own words for those. daily_write_budget: the server's KV writes
+ * of the day are spent (per login or in all), nothing can be saved before
+ * 00:00 UTC, so no caller retries it. kv_busy: the worker already retried a
+ * write refused for KV's one-write-a-second limit; a few seconds is enough.
+ */
+export function workerErrorText(res: Pick<WorkerResult, "error">): string | null {
+  if (res.error === "daily_write_budget") {
+    return t("The server's saves for today are used up. Try again after {time}.", {
+      time: nextUtcMidnight(),
+    });
+  }
+  if (res.error === "kv_busy") return t("The server is busy: try again in a few seconds.");
+  return null;
 }
 
 /** What a 401 from the worker means: the session is gone, offer "Reconnect". */

@@ -236,6 +236,133 @@ describe("PRIVACY.md names the Logtime values the public visuals route serves", 
   });
 });
 
+describe("PRIVACY.md says what the worker keeps, as the worker keeps it", () => {
+  const WORKER = path.join(ROOT, "../better-intra-worker");
+  const worker = (file: string) => fs.readFileSync(path.join(WORKER, file), "utf8");
+  const has = (file: string) => fs.existsSync(path.join(WORKER, file));
+  const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+
+  // Each D1 table the worker's migrations create, and the phrase of PRIVACY.md
+  // that tells a student about it; null for a table that holds nothing about
+  // anyone. A new table fails here until someone decides what the policy says.
+  const TABLE_PHRASE: Record<string, RegExp | null> = {
+    users: /\*\*A users row\*\*/,
+    sessions: /\*\*Your sessions\*\*/,
+    session_migrations: /a row saying your sessions were moved/,
+    calendar_ics: /pushed as an `\.ics` file/,
+    calendar_tokens: /revoked calendar links/,
+    subjects: /\*\*Subject tracker\*\*/,
+    projects: null, // project names a 42 application once filled; read by nothing
+    kv_write_budget: /\*\*A daily write counter\.\*\*/,
+    public_visuals: /copied to the worker's database \(D1\)/,
+  };
+
+  // The worker is a sibling repository: present on the maintainer's machine, not in CI.
+  it.skipIf(!has("migrations"))("names every D1 table the worker's migrations create", () => {
+    const sql = fs
+      .readdirSync(path.join(WORKER, "migrations"))
+      .filter((f) => f.endsWith(".sql"))
+      .map((f) => worker(`migrations/${f}`))
+      .join("\n");
+    // with or without IF NOT EXISTS, whatever the case: a table must not slip past by its spelling
+    const tables = [...sql.matchAll(/CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?["`]?(\w+)/gi)].map((m) => m[1]);
+    expect(tables.length).toBeGreaterThan(0);
+    for (const table of tables) {
+      expect(Object.keys(TABLE_PHRASE), `${table}: add it to TABLE_PHRASE and to PRIVACY.md`).toContain(table);
+      const phrase = TABLE_PHRASE[table];
+      if (phrase) expect(privacy, table).toMatch(phrase);
+    }
+  });
+
+  it.skipIf(!has("src/sessions.ts"))("gives the session cap and age limit the worker enforces, and says tokens are kept hashed", () => {
+    const sessions = worker("src/sessions.ts");
+    const max = Number(/MAX_SESSIONS = (\d+)/.exec(sessions)?.[1]);
+    const days = Number(/SESSION_MAX_AGE_MS = (\d+) \* 24 \* 60 \* 60 \* 1000/.exec(sessions)?.[1]);
+    expect(max, "MAX_SESSIONS").toBeGreaterThan(0);
+    expect(days, "SESSION_MAX_AGE_MS in days").toBeGreaterThan(0);
+    const item = line("- **Your sessions**");
+    expect(item).toMatch(new RegExp(`\\b(${max}|${NUMBER_WORDS[max] ?? max}) at most`, "i"));
+    expect(item).toContain(`${days} days old`);
+    expect(item).toMatch(/SHA-256 hash of the session token/);
+    // the wording from when the record kept the tokens themselves
+    expect(privacy).not.toMatch(/up to ten session tokens/);
+    // Tokens copied from the old records get a fixed date, which decides when
+    // they expire. The policy gives that date: a constant written any other
+    // way must fail here, not skip the check.
+    const legacy = /LEGACY_SESSION_CREATED_AT = Date\.UTC\((\d+), (\d+), (\d+)\)/.exec(sessions);
+    if (sessions.includes("LEGACY_SESSION_CREATED_AT") || /\bdated \d/.test(item)) {
+      expect(legacy, "LEGACY_SESSION_CREATED_AT = Date.UTC(y, m, d) in src/sessions.ts").not.toBeNull();
+    }
+    if (legacy) {
+      const [, y, m, d] = legacy.map(Number);
+      const day = (year: number) =>
+        new Date(Date.UTC(year, m, d)).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+      expect(item).toContain(`dated ${day(y)}`);
+      expect(days, "the expiry date below assumes a one-year limit").toBe(365);
+      expect(item).toContain(`expire on ${day(y + 1)} at the latest`);
+    }
+  });
+
+  it.skipIf(!has("src/budget.ts"))("gives the daily write cap per account, how long the counter is kept and what its log line shows", () => {
+    const budget = worker("src/budget.ts");
+    const perLogin = Number(/DAILY_KV_WRITES_PER_LOGIN = (\d+)/.exec(budget)?.[1]);
+    expect(perLogin, "DAILY_KV_WRITES_PER_LOGIN").toBeGreaterThan(0);
+    const item = line("- **A daily write counter.**");
+    expect(item).toContain(`Past ${perLogin} in a day`);
+    // The first write of a day deletes the rows before yesterday: two days kept.
+    expect(budget).toMatch(/WHERE day < \?[\s\S]{0,40}day - 1\b/);
+    expect(item).toMatch(/deleted after two days/);
+    const shown = /loginHash\.slice\(0, (\d+)\)/.exec(budget)?.[1];
+    if (shown) expect(privacy).toContain(`first ${shown} characters of the login hash`);
+    else expect(privacy).not.toMatch(/characters of the login hash/);
+  });
+
+  it.skipIf(!has("src/index.ts"))("describes the export exactly when the worker serves one, and it hands out no token", () => {
+    const routed = worker("src/index.ts").includes('"/api/v1/private/export"');
+    expect(privacy.includes("/api/v1/private/export")).toBe(routed);
+    if (!routed) return;
+    const item = line("- **A copy of your cloud data**");
+    expect(item).toMatch(/never a token/);
+    expect(item).toContain("`[redacted]`");
+    const handler = worker("src/handlers/export.ts");
+    expect(handler).toContain('"[redacted]"');
+    // sessions leave by their short id, never by their hash or token
+    expect(handler).toMatch(/tokenHash\.slice\(0, 8\)/);
+  });
+
+  it.skipIf(!has("src"))("keeps after a wipe exactly the bookkeeping rows it says stay, and deletes the public copy", () => {
+    const code: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const file = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(file);
+        else if (entry.name.endsWith(".ts")) code.push(fs.readFileSync(file, "utf8"));
+      }
+    };
+    walk(path.join(WORKER, "src"));
+    const workerSrc = code.join("\n");
+    const wipe = line("- **Cloud data**");
+    // "What stays": a DELETE on any of these tables would make the sentence false.
+    expect(wipe).toMatch(/What stays: the revoked calendar links/);
+    expect(workerSrc).not.toMatch(/DELETE FROM calendar_tokens/i);
+    expect(wipe).toMatch(/a row saying your sessions were moved/);
+    expect(workerSrc).not.toMatch(/DELETE FROM session_migrations/i);
+    expect(wipe).toMatch(/the daily write counter \(two days at most\)/);
+    const budgetDeletes = [...workerSrc.matchAll(/DELETE FROM kv_write_budget[^"`]*/gi)].map((m) => m[0]);
+    expect(budgetDeletes, "only the prune of the days before yesterday").toEqual(["DELETE FROM kv_write_budget WHERE day < ?"]);
+    // and the copy visitors are served goes with the rest
+    expect(wipe).toMatch(/published visuals and look \(their database copy included\)/);
+    expect(workerSrc).toMatch(/DELETE FROM public_visuals WHERE hash = \?/);
+  });
+
+  it("sends data requests to the export and the wipe before the public tracker", () => {
+    const contact = privacy.slice(privacy.indexOf("## Contact"));
+    expect(contact).toMatch(/the export above/);
+    expect(contact).toMatch(/\*Wipe All Data\*/);
+    expect(contact).toMatch(/issues are public, so leave your login and its hash out/);
+  });
+});
+
 describe("the worker's logging matches the Server logs section", () => {
   const wranglerPath = path.join(ROOT, "../better-intra-worker/wrangler.json");
   // The worker is a sibling repository: present on the maintainer's machine, not in CI.
@@ -245,6 +372,40 @@ describe("the worker's logging matches the Server logs section", () => {
       expect(privacy).not.toMatch(/Every request is logged/);
       expect(privacy).toMatch(/invocation logs off/);
     }
+  });
+
+  // The other way round: a wrangler.json that turns the logs back on, or
+  // traces (one record per request, query string included), would make the
+  // policy's promise false while it still reads well.
+  it.skipIf(!fs.existsSync(wranglerPath))("keeps per-request logs and traces off while the policy says so", () => {
+    const wrangler = JSON.parse(fs.readFileSync(wranglerPath, "utf8"));
+    if (!/invocation logs off/.test(privacy)) return;
+    expect(wrangler.observability?.logs?.invocation_logs).toBe(false);
+    expect(wrangler.observability?.traces?.enabled ?? false).toBe(false);
+  });
+});
+
+describe("PRIVACY.md promises only the account tools the extension has", () => {
+  const code = (dir: string): string =>
+    fs
+      .readdirSync(dir, { withFileTypes: true })
+      .map((e) =>
+        e.isDirectory() ? code(path.join(dir, e.name)) : e.name.endsWith(".ts") ? fs.readFileSync(path.join(dir, e.name), "utf8") : "",
+      )
+      .join("\n");
+  const client = code(path.join(ROOT, "src"));
+
+  it("lists the sessions and signs out the other browsers through the worker's sessions route", () => {
+    const item = line("- **Your sessions**");
+    expect(item).toMatch(/you can list your sessions/);
+    expect(item).toMatch(/sign out every browser but the current one/);
+    expect(client).toContain('"/api/v1/private/sessions"');
+    expect(client).toMatch(/\?others=true/);
+  });
+
+  it("downloads the export it describes", () => {
+    expect(line("- **A copy of your cloud data**")).toMatch(/the extension can download one JSON file/);
+    expect(client).toContain('"/api/v1/private/export"');
   });
 });
 

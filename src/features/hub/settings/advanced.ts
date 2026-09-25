@@ -1,6 +1,7 @@
 /**
  * Advanced tab of the settings hub: general behaviour, backup and campus
- * maintenance, the "Lighten the Intra" switches, and Reset.
+ * maintenance, the cloud account (signed-in browsers, Download my cloud
+ * data), the "Lighten the Intra" switches, and Reset.
  */
 import { CONFIG_DEFAULT } from "../../../core/config.ts";
 import { msg } from "../../../core/i18n/i18n.ts";
@@ -81,6 +82,28 @@ export const ADVANCED_SETTINGS: readonly HubSettingDef[] = [
     kind: "action",
     actionType: "reload-campus",
     actionLabel: msg("Reload"),
+    grid: true,
+    colSpan: 1,
+  },
+  // What the Better Intra server keeps about the student, and the browsers
+  // signed in to the account (controls/cloud-account.ts).
+  { feature: "advanced", label: "Cloud account", kind: "divider" },
+  {
+    feature: "advanced",
+    label: "Signed-in browsers",
+    desc: "Sign out the browsers you no longer use, such as a campus computer.",
+    kind: "action",
+    actionType: "cloud-sessions",
+    fullWidth: true,
+    grid: true,
+    colSpan: 2,
+  },
+  {
+    feature: "advanced",
+    label: "Download my cloud data",
+    desc: "Everything the Better Intra server keeps about you, as a JSON file.",
+    kind: "action",
+    actionType: "cloud-export",
     grid: true,
     colSpan: 1,
   },
